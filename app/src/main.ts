@@ -3,7 +3,7 @@ import "./chat/chat.css";
 import { AGENTS } from "./data/agents";
 import type { Light } from "three";
 import { buildBuilding, ground as groundMesh } from "./scene/building";
-import { buildLisbon } from "./scene/lisbon";
+import { buildLisbon, updateLisbon } from "./scene/lisbon";
 import { scene } from "./scene/world";
 import { createPerson, STATE_INFO, updatePerson, type PersonView } from "./scene/person";
 import { buildAmbient } from "./scene/ambient";
@@ -545,6 +545,7 @@ function frame(now: number): void {
     if (view) updatePerson(view, a, dt, t);
   }
   updatePerson(guardView, guard, dt, t);
+  updateLisbon(dt);
   if (walk.on) {
     let right = 0;
     let up = 0;
