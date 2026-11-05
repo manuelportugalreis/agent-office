@@ -4,7 +4,7 @@ import { sign } from "./props";
 import { makeEditable } from "./editable";
 
 /**
- * Cantos novos do escritório: o ginásio (sul da sala de jogos) e a sala de servidores (canto nascente da sala Job Search).
+ * Cantos novos do escritório: o ginásio (sul da sala de jogos) e a sala de servidores (canto da sala Job Search).
  * Só aparência e colisões; os lugares onde as pessoas ficam estão em sim/locations.ts.
  */
 
@@ -18,7 +18,7 @@ interface Led {
 const leds: Led[] = [];
 
 function rack(x: number, z: number): void {
-  const g = group(x, 0, z, -Math.PI / 2);
+  const g = group(x, 0, z);
   box(g, 0.65, 2.0, 0.9, 0, 1.0, 0, mat("#1d2026", { roughness: 0.5, metalness: 0.4 }));
   box(g, 0.6, 1.9, 0.03, 0, 1.0, 0.46, mat("#0e1013"), false);
   for (let u = 0; u < 9; u++) {
@@ -83,8 +83,8 @@ export function buildAnnex(): void {
   box(yogaMat, 1.5, 0.025, 0.6, 0, 0.026, 0, mat("#6d4cc2", { roughness: 0.95 }), false);
   makeEditable("tapete", "Tapete de ioga", yogaMat, { w: 1.5, d: 0.6 });
 
-  // Sala de servidores: chão técnico escuro, quatro bastidores encostados à parede nascente e o letreiro.
-  box(group(11.05, 0, 2.5), 1.9, 0.02, 4.6, 0, 0.012, 0, mat("#39424d", { roughness: 0.6 }), false);
-  [1.0, 1.7, 2.4, 3.1].forEach((z) => rack(11.55, z));
-  sign(11.97, 2.5, 2.05, -Math.PI / 2, "SERVIDORES", "#0f2530", "#7be0ff", 1.5);
+  // Sala de servidores: chão técnico escuro, três bastidores encostados à parede norte (virados para a câmara) e o letreiro.
+  box(group(10.95, 0, 1.25), 2.1, 0.02, 2.3, 0, 0.012, 0, mat("#39424d", { roughness: 0.6 }), false);
+  [10.25, 10.95, 11.65].forEach((x) => rack(x, 0.55));
+  sign(10.95, 2.3, 0.14, 0, "SERVIDORES", "#0f2530", "#7be0ff", 1.5);
 }

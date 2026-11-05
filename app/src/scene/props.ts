@@ -238,7 +238,6 @@ export function buildProps(screens: ReadonlyMap<string, ScreenHandle>): void {
   }
   [
     [5.6, 0.5],
-    [11.6, 0.5],
     [17.5, 0.5],
   ].forEach(([x, z]) => plant(x, z, 1.1, true));
   [
@@ -251,8 +250,9 @@ export function buildProps(screens: ReadonlyMap<string, ScreenHandle>): void {
   ].forEach(([x, z]) => plant(x, z, 0.7));
   shelf(0.3, 3.6, Math.PI / 2);
   shelf(0.3, 8.2, Math.PI / 2, 1.5);
-  cabinet(6.5, 4.5);
-  cabinet(7.15, 4.5);
+  // Encostados à parede: quem vai para a secretária em x = 7.2 passa mesmo ao lado.
+  cabinet(6.35, 4.5);
+  cabinet(6.35, 3.85);
   printer(12.8, 4.4);
   cooler(5.6, 4.5);
   cooler(0.7, 11.4);

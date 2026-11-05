@@ -46,8 +46,8 @@ function buildSolids(): Rect[] {
     box(23.4, 11.4, 0.9, 0.7), // máquina de venda
     box(0.3, 3.6, 0.5, 1.4), // estantes
     box(0.3, 8.2, 0.5, 1.5),
-    box(6.5, 4.5, 0.5, 0.6), // arquivos
-    box(7.15, 4.5, 0.5, 0.6),
+    box(6.35, 4.5, 0.5, 0.6), // arquivos
+    box(6.35, 3.85, 0.5, 0.6),
     box(12.8, 4.4, 0.6, 0.5), // impressora
     box(19.3, 11.0, 0.8, 1.7), // passadeira
     box(20.6, 11.72, 1.1, 0.4), // pesos
@@ -55,8 +55,8 @@ function buildSolids(): Rect[] {
     box(22.7, 5.35, 1.3, 0.5), // receção
     box(23.25, 6.35, 0.5, 0.5), // segurança
   );
-  // Sala de servidores: quatro bastidores encostados à parede nascente.
-  for (const z of [1.0, 1.7, 2.4, 3.1]) out.push(box(11.55, z, 0.9, 0.65));
+  // Sala de servidores: três bastidores encostados à parede norte.
+  for (const x of [10.25, 10.95, 11.65]) out.push(box(x, 0.55, 0.65, 0.9));
   // Casa de banho: sanitas, cabines e lavatórios.
   for (const x of [18.9, 20.1]) out.push(box(x, 0.7, 0.45, 0.6), box(x + 0.55, 1.0, 0.1, 1.8));
   for (const z of [1.6, 2.8]) out.push(box(23.55, z, 0.5, 0.7));

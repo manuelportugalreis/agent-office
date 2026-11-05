@@ -19,6 +19,7 @@ export const STATE_INFO: Record<DisplayState, { icon: string; label: string; col
   play: { icon: "🏓", label: "A jogar ténis de mesa", color: "#22c55e" },
   gym: { icon: "🏋", label: "No ginásio", color: "#f97316" },
   server: { icon: "🖥", label: "Na sala de servidores", color: "#06b6d4" },
+  clean: { icon: "🧹", label: "A limpar", color: "#84cc16" },
 };
 
 export interface Rig {
@@ -38,6 +39,7 @@ export interface Rig {
   mouth: THREE.Mesh;
   paper: THREE.Group;
   mug: THREE.Group;
+  mop: THREE.Group;
 }
 
 export interface PersonView {
@@ -245,7 +247,7 @@ function buildLeg(hips: THREE.Group, side: 1 | -1, pants: THREE.Material, shoe: 
   return { hp, kn };
 }
 
-function buildHeldItems(elR: THREE.Group): { paper: THREE.Group; mug: THREE.Group } {
+function buildHeldItems(elR: THREE.Group): { paper: THREE.Group; mug: THREE.Group; mop: THREE.Group } {
   const paper = new THREE.Group();
   paper.position.set(0, -0.3, 0.09);
   paper.rotation.x = -0.35;
@@ -264,7 +266,16 @@ function buildHeldItems(elR: THREE.Group): { paper: THREE.Group; mug: THREE.Grou
   mug.add(handle);
   mug.visible = false;
   elR.add(mug);
-  return { paper, mug };
+
+  // A esfregona do Joaquim: o cabo sai da mão e a cabeça fica junto ao chão.
+  const mop = new THREE.Group();
+  mop.position.set(0, -0.3, 0.05);
+  mop.rotation.x = 0.35;
+  cyl(mop, 0.012, 0.012, 1.25, 0, -0.32, 0, mat("#c9ccd2", { metalness: 0.5, roughness: 0.4 }), 8);
+  box(mop, 0.26, 0.05, 0.1, 0, -0.95, 0, mat("#e8e4d8", { roughness: 1 }));
+  mop.visible = false;
+  elR.add(mop);
+  return { paper, mug, mop };
 }
 
 const seedOf = (id: string): number => [...id].reduce((s, c) => s + c.charCodeAt(0), 0);
@@ -345,7 +356,7 @@ function attachRealisticBody(view: PersonView, def: AgentDef): void {
   void preloadCharacters(Object.values(HAIR_MODEL).filter((h): h is string => h !== null)).then(() => {
     const character = buildCharacter(lookOf(def), rig);
     if (!character) return;
-    const keep = new Set<THREE.Object3D>([rig.paper, rig.mug, view.bubble]);
+    const keep = new Set<THREE.Object3D>([rig.paper, rig.mug, rig.mop, view.bubble]);
     group.traverse((o) => {
       if (!(o as THREE.Mesh).isMesh) return;
       for (let p: THREE.Object3D | null = o; p; p = p.parent) if (keep.has(p)) return;

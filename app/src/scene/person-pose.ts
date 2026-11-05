@@ -165,6 +165,16 @@ function standingPose(a: Agent, t: number, seed: number, p: Pose): void {
     p.elL = -0.6;
     p.torsoY = Math.sin(t * 3.1 + seed) * 0.18;
     p.headX = 0.12;
+  } else if (state === "clean") {
+    // A passar a esfregona: os braços vão de um lado ao outro e o tronco acompanha.
+    const sweep = Math.sin(t * 2.6 + seed);
+    p.shR = -0.75 + sweep * 0.25;
+    p.elR = -0.6;
+    p.shL = -0.9 - sweep * 0.25;
+    p.elL = -0.9;
+    p.torsoX = 0.22;
+    p.torsoY = sweep * 0.3;
+    p.headX = 0.2;
   } else if (state === "gym") {
     gymPose(a, t, seed, p);
   } else if (state === "server") {
@@ -268,6 +278,7 @@ export function updatePerson(v: PersonView, a: Agent, dt: number, t: number): vo
   lerpRot(r.torso, "y", p.torsoY, f);
   r.mug.visible = p.mug;
   r.paper.visible = p.paper;
+  r.mop.visible = a.def.id === "janitor";
   animateFace(v, p, t, f);
 
   const swing = Math.sin(phase) * 0.75 * stride;

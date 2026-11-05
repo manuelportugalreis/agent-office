@@ -24,7 +24,9 @@ const FACE_EAST = Math.PI / 2;
 const FACE_WEST = -Math.PI / 2;
 const CHAT_Z = 5.45;
 /** Onde se fica em pé em frente aos bastidores dos servidores. */
-const SERVER_X = 10.6;
+const SERVER_XS = [10.5, 11.4] as const;
+const SERVER_Z = 1.75;
+const SERVER_APPROACH_X = 10.2;
 /** Identificador do lugar junto à bandeja de revisão (usado como destino de uma entrega: `visit-tray`). */
 export const TRAY_ID = "tray";
 const TRAY_VISIT_KEY = `visit-${TRAY_ID}`;
@@ -291,16 +293,18 @@ export function buildLocations(defs: readonly AgentDef[]): LocMap {
     ),
   );
 
-  // Sala de servidores (canto nascente da sala Job Search): dois sítios em frente aos bastidores.
-  [1.7, 2.8].forEach((z, i) =>
+  // Sala de servidores (canto da sala Job Search): dois sítios em frente aos bastidores, virados para norte.
+  SERVER_XS.forEach((x, i) =>
     add(
       make(
         `srv${i}`,
         [
-          { x: SERVER_X, z: LANE },
-          { x: SERVER_X, z },
+          // Entram a poente do quadro "Vagas", que fica mesmo à frente dos bastidores.
+          { x: SERVER_APPROACH_X, z: LANE },
+          { x: SERVER_APPROACH_X, z: 2.6 },
+          { x, z: SERVER_Z },
         ],
-        FACE_EAST,
+        FACE_NORTH,
         0,
       ),
     ),

@@ -2,7 +2,7 @@ import type { AgentDef, AgentState, Deadline } from "../data/agents";
 import { routeBetween, type Loc, type Pt } from "./locations";
 
 /** Onde o agente está ou para onde vai: à secretária, no descanso, em reunião, a conversar ou a entregar um papel. */
-export type Kind = "desk" | "rest" | "meet" | "chat" | "visit" | "wc" | "play" | "gym" | "server";
+export type Kind = "desk" | "rest" | "meet" | "chat" | "visit" | "wc" | "play" | "gym" | "server" | "clean";
 export type DisplayState = AgentState | Exclude<Kind, "desk">;
 export type LogLine = readonly [time: string, text: string];
 

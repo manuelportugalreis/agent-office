@@ -30,6 +30,7 @@ import { createDossierUi } from "./ui/dossier";
 import { waitingForUser } from "./ui/dossier-model";
 import type { Dossier } from "../../shared/protocol";
 import { createGuard, GUARD_DEF } from "./sim/guard";
+import { createJanitor, JANITOR_DEF, janitorUpdate, requestCleaning } from "./sim/janitor";
 import { shortcutAllowed } from "./ui/keys";
 import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
 import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, freeWalk, PLAYER_DEF } from "./sim/player";
@@ -75,6 +76,8 @@ const player = createPlayer();
 const playerView = createPerson(PLAYER_DEF);
 const guard = createGuard();
 const guardView = createPerson(GUARD_DEF);
+const janitor = createJanitor();
+const janitorView = createPerson(JANITOR_DEF);
 playerView.group.visible = false;
 const walk = { on: false, follow: true, keys: new Set<string>(), arrivedFor: null as string | null };
 for (const a of agents) if (a.def.startsResting) teleport(a, locs.rest0, "rest");
@@ -150,7 +153,8 @@ function setEditMode(on: boolean): void {
   editor.setActive(on);
   byId("hint").hidden = on;
 }
-if (new URLSearchParams(location.search).has("debug")) Object.assign(window, { __office: { editor, stage, editables } });
+if (new URLSearchParams(location.search).has("debug"))
+  Object.assign(window, { __office: { editor, stage, editables, janitor, requestCleaning } });
 byId("editBtn").onclick = () => setEditMode(!editor.active());
 byId("editRotate").onclick = () => editor.rotate();
 byId("editReset").onclick = () => editor.reset();
@@ -316,7 +320,12 @@ const chatActions: ChatActions = {
   // "Sincroniza o Canvas" no chat do Dean é tratado pelo servidor (guarda a mensagem, sincroniza e responde com o resultado).
   send: (agentId, text, files) => sendToServer(agentId, { type: "send", agentId, text, ...(files.length ? { files } : {}) }),
   redo: (agentId, text, files) => sendToServer(agentId, { type: "redo", agentId, text, ...(files.length ? { files } : {}) }),
-  newChat: (agentId) => sendToServer(agentId, { type: "newchat", agentId }),
+  newChat: (agentId) => {
+    // O servidor recusa limpar a conversa de quem está a trabalhar: nesse caso o Joaquim não sai do sítio.
+    const accepted = !busy.has(agentId) && sendToServer(agentId, { type: "newchat", agentId });
+    if (accepted) requestCleaning(janitor, agentId);
+    return accepted;
+  },
   stop: (agentId) => void client.send({ type: "stop", agentId }),
   upload: uploadFile,
   notify: toast,
@@ -579,6 +588,9 @@ function frame(now: number): void {
     if (view) updatePerson(view, a, dt, t);
   }
   updatePerson(guardView, guard, dt, t);
+  stepAgent(janitor.agent, dt);
+  janitorUpdate(janitor, locs, now);
+  updatePerson(janitorView, janitor.agent, dt, t);
   updateLisbon(dt);
   updateServers(t);
   if (walk.on) {
