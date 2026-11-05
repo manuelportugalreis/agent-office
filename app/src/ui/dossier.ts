@@ -281,7 +281,23 @@ export function createDossierUi(actions: DossierActions): DossierUi {
       tab = defaultTab(dossier);
       tabFor = dossier.id;
     }
+    const active = card.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+    const key = active
+      ? active.id
+        ? `#${active.id}`
+        : active.dataset.tab
+          ? `[data-tab="${active.dataset.tab}"]`
+          : active.dataset.act
+            ? `[data-act="${active.dataset.act}"]`
+            : ""
+      : "";
+    const caret = active instanceof HTMLTextAreaElement ? active.selectionStart : null;
     card.innerHTML = dossier ? cardHtml(dossier, note, answer, tab) : emptyHtml;
+    const again = key ? card.querySelector<HTMLElement>(key) : null;
+    if (again) {
+      again.focus();
+      if (caret !== null && again instanceof HTMLTextAreaElement) again.setSelectionRange(caret, caret);
+    }
     const returnBtn = card.querySelector<HTMLButtonElement>('[data-act="return"]');
     const answerBtn = card.querySelector<HTMLButtonElement>('[data-act="answer"]');
     bind(

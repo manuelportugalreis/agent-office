@@ -5,3 +5,4 @@ package-lock.json
 server/data
 server/workspaces
 mockup
+.claude/
