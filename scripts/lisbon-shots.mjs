@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const out = process.argv[2] ?? "shots";
-const url = process.argv[3] ?? "http://127.0.0.1:5174/?q=alta";
+const url = process.argv[3] ?? "http://127.0.0.1:5174/?q=alta&debug";
 mkdirSync(out, { recursive: true });
 
 const browser = await chromium.launch({ args: ["--use-angle=d3d11", "--enable-gpu", "--ignore-gpu-blocklist"] });
@@ -71,6 +71,52 @@ async function shot(name) {
   await page.waitForTimeout(700);
   await canvas.screenshot({ path: join(out, `${name}.png`) });
 }
+/** Centra a câmara num ponto (x, y, z) do mundo com o zoom dado (o alvo da câmara vive no plano y = -1.3). */
+async function focus(x, y, z, zoomValue) {
+  await page.evaluate(
+    ([x, y, z, zoomValue]) => {
+      const stage = window.__office.stage;
+      const az = stage.azimuth();
+      const el = 0.62;
+      const s = (-1.3 - y) / Math.sin(el);
+      const p = { x: x + Math.sin(az) * Math.cos(el) * s, z: z + Math.cos(az) * Math.cos(el) * s };
+      stage.setFollow(() => p);
+      stage.setZoom(zoomValue);
+    },
+    [x, y, z, zoomValue],
+  );
+  await page.waitForTimeout(2500);
+}
+/** Espera que o eléctrico esteja dentro da maqueta e põe a câmara a segui-lo. */
+async function focusTram(zoomValue) {
+  await page.waitForFunction(
+    () => {
+      const p = window.__office.tramPosition();
+      return p && p.x > -24 && p.x < 20;
+    },
+    null,
+    { timeout: 90000 },
+  );
+  await page.evaluate((zoomValue) => {
+    const stage = window.__office.stage;
+    const az = stage.azimuth();
+    const k = ((-1.3 + 8) / Math.sin(0.62)) * Math.cos(0.62);
+    stage.setFollow(() => {
+      const p = window.__office.tramPosition();
+      return { x: p.x + Math.sin(az) * k, z: p.z + Math.cos(az) * k };
+    });
+    stage.setZoom(zoomValue);
+  }, zoomValue);
+  await page.waitForTimeout(2500);
+}
+async function unfocus() {
+  await page.evaluate(() => {
+    window.__office.stage.setFollow(() => ({ x: 12, z: 5.6 }));
+    window.__office.stage.setZoom(0.95);
+  });
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => window.__office.stage.setFollow(null));
+}
 async function perf() {
   const s = await page.evaluate(() => [window.__draws, window.__frames, performance.now()]);
   await page.waitForTimeout(3000);
@@ -102,12 +148,19 @@ await pan(350, -250);
 await shot("05-day-neighbours-zoom");
 await pan(-350, 250);
 await zoom(-4);
+await focusTram(3);
+await shot("08-day-tram-close");
+await focus(21, -8, 14, 2.6);
+await shot("09-day-corner-close");
+await unfocus();
 await setTime("Noite");
 await shot("06-night-default");
 metrics.nightDefault = await perf();
 await zoom(5);
 await pan(-250, -330);
 await shot("07-night-street-zoom");
+await focusTram(3);
+await shot("10-night-tram-close");
 const report = JSON.stringify({ metrics, errors }, null, 2);
 writeFileSync(join(out, "metrics.json"), `${report}\n`);
 console.log(report);

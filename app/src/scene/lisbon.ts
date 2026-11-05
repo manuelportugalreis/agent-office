@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { ground } from "./building";
 import { buildCity } from "./lisbon/city";
-import { TRAM_Z } from "./lisbon/layout";
 import { buildStreet } from "./lisbon/street";
+import { buildTram, type Tram } from "./lisbon/tram";
 import { box, canvas2d, canvasTexture, group, mat } from "./util";
 import { scene } from "./world";
 
@@ -33,7 +33,7 @@ export function buildLisbon(): void {
   cafe(CX + 6.5, BASE_Y, CZ + D / 2);
 
   // Eléctrico amarelo (o 28) a passar na rua com carris na calçada.
-  tram = buildTram(TRAM_Z);
+  tram = buildTram(scene);
 }
 
 // ---------- pormenores de rua ----------
@@ -101,38 +101,12 @@ function cafe(x: number, baseY: number, zFacade: number): void {
   }
 }
 
-let tram: THREE.Group | null = null;
-const TRAM_SPEED = 1.6;
-const TRAM_FROM = -26;
-const TRAM_TO = 52;
+let tram: Tram | null = null;
 
-function buildTram(z: number): THREE.Group {
-  const t = group(CX - 14, BASE_Y, z);
-  scene.add(t);
-  const yellow = mat("#f0bf2e", { roughness: 0.5 });
-  const cream = mat("#f6efd9", { roughness: 0.6 });
-  box(t, 6.4, 1.5, 2.3, 0, 1.15, 0, yellow);
-  box(t, 6.45, 0.45, 2.35, 0, 0.55, 0, cream);
-  box(t, 6.4, 0.9, 2.3, 0, 2.3, 0, cream);
-  for (let i = -2; i <= 2; i++) box(t, 0.8, 0.7, 2.34, i * 1.2, 2.3, 0, mat("#4a5a6a", { roughness: 0.15 }), false);
-  box(t, 6.6, 0.12, 2.5, 0, 2.82, 0, mat("#7b7f86"));
-  // Pantógrafo e cabo.
-  box(t, 0.06, 0.8, 0.06, 0, 3.3, 0, mat(IRON), false);
-  box(t, 1.2, 0.04, 0.04, 0, 3.7, 0, mat(IRON), false);
-  for (const wx of [-2.4, 2.4]) {
-    for (const wz of [-1.0, 1.0]) {
-      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.1, 14), mat(IRON));
-      wheel.rotation.x = Math.PI / 2;
-      wheel.position.set(wx, 0.28, wz);
-      t.add(wheel);
-    }
-  }
-  return t;
-}
+/** Onde está o eléctrico (para o modo de depuração). */
+export const tramPosition = (): { x: number; z: number } | null => tram?.position() ?? null;
 
-/** O eléctrico passa devagar e volta ao início (só decoração). */
+/** O eléctrico anda (só decoração). */
 export function updateLisbon(dt: number): void {
-  if (!tram) return;
-  tram.position.x += TRAM_SPEED * dt;
-  if (tram.position.x > TRAM_TO) tram.position.x = TRAM_FROM;
+  tram?.update(dt);
 }

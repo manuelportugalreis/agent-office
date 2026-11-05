@@ -112,6 +112,7 @@ export function setCityNight(n: number): void {
   curtainMat().emissiveIntensity = 0.25 * n;
   lampGlassMat().emissiveIntensity = 0.04 + 2.4 * n;
   for (const l of nightLights) l.intensity = (l.userData.max as number) * n;
+  for (const g of glowing) g.material.emissiveIntensity = g.max * n;
 }
 
 /** Placa pequena (número de polícia, toponímia) com as letras desenhadas a azul sobre fundo claro. */
@@ -124,3 +125,11 @@ export const lampGlassMat = (): THREE.MeshStandardMaterial =>
 
 /** Luzes da rua (candeeiros), acesas só à noite. `userData.max` é a intensidade máxima. */
 export const nightLights: THREE.PointLight[] = [];
+
+const glowing: { readonly material: THREE.MeshStandardMaterial; readonly max: number }[] = [];
+
+/** Regista um material cujo brilho (emissive) acompanha a noite, até `max`. */
+export function glowAtNight(material: THREE.MeshStandardMaterial, max: number): THREE.MeshStandardMaterial {
+  glowing.push({ material, max });
+  return material;
+}

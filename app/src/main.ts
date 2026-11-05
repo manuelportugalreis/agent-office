@@ -3,7 +3,7 @@ import "./chat/chat.css";
 import { AGENTS } from "./data/agents";
 import type { Light } from "three";
 import { buildBuilding, ground as groundMesh } from "./scene/building";
-import { buildLisbon, updateLisbon } from "./scene/lisbon";
+import { buildLisbon, tramPosition, updateLisbon } from "./scene/lisbon";
 import { scene } from "./scene/world";
 import { createPerson, STATE_INFO, updatePerson, type PersonView } from "./scene/person";
 import { buildAmbient } from "./scene/ambient";
@@ -154,7 +154,7 @@ function setEditMode(on: boolean): void {
   byId("hint").hidden = on;
 }
 if (new URLSearchParams(location.search).has("debug"))
-  Object.assign(window, { __office: { editor, stage, editables, janitor, requestCleaning } });
+  Object.assign(window, { __office: { editor, stage, editables, janitor, requestCleaning, tramPosition } });
 byId("editBtn").onclick = () => setEditMode(!editor.active());
 byId("editRotate").onclick = () => editor.rotate();
 byId("editReset").onclick = () => editor.reset();

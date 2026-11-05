@@ -71,11 +71,23 @@ Resultado (`docs/img/lisbon/it1/`): draw calls 4189 → 3322 com muitíssimo mai
 
 Resultado (`docs/img/lisbon/it2/`): 3241 draw calls (dia), FPS 22 (headless).
 
+### 3. O eléctrico 28 (feito)
+
+- `tram.ts`: "remodelado" com caixa de cantos arredondados (planta extrudida), amarelo com faixas creme, janelas
+  com pilares, portas do lado do passeio com degrau, salva-vidas, faróis (acendem à noite), caixas de destino
+  "28 PRAZERES" iluminadas, número "566", tejadilho e pantógrafo de braço único a tocar na catenária. Fundido em ~10
+  malhas que se movem em grupo.
+- Animação: velocidade de cruzeiro, travagem e arranque com aceleração constante, paragem de 7 s junto ao
+  escritório (poste "PARAGEM" no largo), ligeiro balanço e trepidação em andamento, recorte nas bordas da maqueta
+  (planos de recorte, também nas sombras: `renderer.localClippingEnabled`).
+- Ao abrir a app o eléctrico está parado na paragem.
+- Depuração: `?debug` expõe `__office.tramPosition()`; o script de capturas segue o eléctrico.
+- E2E Playwright: 7/7 passam.
+
 ## Backlog (prioridade)
 
-1. Eléctrico 28 remodelado (perfil arredondado, janelas, portas, trólei, letreiro) e animação com paragem.
-2. Iluminação: noite real (ambiente desligado, candeeiros), sombras a cobrir a rua, exposição, sol quente.
-3. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
+1. Iluminação: noite real (ambiente desligado, candeeiros), sombras a cobrir a rua, exposição, sol quente.
+2. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
    manjericos e arraial discreto.
-4. Vida: peões, roupa e bandeirolas a ondular, pombos.
-5. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.
+3. Vida: peões, roupa e bandeirolas a ondular, pombos.
+4. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.

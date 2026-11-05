@@ -81,6 +81,8 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
+  // O eléctrico é recortado nas bordas da maqueta.
+  renderer.localClippingEnabled = true;
   container.prepend(renderer.domElement);
   const dom = renderer.domElement;
   initLights();
