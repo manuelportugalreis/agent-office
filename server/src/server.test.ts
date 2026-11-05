@@ -83,7 +83,7 @@ describe("buildArgs", () => {
     expect(a).not.toContain("olá");
   });
   it("agentes sem ferramentas não levam --allowedTools", () => {
-    const a = buildArgs({ ...req, agent: REAL_AGENTS.find((x) => x.id === "ceo")! });
+    const a = buildArgs({ ...req, agent: { ...REAL_AGENTS.find((x) => x.id === "ceo")!, files: false } });
     expect(a).not.toContain("--allowedTools");
     expect(a[a.indexOf("--tools") + 1]).toBe("");
   });

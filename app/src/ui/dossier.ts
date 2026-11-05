@@ -339,6 +339,11 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     );
     card.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b, i, all) => {
       b.onkeydown = (e) => {
+        if (e.key === "Home" || e.key === "End") {
+          e.preventDefault();
+          all[e.key === "Home" ? 0 : all.length - 1]?.click();
+          return;
+        }
         const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
         if (!step) return;
         e.preventDefault();

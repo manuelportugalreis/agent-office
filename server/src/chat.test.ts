@@ -189,7 +189,7 @@ describe("ferramentas e modelos dos agentes", () => {
     expect(hooks[0].matcher).toBe("Read|Write|Edit|Glob|Grep");
     expect(hooks[0].hooks[0].command).toContain("fs-guard.mjs");
     expect(buildArgs({ agent: lena, text: "x", sessionId: "s", resume: false })).toContain("--add-dir");
-    const ceo = REAL_AGENTS.find((a) => a.id === "ceo")!;
+    const ceo = { ...REAL_AGENTS.find((a) => a.id === "ceo")!, files: false };
     expect(guardHooks(ceo)).toEqual([]);
     expect(buildArgs({ agent: ceo, text: "x", sessionId: "s", resume: false })).not.toContain("--settings");
   });
@@ -381,7 +381,7 @@ describe("uploads", () => {
       expect((await upload("agent=scout&name=virus.exe", "x")).status).toBe(415);
       expect((await upload("agent=scout&name=a.md", "")).status).toBe(400);
       expect((await upload("agent=scout&name=..", "x")).status).toBe(400);
-      expect((await upload("agent=ceo&name=a.md", "x")).status).toBe(404);
+      expect((await upload("agent=dean&name=a.md", "x")).status).toBe(404);
       expect((await upload("agent=nao-existe&name=a.md", "x")).status).toBe(404);
     });
     it("recusa ficheiros com mais de 10 MB", async () => {

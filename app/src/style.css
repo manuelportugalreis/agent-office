@@ -1006,7 +1006,7 @@ main.dossier-open > aside {
 .next-action.tone-done .na-dot {
   background: #4caf7a;
 }
-@media (max-width: 900px) {
+@media (max-width: 640px) {
   .next-action .na-sub {
     display: none;
   }
@@ -1019,7 +1019,7 @@ main.dossier-open > aside {
 main {
   position: relative;
 }
-@media (max-width: 820px) {
+@media (max-width: 1000px) {
   header {
     flex-wrap: wrap;
     row-gap: 8px;
@@ -1039,6 +1039,8 @@ main {
     padding: 5px 8px;
     font-size: 13px;
   }
+}
+@media (max-width: 820px) {
   .dossier-card {
     position: absolute;
     inset: 0;
@@ -1080,4 +1082,11 @@ header .mock {
 
 header h1 {
   white-space: nowrap;
+}
+
+@media (max-height: 780px) {
+  .dz-steps,
+  .dz-banner small {
+    display: none;
+  }
 }
