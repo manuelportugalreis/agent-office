@@ -24,6 +24,8 @@ export interface FitOptions {
   readonly height?: number;
   /** Ou largura máxima no eixo X. */
   readonly width?: number;
+  /** Ou o tamanho final exato [x, y, z] no espaço do modelo (estica o modelo). */
+  readonly size?: readonly [number, number, number];
   /** Rotação extra sobre o eixo vertical. */
   readonly yaw?: number;
   /** Desloca o modelo depois de o assentar no chão e o centrar. */
@@ -36,9 +38,11 @@ function fit(source: THREE.Object3D, opts: FitOptions): THREE.Group {
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   const scale = opts.height ? opts.height / size.y : opts.width ? opts.width / size.x : 1;
+  const stretch = opts.size ? new THREE.Vector3(opts.size[0] / size.x, opts.size[1] / size.y, opts.size[2] / size.z) : null;
   const wrapper = new THREE.Group();
   wrapper.add(model);
-  model.scale.multiplyScalar(scale);
+  if (stretch) model.scale.copy(stretch);
+  else model.scale.multiplyScalar(scale);
   const fitted = new THREE.Box3().setFromObject(model);
   const centre = fitted.getCenter(new THREE.Vector3());
   model.position.set(-centre.x, -fitted.min.y, -centre.z);

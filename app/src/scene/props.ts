@@ -42,6 +42,9 @@ export function desk(x: number, z: number, w: number, hue: number, screen: Scree
   cyl(g, 0.04, 0.04, 0.09, -0.4, 0.82, 0.05, mat(`hsl(${hue},60%,55%)`, { roughness: 0.4 }));
   box(g, 0.22, 0.012, 0.3, 0.45, 0.77, -0.05, mat("#fafafa")).rotation.y = 0.35;
   if (rnd(x * 3 + z) > 0.4) deskLamp(g, -w / 2 + 0.2, dark);
+  // O tampo e as gavetas passam a ser o modelo real; o monitor, o teclado e os objetos ficam por cima.
+  const body = g.children.slice(0, 9);
+  upgradeWithModel(g, "metal_office_desk", { size: [w, 0.76, 0.84], yaw: Math.PI }, (c) => !body.includes(c));
 }
 
 function deskLamp(g: THREE.Group, x: number, dark: THREE.Material): void {
@@ -132,11 +135,12 @@ export function sofa(x: number, z: number, w: number, color: string): void {
   upgradeWithModel(g, "sofa_02", { width: w, yaw: Math.PI });
 }
 
-export function table(x: number, z: number, w: number, d: number, h = 0.75, color = "#c9a47a"): void {
+export function table(x: number, z: number, w: number, d: number, h = 0.75, color = "#c9a47a", model?: string): void {
   const g = group(x, 0, z);
   const dark = mat("#33373f", { metalness: 0.4, roughness: 0.5 });
   box(g, w, 0.05, d, 0, h, 0, mat(color, { roughness: 0.45 }));
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.05, h, 0.05, sx * (w / 2 - 0.1), h / 2, sz * (d / 2 - 0.1), dark);
+  if (model) upgradeWithModel(g, model, { size: [d, h, w], yaw: Math.PI / 2 });
 }
 
 export function rug(x: number, z: number, w: number, d: number, color: string): void {
@@ -322,7 +326,7 @@ function buildMeetingAndRest(): void {
   pendantLamps(10.8, 9.5);
   rug(15, 10, 4, 2.4, "#c98b9e");
   sofa(15, 11.3, 3.2, "#b97086");
-  table(14.8, 9.6, 1.2, 0.6, 0.4, "#d9bd94");
+  table(14.8, 9.6, 1.2, 0.6, 0.4, "#d9bd94", "modern_coffee_table_01");
   coffeeStation(13.2, 7.55);
   plant(17.3, 11.5, 1.2, true);
   plant(12.6, 11.6, 0.9);
