@@ -132,6 +132,30 @@ Resultado: 3400 draw calls (dia).
 
 Resultado: 3423 draw calls (dia), FPS headless ~22.
 
+### 7. Desempenho (feito)
+
+- Um só lote estático para todo o bairro (`lisbon.ts` cria o `Batch`, os módulos `city`, `street`, `pastelaria` e
+  `largo` só acrescentam peças): os materiais partilhados (reboco, cantaria, ferro, vidros...) deixam de ter uma malha
+  por módulo.
+- As 5 luzes pontuais da rua foram substituídas por "poças de luz": quadrados com gradiente radial em mistura aditiva
+  (no chão debaixo de cada candeeiro e nas duas fachadas da esquina), com opacidade ligada à noite. Cada luz pontual
+  pesava no shader de todos os materiais, também de dia; agora há poças nos 7 postes em vez de 4 luzes.
+- O fundo deixou de ser clonado em cada fotograma.
+- Novo `scripts/lisbon-perf.mjs` (mediana de 3 medições de 4 s, qualidade alta e normal, dia e noite).
+
+Medição com o mesmo script (`docs/img/lisbon/perf.json`):
+
+| Qualidade / hora | Base: FPS | Base: draws | Agora: FPS | Agora: draws |
+| ---------------- | --------- | ----------- | ---------- | ------------ |
+| Alta, dia        | 17,9      | 4194        | 21,4       | 3403         |
+| Alta, noite      | 17,6      | 4177        | 19,5       | 3369         |
+| Normal, dia      | 32,6      | 2103        | 34,0       | 1709         |
+| Normal, noite    | 31,5      | 2095        | 32,9       | 1704         |
+
+Com muito mais geometria, a cena ficou mais leve do que a original em todas as combinações. O tempo até ao primeiro
+fotograma subiu (~3,5 s → ~7 s no Chromium sem ecrã, servidor de desenvolvimento) por causa da geração das texturas
+procedimentais e da fusão da geometria no arranque; ver "Problemas restantes".
+
 ## Backlog (prioridade)
 
-1. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.
+1. Desempenho do arranque: gerar as texturas grandes (calçada, cubos) num worker ou a 512² na qualidade normal.

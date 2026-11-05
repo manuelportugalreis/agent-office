@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Batch } from "./batch";
+import type { Batch } from "./batch";
 import { OFFICE_SOUTH } from "./city";
 import { bayCenters } from "./facade";
 import { facadeFrame } from "./houses";
@@ -112,8 +112,7 @@ function lousaTexture(): THREE.CanvasTexture {
   return t;
 }
 
-export function buildPastelaria(parent: THREE.Object3D): void {
-  const b = new Batch();
+export function buildPastelaria(b: Batch): void {
   const centers = bayCenters(OFFICE_SOUTH);
   const [a, c] = [centers[6], centers[7]];
   const ow = 1.55;
@@ -129,5 +128,4 @@ export function buildPastelaria(parent: THREE.Object3D): void {
   const wx = (v: number): number => OFFICE.x0 + v;
   [wx(a) - 1.1, wx((a + c) / 2) + 0.2, wx(c) + 1.4].forEach((x, i) => terraceTable(b, x, zT, i));
   menuBoard(b, wx(c) + 0.2, OFFICE.z1 + 0.75);
-  b.build(parent);
 }

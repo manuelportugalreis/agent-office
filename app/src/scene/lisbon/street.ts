@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Batch } from "./batch";
 import { BASE_Y, EAST, OFFICE, SOUTH, TRAM_Z, WORLD } from "./layout";
-import { ironMat, lampGlassMat, nightLights, plaqueMat, plasterMat, stoneMat } from "./materials";
+import { ironMat, lampGlassMat, lightPoolMat, plaqueMat, plasterMat, stoneMat } from "./materials";
 import { calcadaTexture, gardenTexture, settsTexture } from "./textures";
 
 /**
@@ -156,7 +156,12 @@ function lantern(b: Batch, x: number, y: number, z: number): void {
 }
 
 /** Poste da catenária com candeeiro em braço, do lado do largo; o fio de suspensão atravessa a rua até à fachada. */
-function tramPole(b: Batch, x: number, light: boolean, parent: THREE.Object3D): void {
+/** Poça de luz no chão (raio r) por baixo de um candeeiro. */
+function lightPool(b: Batch, x: number, y: number, z: number, r: number): void {
+  b.add(new THREE.PlaneGeometry(r * 2, r * 2), lightPoolMat(), x, y, z, { rx: -Math.PI / 2, cast: false });
+}
+
+function tramPole(b: Batch, x: number): void {
   const iron = plasterMat(LAMP_GREEN);
   const z = SOUTH.curb1 + 0.45;
   const y = BASE_Y + WALK_H;
@@ -173,17 +178,11 @@ function tramPole(b: Batch, x: number, light: boolean, parent: THREE.Object3D): 
   const span = z - OFFICE.z1;
   b.box(ironMat(), 0.015, 0.015, span, x, wy, OFFICE.z1 + span / 2, { cast: false });
   b.box(ironMat(), 0.12, 0.12, 0.08, x, wy, OFFICE.z1 + 0.04, { cast: false });
-  if (light) {
-    const l = new THREE.PointLight(0xffc77a, 0, 13, 1.7);
-    l.position.set(x, y + 4.2, z - 1.15);
-    l.userData.max = 9;
-    parent.add(l);
-    nightLights.push(l);
-  }
+  lightPool(b, x, BASE_Y + WALK_H + 0.02, z - 1.3, 4.2);
 }
 
 /** Candeeiro de braço preso à esquina do prédio do escritório. */
-function cornerLamp(b: Batch, parent: THREE.Object3D): void {
+function cornerLamp(b: Batch): void {
   const iron = plasterMat(LAMP_GREEN);
   const x = OFFICE.x1;
   const z = OFFICE.z1;
@@ -194,11 +193,10 @@ function cornerLamp(b: Batch, parent: THREE.Object3D): void {
   b.box(iron, 0.04, 0.6, 0.04, x + d * 0.15, y + 0.5, z + d * 0.15, { ry: Math.PI / 4, rx: 0.8 });
   lantern(b, x + d * 0.7, y, z + d * 0.7);
   b.box(iron, 0.03, 0.5, 0.03, x + d * 0.7, y + 0.95, z + d * 0.7);
-  const l = new THREE.PointLight(0xffc77a, 0, 11, 1.7);
-  l.position.set(x + d * 0.7, y + 0.3, z + d * 0.7);
-  l.userData.max = 7;
-  parent.add(l);
-  nightLights.push(l);
+  // Luz no passeio e nas duas fachadas da esquina.
+  lightPool(b, x + 1.2, BASE_Y + WALK_H + 0.02, z + 1.2, 3.6);
+  b.add(new THREE.PlaneGeometry(4.4, 4.4), lightPoolMat(), x - 1.3, y + 0.2, z + 0.15, { cast: false });
+  b.add(new THREE.PlaneGeometry(4.4, 4.4), lightPoolMat(), x + 0.15, y + 0.2, z - 1.3, { ry: Math.PI / 2, cast: false });
 }
 
 /** Placas toponímicas (em pedra, letras azuis) na esquina do escritório. */
@@ -222,16 +220,15 @@ function catenary(b: Batch): void {
   b.box(ironMat(), len, 0.012, 0.012, (WORLD.x0 + WORLD.x1) / 2, BASE_Y + 6.1, TRAM_Z, { cast: false });
 }
 
-export function buildStreet(parent: THREE.Object3D): THREE.Mesh[] {
-  const b = new Batch();
+export function buildStreet(b: Batch): void {
+  b.frame.identity();
   surfacesAndCurbs(b);
   tramTracks(b);
   bollards(b);
   drains(b);
   catenary(b);
   crosswalk(b);
-  for (const x of [-30, -18, -6, 6, 18, 30, 42]) tramPole(b, x, x >= -6 && x <= 30, parent);
-  cornerLamp(b, parent);
+  for (const x of [-30, -18, -6, 6, 18, 30, 42]) tramPole(b, x);
+  cornerLamp(b);
   streetNames(b);
-  return b.build(parent);
 }

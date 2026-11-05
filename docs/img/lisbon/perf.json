@@ -1,0 +1,11 @@
+{
+  "script": "node scripts/lisbon-perf.mjs (mediana de 3 x 4 s, 1600x900, Chromium sem ecrã com ANGLE/D3D11)",
+  "baseline_95cce93": {
+    "alta": { "Dia": { "fps": 17.9, "drawsPerFrame": 4194 }, "Noite": { "fps": 17.6, "drawsPerFrame": 4177 } },
+    "normal": { "Dia": { "fps": 32.6, "drawsPerFrame": 2103 }, "Noite": { "fps": 31.5, "drawsPerFrame": 2095 } }
+  },
+  "iteracao_7": {
+    "alta": { "Dia": { "fps": 21.4, "drawsPerFrame": 3403 }, "Noite": { "fps": 19.5, "drawsPerFrame": 3369 } },
+    "normal": { "Dia": { "fps": 34.0, "drawsPerFrame": 1709 }, "Noite": { "fps": 32.9, "drawsPerFrame": 1704 } }
+  }
+}

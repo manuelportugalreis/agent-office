@@ -1,5 +1,4 @@
-import * as THREE from "three";
-import { Batch } from "./batch";
+import type { Batch } from "./batch";
 import { buildFacade, type FacadeSpec } from "./facade";
 import { buildHouse, facadeFrame, type HouseSpec } from "./houses";
 import { BASE_Y, EAST, OFFICE } from "./layout";
@@ -267,8 +266,7 @@ const OFFICE_EAST: FacadeSpec = {
   seed: 5,
 };
 
-export function buildCity(parent: THREE.Object3D): THREE.Mesh[] {
-  const b = new Batch();
+export function buildCity(b: Batch): void {
   for (const h of [...WEST_ROW, ...NORTH_ROW, ...ACROSS_ROW, ...rearRow()]) buildHouse(b, h);
 
   // Corpo do prédio do escritório, com embasamento e cornija de pedra por baixo do último piso.
@@ -283,5 +281,5 @@ export function buildCity(parent: THREE.Object3D): THREE.Mesh[] {
   buildFacade(b, OFFICE_SOUTH);
   b.frame.copy(facadeFrame(OFFICE.x1, OFFICE.z1, "east"));
   buildFacade(b, OFFICE_EAST);
-  return b.build(parent);
+  b.frame.identity();
 }

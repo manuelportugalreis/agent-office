@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { rnd } from "../util";
-import { Batch } from "./batch";
+import type { Batch } from "./batch";
 import { BASE_Y, SOUTH } from "./layout";
 import { doorMat, glowAtNight, ironMat, plasterMat, shopGlass, signMat, stoneMat } from "./materials";
 
@@ -176,8 +176,8 @@ function garland(b: Batch, p0: THREE.Vector3, p1: THREE.Vector3, seed: number): 
   }
 }
 
-export function buildLargo(parent: THREE.Object3D): void {
-  const b = new Batch();
+export function buildLargo(b: Batch): void {
+  b.frame.identity();
   TREES.forEach((t, i) => jacaranda(b, t, 1.7 + i * 2.3));
   const kx = 4;
   const kz = 31;
@@ -204,5 +204,4 @@ export function buildLargo(parent: THREE.Object3D): void {
   ];
   for (let i = 0; i < anchors.length - 1; i++) garland(b, anchors[i], anchors[i + 1], i * 5 + 1);
   garland(b, new THREE.Vector3(TREES[0].x + 1.5, h, TREES[0].z), anchors[0], 31);
-  b.build(parent);
 }

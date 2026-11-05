@@ -39,6 +39,7 @@ const hemi = new THREE.HemisphereLight(daySky, dayBounce, 1.2);
 const sun = new THREE.DirectionalLight(sunWarm, 3.6);
 const fog = new THREE.Fog(dayBg, 85, 210);
 const tmpColor = new THREE.Color();
+const background = new THREE.Color();
 const tmpDir = new THREE.Vector3();
 
 export function initLights(q: Quality): void {
@@ -100,9 +101,9 @@ export function applyLighting(dt: number, current: number, mode: TimeMode, quali
   hemi.groundColor.copy(dayBounce).lerp(nightBounce, n);
   hemi.intensity = (1 - n) * 0.95 + n * 0.55;
 
-  const bg = tmpColor.copy(dayBg).lerp(nightBg, n);
-  scene.background = bg.clone();
-  fog.color.copy(bg);
+  background.copy(dayBg).lerp(nightBg, n);
+  scene.background = background;
+  fog.color.copy(background);
   scene.environmentIntensity = ENV_DAY[quality] * (1 - 0.8 * n);
   lamps.forEach((l) => {
     l.intensity = (0.25 + 0.7 * n) * Math.PI * 3;

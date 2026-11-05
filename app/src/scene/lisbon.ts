@@ -1,4 +1,5 @@
 import { ground } from "./building";
+import { Batch } from "./lisbon/batch";
 import { buildCity } from "./lisbon/city";
 import { buildLargo } from "./lisbon/largo";
 import { buildLife, type Life } from "./lisbon/life";
@@ -17,10 +18,13 @@ let life: Life | null = null;
 
 export function buildLisbon(): void {
   ground.visible = false;
-  buildCity(scene);
-  buildStreet(scene);
-  buildPastelaria(scene);
-  buildLargo(scene);
+  // Toda a geometria estática do bairro num só lote: fundida por material, partilhada entre módulos.
+  const b = new Batch();
+  buildCity(b);
+  buildStreet(b);
+  buildPastelaria(b);
+  buildLargo(b);
+  b.build(scene);
   tram = buildTram(scene);
   life = buildLife(scene);
 }

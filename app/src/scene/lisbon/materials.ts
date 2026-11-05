@@ -116,7 +116,7 @@ export function setCityNight(n: number): void {
   shopGlass().emissiveIntensity = 0.9 * n;
   curtainMat().emissiveIntensity = 0.25 * n;
   lampGlassMat().emissiveIntensity = 0.04 + 2.4 * n;
-  for (const l of nightLights) l.intensity = (l.userData.max as number) * n;
+  if (pool) pool.opacity = 0.55 * n;
   for (const g of glowing) g.material.emissiveIntensity = g.max * n;
 }
 
@@ -128,8 +128,40 @@ export const plaqueMat = (text: string, w = 128, h = 96): THREE.MeshStandardMate
 export const lampGlassMat = (): THREE.MeshStandardMaterial =>
   cached("lampGlass", () => new THREE.MeshStandardMaterial({ color: 0xfff1d0, roughness: 0.3, emissive: 0xffc46b, emissiveIntensity: 0 }));
 
-/** Luzes da rua (candeeiros), acesas só à noite. `userData.max` é a intensidade máxima. */
-export const nightLights: THREE.PointLight[] = [];
+/**
+ * Poça de luz dos candeeiros: quadrado com gradiente radial em mistura aditiva, em vez de luzes pontuais (cada luz
+ * pontual encarece o shader de todos os materiais da cena, de dia e de noite).
+ */
+export const lightPoolMat = (): THREE.MeshBasicMaterial => {
+  pool ??= new THREE.MeshBasicMaterial({
+    map: radialTexture(),
+    color: 0xffb35c,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  return pool;
+};
+let pool: THREE.MeshBasicMaterial | null = null;
+
+function radialTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  if (g) {
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.35, "rgba(255,255,255,0.55)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 128, 128);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 
 const glowing: { readonly material: THREE.MeshStandardMaterial; readonly max: number }[] = [];
 
