@@ -115,7 +115,23 @@ Resultado (`docs/img/lisbon/it2/`): 3241 draw calls (dia), FPS 22 (headless).
 
 Resultado: 3400 draw calls (dia).
 
+### 6. Vida no bairro (feito)
+
+- `life.ts`:
+  - Peões em seis percursos (os dois passeios da rua do eléctrico, dois caminhos no largo e dois que descem a
+    travessa e atravessam a rua até ao largo); cada parte do corpo é um `InstancedMesh` (tronco, cabeça, cabelo,
+    pernas, braços), com cores de roupa, pele e cabelo variadas, passo com balanço de braços e pernas. Os percursos
+    começam e acabam fora da maqueta e são recortados nas bordas, por isso o regresso ao início não se vê.
+  - Quatro clientes sentados na esplanada da pastelaria (a acenar ligeiramente a cabeça e a mexer o braço).
+  - Nove pombos no largo a debicar e a dar uns passos.
+  - Vento no vertex shader (posições do mundo das malhas fundidas): copas dos jacarandás, bandeirinhas, balões e
+    roupa estendida (`clothMat` novo, para o vento não mexer nas fachadas).
+- `materials.ts`: as janelas "de televisão" cintilam devagar à noite.
+- `street.ts`: passadeira na boca da travessa (por onde os peões atravessam).
+- Nada disto é clicável nem entra nos raios de seleção (`pickAgent`/`pickObject` só olham para agentes e mobília).
+
+Resultado: 3423 draw calls (dia), FPS headless ~22.
+
 ## Backlog (prioridade)
 
-1. Vida: peões, roupa e bandeirolas a ondular, pombos.
-2. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.
+1. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.

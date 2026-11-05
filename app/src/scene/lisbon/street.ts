@@ -208,6 +208,13 @@ function streetNames(b: Batch): void {
   b.box(plaqueMat("TRAV. DA QUEIMADA", 512, 128), 0.04, 0.42, 1.7, OFFICE.x1 + 0.13, y, OFFICE.z1 - 1.35, { cast: false, ry: 0 });
 }
 
+/** Passadeira na boca da travessa. */
+function crosswalk(b: Batch): void {
+  const paint = new THREE.MeshStandardMaterial({ color: 0xf1efe8, roughness: 0.75 });
+  const z = SOUTH.walk0 + (SOUTH.curb0 - SOUTH.walk0) / 2 - 0.1;
+  for (let x = EAST.curb0 + 0.45; x < EAST.curb1 - 0.3; x += 0.9) b.box(paint, 0.5, 0.01, 2.0, x, BASE_Y + 0.005, z, { cast: false });
+}
+
 /** Fio da catenária por cima dos carris. */
 function catenary(b: Batch): void {
   const len = WORLD.x1 - WORLD.x0;
@@ -222,6 +229,7 @@ export function buildStreet(parent: THREE.Object3D): THREE.Mesh[] {
   bollards(b);
   drains(b);
   catenary(b);
+  crosswalk(b);
   for (const x of [-30, -18, -6, 6, 18, 30, 42]) tramPole(b, x, x >= -6 && x <= 30, parent);
   cornerLamp(b, parent);
   streetNames(b);

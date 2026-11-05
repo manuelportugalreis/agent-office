@@ -65,15 +65,16 @@ export const signMat = (text: string, bg: string, ink: string): THREE.MeshStanda
 interface GlassVariant {
   readonly material: THREE.MeshStandardMaterial;
   readonly night: number;
+  readonly tv: boolean;
 }
 
-const GLASS_VARIANTS: readonly { readonly emissive: number; readonly night: number }[] = [
+const GLASS_VARIANTS: readonly { readonly emissive: number; readonly night: number; readonly tv?: boolean }[] = [
   { emissive: 0xffc777, night: 0 },
   { emissive: 0xffc777, night: 0 },
   { emissive: 0xffb45e, night: 1.15 },
   { emissive: 0xffd08a, night: 0.7 },
   { emissive: 0xffc070, night: 0.45 },
-  { emissive: 0x9fb8ff, night: 0.35 },
+  { emissive: 0x9fb8ff, night: 0.35, tv: true },
 ];
 
 let glass: GlassVariant[] | null = null;
@@ -88,6 +89,7 @@ function glassVariants(): GlassVariant[] {
       emissiveIntensity: 0,
     }),
     night: v.night,
+    tv: v.tv ?? false,
   }));
   return glass;
 }
@@ -107,7 +109,10 @@ export const shopGlass = (): THREE.MeshStandardMaterial =>
 
 /** Acende as janelas da cidade conforme a noite (0 = dia, 1 = noite). */
 export function setCityNight(n: number): void {
-  for (const v of glassVariants()) v.material.emissiveIntensity = v.night * n;
+  // As janelas com televisão cintilam devagar.
+  const now = performance.now();
+  const tv = 0.75 + 0.25 * Math.sin(now * 0.011) * Math.sin(now * 0.0029 + 1.3);
+  for (const v of glassVariants()) v.material.emissiveIntensity = v.night * n * (v.tv ? tv : 1);
   shopGlass().emissiveIntensity = 0.9 * n;
   curtainMat().emissiveIntensity = 0.25 * n;
   lampGlassMat().emissiveIntensity = 0.04 + 2.4 * n;
@@ -133,3 +138,13 @@ export function glowAtNight(material: THREE.MeshStandardMaterial, max: number): 
   glowing.push({ material, max });
   return material;
 }
+
+/** Roupa a secar (tecido: ondula com o vento, ver `life.ts`). */
+export const clothes: THREE.MeshStandardMaterial[] = [];
+
+export const clothMat = (color: string): THREE.MeshStandardMaterial =>
+  cached(`cloth${color}`, () => {
+    const m = new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide });
+    clothes.push(m);
+    return m;
+  });

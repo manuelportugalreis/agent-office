@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { rnd } from "../util";
 import type { Batch } from "./batch";
 import {
+  clothMat,
   curtainMat,
   doorMat,
   ironMat,
@@ -279,7 +280,7 @@ function clothesLine(b: Batch, cx: number, y: number, seed: number): void {
     const w = 0.18 + rnd(seed + k * 3.3) * 0.22;
     const h = 0.25 + rnd(seed + k * 5.1) * 0.3;
     const color = CLOTHES[Math.floor(rnd(seed * 1.3 + k) * CLOTHES.length)];
-    b.box(plasterMat(color), w, h, 0.015, x + w / 2, y - h / 2, k % 2 ? 0.5 : 0.35);
+    b.box(clothMat(color), w, h, 0.015, x + w / 2, y - h / 2, k % 2 ? 0.5 : 0.35);
     x += w + 0.06;
   }
 }

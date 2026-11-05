@@ -1,6 +1,7 @@
 import { ground } from "./building";
 import { buildCity } from "./lisbon/city";
 import { buildLargo } from "./lisbon/largo";
+import { buildLife, type Life } from "./lisbon/life";
 import { buildPastelaria } from "./lisbon/pastelaria";
 import { buildStreet } from "./lisbon/street";
 import { buildTram, type Tram } from "./lisbon/tram";
@@ -12,6 +13,7 @@ import { scene } from "./world";
  */
 
 let tram: Tram | null = null;
+let life: Life | null = null;
 
 export function buildLisbon(): void {
   ground.visible = false;
@@ -20,12 +22,14 @@ export function buildLisbon(): void {
   buildPastelaria(scene);
   buildLargo(scene);
   tram = buildTram(scene);
+  life = buildLife(scene);
 }
 
 /** Onde está o eléctrico (para o modo de depuração). */
 export const tramPosition = (): { x: number; z: number } | null => tram?.position() ?? null;
 
-/** O eléctrico anda (só decoração). */
+/** O eléctrico, os peões, os pombos e o vento (só decoração). */
 export function updateLisbon(dt: number): void {
   tram?.update(dt);
+  life?.update(dt);
 }

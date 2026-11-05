@@ -127,13 +127,13 @@ function bench(b: Batch, x: number, z: number, ry: number): void {
   b.frame.identity();
 }
 
-const FLAG_COLORS = ["#d8423a", "#f0c330", "#2f8f57", "#2f6fd1", "#f4f1ea", "#e8823a"].map((c) => {
+export const FLAG_COLORS = ["#d8423a", "#f0c330", "#2f8f57", "#2f6fd1", "#f4f1ea", "#e8823a"].map((c) => {
   const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide });
   return m;
 });
 
 /** Balões de papel: acendem-se um pouco à noite. */
-const BALLOONS = ["#d8423a", "#f0c330", "#2f6fd1", "#e8823a"].map((c) =>
+export const BALLOONS = ["#d8423a", "#f0c330", "#2f6fd1", "#e8823a"].map((c) =>
   glowAtNight(new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0, roughness: 0.9 }), 0.55),
 );
 
