@@ -11,7 +11,7 @@ import { plasterMat, roofMat, stoneMat, windowGlass, woodFrameMat } from "./mate
  */
 
 export type RoofKind = "gable" | "mansard";
-export type Facing = "south" | "east" | "north";
+export type Facing = "south" | "east" | "north" | "west";
 
 export interface HouseSpec {
   readonly facade: FacadeSpec;
@@ -24,7 +24,7 @@ export interface HouseSpec {
   readonly chimneys: number;
 }
 
-const ROT: Record<Facing, number> = { south: 0, east: Math.PI / 2, north: Math.PI };
+const ROT: Record<Facing, number> = { south: 0, east: Math.PI / 2, north: Math.PI, west: -Math.PI / 2 };
 
 /** Matriz do referencial da fachada (origem no canto inferior esquerdo, ao nível da rua). */
 export function facadeFrame(x: number, z: number, facing: Facing, y = BASE_Y): THREE.Matrix4 {

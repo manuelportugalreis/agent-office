@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Batch } from "./batch";
 import { buildFacade, type FacadeSpec } from "./facade";
 import { buildHouse, facadeFrame, type HouseSpec } from "./houses";
-import { BASE_Y, OFFICE } from "./layout";
+import { BASE_Y, EAST, OFFICE } from "./layout";
 import { plasterMat, stoneMat } from "./materials";
 
 /**
@@ -150,6 +150,68 @@ const NORTH_ROW: readonly HouseSpec[] = [
   }),
 ];
 
+/** Do outro lado da travessa: frente para a rua do eléctrico e frente para a travessa (referencial para sul). */
+const ACROSS_ROW: readonly HouseSpec[] = [
+  house(EAST.walk1, OFFICE.z1, "south", 12.8, "gable", 2, {
+    width: 7.4,
+    storeys: [3.4, 3.0, 2.9],
+    bays: 3,
+    wall: "#f0d48c",
+    trim: LIOZ,
+    shutters: GREEN,
+    balconies: "nobre",
+    shops: [{ name: "CAFÉ", bg: "#5a1f1c", ink: "#f2dfb3", bays: [1, 2] }],
+    doorBay: 0,
+    seed: 131,
+  }),
+  house(EAST.walk1 + 7.4, OFFICE.z1, "south", 12.8, "mansard", 1, {
+    width: 7.8,
+    storeys: [3.5, 3.1, 2.9],
+    bays: 3,
+    wall: "#cfd9dc",
+    trim: LIOZ,
+    shutters: null,
+    balconies: "corrida",
+    doorBay: 1,
+    door: "#2f3e4a",
+    seed: 137,
+  }),
+  house(EAST.walk1, OFFICE.z0 - 7.0, "west", 12.8, "gable", 1, {
+    width: 7.0,
+    storeys: [3.3, 3.0, 3.0, 3.0],
+    bays: 3,
+    wall: "#e4b7a0",
+    trim: LIOZ_WARM,
+    shutters: BROWN,
+    balconies: "sacadas",
+    doorBay: 2,
+    seed: 149,
+  }),
+  house(EAST.walk1, OFFICE.z0 - 14.2, "west", 12.8, "gable", 2, {
+    width: 7.2,
+    storeys: [3.4, 3.0, 3.0, 2.9],
+    bays: 3,
+    wall: "#efe6d2",
+    trim: LIOZ,
+    shutters: GREEN_LIGHT,
+    balconies: "nobre",
+    shops: [{ name: "LAVANDARIA", bg: "#e8eef0", ink: "#24489a", bays: [0] }],
+    doorBay: 1,
+    seed: 151,
+  }),
+  house(EAST.walk1, OFFICE.z0 - 22.6, "west", 12.8, "mansard", 1, {
+    width: 8.4,
+    storeys: [3.4, 3.1, 3.0, 3.0],
+    bays: 3,
+    wall: "#b9c7b1",
+    trim: LIOZ,
+    shutters: null,
+    balconies: "corrida",
+    doorBay: 0,
+    seed: 157,
+  }),
+];
+
 /** Tardozes do interior do quarteirão (vistos por cima do logradouro): janelas simples e estendais. */
 const REAR_WALLS = ["#ece3cf", "#e7c9a5", "#d9dccd", "#f0e2b8", "#e3cfc4", "#efe9dc", "#dcc7a3"];
 const REAR_WIDTHS = [7.4, 6.4, 8.0, 7.0, 6.6, 6.8, 5.2];
@@ -207,7 +269,7 @@ const OFFICE_EAST: FacadeSpec = {
 
 export function buildCity(parent: THREE.Object3D): THREE.Mesh[] {
   const b = new Batch();
-  for (const h of [...WEST_ROW, ...NORTH_ROW, ...rearRow()]) buildHouse(b, h);
+  for (const h of [...WEST_ROW, ...NORTH_ROW, ...ACROSS_ROW, ...rearRow()]) buildHouse(b, h);
 
   // Corpo do prédio do escritório, com embasamento e cornija de pedra por baixo do último piso.
   const H = -0.4 - BASE_Y;

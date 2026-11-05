@@ -56,13 +56,26 @@ Problemas encontrados:
 
 Resultado (`docs/img/lisbon/it1/`): draw calls 4189 → 3322 com muitíssimo mais detalhe; FPS 14 → 20.
 
+### 2. A rua e o outro lado da travessa (feito)
+
+- `street.ts`: faixa de rodagem em cubos de granito (textura procedimental em fiadas desencontradas), passeios de
+  calçada branca de calcário (pedras irregulares de ~6 cm com juntas de areia), lancis de granito, carris embutidos com
+  caleira, largo com o "mar largo" do Rossio em tom suave, logradouros em terra e relva, base da maqueta em corte.
+- Pilaretes de ferro fundido, sarjetas e tampas, postes da catenária com candeeiro de braço e fio de suspensão até à
+  fachada, catenária sobre os carris, candeeiro de esquina no prédio do escritório, placas toponímicas
+  ("RUA DO LORETO", "TRAV. DA QUEIMADA").
+- Lanternas lisboetas de seis faces com vidro que acende à noite e 5 luzes pontuais (só acesas à noite).
+- `city.ts`: outro lado da travessa (2 prédios para a rua do eléctrico, de 3 pisos para não taparem o escritório, e 3
+  virados para a travessa).
+- Removidos: plano de calçada de 120 m, relva verde, bandeirolas penduradas ao longo da rua, carris e fio antigos.
+
+Resultado (`docs/img/lisbon/it2/`): 3241 draw calls (dia), FPS 22 (headless).
+
 ## Backlog (prioridade)
 
-1. Rua: faixa de rodagem em cubos de granito, passeios em calçada branca com lancil, carris embutidos, largo com
-   desenho de ondas mais discreto, maqueta com corte de terreno.
-2. Eléctrico 28 remodelado (perfil arredondado, janelas, portas, trólei, letreiro) e animação com paragem.
-3. Iluminação: noite real (ambiente desligado, candeeiros), sombras a cobrir a rua, exposição, sol quente.
-4. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
+1. Eléctrico 28 remodelado (perfil arredondado, janelas, portas, trólei, letreiro) e animação com paragem.
+2. Iluminação: noite real (ambiente desligado, candeeiros), sombras a cobrir a rua, exposição, sol quente.
+3. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
    manjericos e arraial discreto.
-5. Vida: peões, roupa e bandeirolas a ondular, pombos.
-6. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.
+4. Vida: peões, roupa e bandeirolas a ondular, pombos.
+5. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.

@@ -217,3 +217,127 @@ export function signTexture(text: string, bg: string, ink: string, w = 512, h = 
   g.fillText(text, w / 2, h / 2 + 2);
   return canvasTexture(c);
 }
+
+/** Pedras irregulares numa grelha com jitter (calçada e cubos): `tone` dá a cor de cada pedra pelo centro. */
+function stones(g: Ctx, size: number, cell: number, joint: string, tone: (x: number, y: number, i: number) => string): void {
+  g.fillStyle = joint;
+  g.fillRect(0, 0, size, size);
+  const n = Math.round(size / cell);
+  const step = size / n;
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      const id = j * n + i;
+      const cx = (i + 0.5) * step + (rnd(id * 1.3) - 0.5) * step * 0.18;
+      const cy = (j + 0.5) * step + (rnd(id * 2.7) - 0.5) * step * 0.18;
+      const sides = 5 + Math.floor(rnd(id * 3.9) * 3);
+      const pts: [number, number][] = [];
+      for (let k = 0; k < sides; k++) {
+        const a = (k / sides) * Math.PI * 2 + rnd(id + k * 0.7) * 0.6;
+        const r = step * (0.46 + rnd(id * 5.1 + k) * 0.14);
+        pts.push([Math.cos(a) * r, Math.sin(a) * r]);
+      }
+      g.fillStyle = tone(cx, cy, id);
+      const edge = cx < step || cy < step || cx > size - step || cy > size - step;
+      for (const ox of edge ? [-size, 0, size] : [0]) {
+        for (const oy of edge ? [-size, 0, size] : [0]) {
+          g.beginPath();
+          pts.forEach(([px, py], k) => (k ? g.lineTo(cx + ox + px, cy + oy + py) : g.moveTo(cx + ox + px, cy + oy + py)));
+          g.closePath();
+          g.fill();
+        }
+      }
+    }
+  }
+}
+
+const shade = (base: readonly [number, number, number], v: number): string =>
+  `rgb(${Math.round(base[0] * v)},${Math.round(base[1] * v)},${Math.round(base[2] * v)})`;
+
+const texCache = new Map<string, THREE.CanvasTexture>();
+
+/**
+ * Calçada portuguesa de passeio: pedrinhas de calcário branco (cerca de 6 cm) com juntas de areia. Com `waves`, o
+ * desenho de ondas de basalto negro do Rossio ("mar largo"), mais suave para não cansar.
+ */
+export function calcadaTexture(waves: boolean): THREE.CanvasTexture {
+  const key = `calcada${waves}`;
+  const hit = texCache.get(key);
+  if (hit) return hit;
+  const S = 1024;
+  const { c, g } = canvas2d(S, S);
+  const P = S / 2;
+  stones(g, S, waves ? 26 : 30, "#b9b1a0", (x, y, i) => {
+    const band = (((y + Math.sin((x / S) * Math.PI * 4) * P * 0.28) % P) + P) % P;
+    const dark = waves && band < P * 0.3;
+    const v = 0.9 + rnd(i * 7.7) * 0.12;
+    return dark ? shade([72, 74, 80], v) : shade([236, 231, 220], v);
+  });
+  grain(g, S, 12, 21);
+  const t = repeatTex(c);
+  texCache.set(key, t);
+  return t;
+}
+
+/** Cubos de granito da faixa de rodagem, em fiadas desencontradas, gastos e com juntas escuras. */
+export function settsTexture(): THREE.CanvasTexture {
+  const hit = texCache.get("setts");
+  if (hit) return hit;
+  const S = 1024;
+  const ROWS = 24;
+  const rh = S / ROWS;
+  const { c, g } = canvas2d(S, S);
+  g.fillStyle = "#4b4844";
+  g.fillRect(0, 0, S, S);
+  const tones: readonly (readonly [number, number, number])[] = [
+    [146, 141, 133],
+    [156, 151, 143],
+    [128, 124, 118],
+    [140, 132, 122],
+    [118, 116, 113],
+  ];
+  for (let r = 0; r < ROWS; r++) {
+    let x = (r % 2) * rh * 0.5 - rh;
+    let k = 0;
+    while (x < S) {
+      const w = rh * (0.85 + rnd(r * 131 + k) * 0.35);
+      const tone = tones[Math.floor(rnd(r * 17 + k * 3.3) * tones.length)];
+      g.fillStyle = shade(tone, 0.92 + rnd(r * 7 + k) * 0.14);
+      for (const ox of [0, S]) {
+        g.beginPath();
+        g.roundRect(x + 2 - ox, r * rh + 2, w - 4, rh - 4, 5);
+        g.fill();
+      }
+      x += w;
+      k++;
+    }
+  }
+  grain(g, S, 22, 33);
+  const t = repeatTex(c);
+  texCache.set("setts", t);
+  return t;
+}
+
+/** Terra e relva do logradouro. */
+export function gardenTexture(): THREE.CanvasTexture {
+  const hit = texCache.get("garden");
+  if (hit) return hit;
+  const S = 256;
+  const { c, g } = canvas2d(S, S);
+  g.fillStyle = "#7d8a55";
+  g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 90; i++) {
+    const x = rnd(i + 5) * S;
+    const y = rnd(i + 55) * S;
+    const r = 8 + rnd(i + 99) * 30;
+    wrapped(S, (ox, oy) => {
+      g.fillStyle = rnd(i * 3) > 0.6 ? "rgba(120,96,64,0.35)" : "rgba(150,170,90,0.3)";
+      g.beginPath();
+      g.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+      g.fill();
+    });
+  }
+  grain(g, S, 30, 44);
+  const t = repeatTex(c);
+  texCache.set("garden", t);
+  return t;
+}
