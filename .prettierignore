@@ -6,3 +6,5 @@ server/data
 server/workspaces
 mockup
 .claude/
+app/public/models/
+app/public/textures/
