@@ -58,7 +58,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 0.9;
   container.prepend(renderer.domElement);
   const dom = renderer.domElement;
   initLights();
@@ -242,9 +242,9 @@ function applyLighting(dt: number, current: number, mode: TimeMode): number {
   const n = current + (nightFactor(hour) - current) * Math.min(1, dt * 2);
   const t = clamp((hour - 6) / 12, 0, 1);
   sun.position.set(14 - Math.cos(Math.PI * t) * 9, Math.max(8, Math.sin(Math.PI * t) * 14 + 6), 18);
-  sun.intensity = 1.35 * (1 - n) + 0.12;
+  sun.intensity = 1.05 * (1 - n) + 0.12;
   sun.color.setHex(t < 0.15 || t > 0.85 ? 0xffc08a : 0xffe9cc);
-  hemi.intensity = 0.38 * (1 - n) + 0.14;
+  hemi.intensity = 0.3 * (1 - n) + 0.14;
   scene.background = dayBg.clone().lerp(nightBg, n);
   (ground.material as THREE.MeshStandardMaterial).color.copy(dayGround).lerp(nightGround, n);
   lamps.forEach((l) => {
