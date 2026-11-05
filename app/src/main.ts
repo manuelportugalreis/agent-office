@@ -9,6 +9,8 @@ import { createPerson, STATE_INFO, updatePerson, type PersonView } from "./scene
 import { buildAmbient } from "./scene/ambient";
 import { buildProps } from "./scene/props";
 import { buildAnnex, updateServers } from "./scene/annex";
+import { editables, loadLayout } from "./scene/editable";
+import { createEditor } from "./scene/editor";
 import { createScreen, drawScreen, type ScreenHandle } from "./scene/screens";
 import { createStage, DEFAULT_ZOOM, type TimeMode } from "./scene/stage";
 import type { ChatActions, ChatAgent } from "./chat/ChatPanel";
@@ -58,6 +60,7 @@ const agents: Agent[] = AGENTS.map((d) => createAgent(d, locs[`desk-${d.id}`]));
 const screens = new Map<string, ScreenHandle>(agents.map((a) => [a.def.id, createScreen()]));
 buildProps(screens);
 buildAnnex();
+loadLayout();
 // Tudo o que existe até aqui é edifício e mobília (estático); as pessoas, o dossier e o resto vêm depois.
 const staticRoots = scene.children.filter((c) => !(c as Light).isLight && c !== groundMesh && !c.userData.live);
 // A versão cozinhada no Blender é experimental e fica desligada por defeito (abre com ?baked).
@@ -122,6 +125,7 @@ const stage = createStage(
   (e) => {
     // Clicar no dossier (a pasta ou o rótulo) abre o cartão com tudo o que interessa.
     if (pickId(e) === DOSSIER_ID) return dossierUi.open();
+    if (editor.active()) return;
     const a = pickAt(e);
     if (walk.on) return clickInWalkMode(e, a);
     if (a) panel.open(a, "chat");
@@ -131,6 +135,27 @@ const stage = createStage(
     stage.dom.style.cursor = hovered || pickId(e) === DOSSIER_ID ? "pointer" : "grab";
   },
 );
+const editor = createEditor(stage, () => refreshEditBar());
+function refreshEditBar(): void {
+  const on = editor.active();
+  byId("editBar").hidden = !on;
+  const btn = byId("editBtn");
+  btn.setAttribute("aria-pressed", String(on));
+  btn.classList.toggle("on", on);
+  const name = editor.selected();
+  byId("editInfo").textContent = name ? `${name}: arrasta para mudar de sítio` : "Arrasta uma peça para a mudar de sítio.";
+}
+function setEditMode(on: boolean): void {
+  if (on && walk.on) setWalkMode(false);
+  editor.setActive(on);
+  byId("hint").hidden = on;
+}
+if (new URLSearchParams(location.search).has("debug")) Object.assign(window, { __office: { editor, stage, editables } });
+byId("editBtn").onclick = () => setEditMode(!editor.active());
+byId("editRotate").onclick = () => editor.rotate();
+byId("editReset").onclick = () => editor.reset();
+byId("editDone").onclick = () => setEditMode(false);
+
 /** Modo andar: clicar numa pessoa leva-te à secretária dela; no corredor, ao sítio clicado; numa sala, à secretária mais próxima. */
 function clickInWalkMode(e: PointerEvent, clicked: Agent | null): void {
   if (clicked) {
@@ -149,6 +174,7 @@ function clickInWalkMode(e: PointerEvent, clicked: Agent | null): void {
 }
 
 function setWalkMode(on: boolean): void {
+  if (on && editor.active()) setEditMode(false);
   walk.on = on;
   playerView.group.visible = on;
   const btn = byId("walkBtn");
@@ -207,6 +233,12 @@ addEventListener("keydown", (e) => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   // Os atalhos de ligar/desligar não repetem quando a tecla fica carregada (o autorrepeat do browser).
   if (k === "g" && !e.repeat) return setWalkMode(!walk.on);
+  if (k === "m" && !e.repeat) return setEditMode(!editor.active());
+  if (editor.active()) {
+    if (k === "r" && !e.repeat) editor.rotate();
+    else if (k === "Escape") setEditMode(false);
+    return;
+  }
   if (!walk.on) return;
   if (k === "f" && !e.repeat) return setFollow(!walk.follow);
   if (k in MOVE_KEYS) {

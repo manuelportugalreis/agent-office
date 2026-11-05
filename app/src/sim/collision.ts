@@ -63,7 +63,7 @@ function buildSolids(): Rect[] {
   return out;
 }
 
-export const SOLIDS: readonly Rect[] = buildSolids();
+export const SOLIDS: Rect[] = buildSolids();
 
 /** Distância de (x, z) ao retângulo (0 se estiver lá dentro). */
 function distance(x: number, z: number, r: Rect): number {

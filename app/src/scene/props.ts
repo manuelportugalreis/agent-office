@@ -3,6 +3,7 @@ import { AGENTS } from "../data/agents";
 import { box, canvas2d, canvasTexture, cyl, group, mat, rnd, sphere, wrapText } from "./util";
 import { scene } from "./world";
 import { upgradeWithModel } from "./models";
+import { makeEditable } from "./editable";
 import type { ScreenHandle } from "./screens";
 
 // ---------- cadeiras e secretárias ----------
@@ -71,6 +72,7 @@ export function plant(x: number, z: number, s = 1, tall = false): void {
     sphere(g, 0.17 * s, -0.12, 0.62 * s, -0.05, leaf2);
   }
   upgradeWithModel(g, tall ? "potted_plant_01" : "potted_plant_02", { height: tall ? 1.55 : 0.8 * s });
+  makeEditable("planta", "Planta", g);
 }
 
 export function shelf(x: number, z: number, rotY: number, w = 1.4): void {
@@ -87,6 +89,7 @@ export function shelf(x: number, z: number, rotY: number, w = 1.4): void {
     }
   }
   upgradeWithModel(g, "wooden_bookshelf_worn", { height: 2, yaw: Math.PI });
+  makeEditable("estante", "Estante", g);
 }
 
 export function cabinet(x: number, z: number): void {
@@ -96,6 +99,7 @@ export function cabinet(x: number, z: number): void {
     box(g, 0.5, 0.01, 0.6, 0, 0.1 + i * 0.35, 0.001, mat("#7f8793"));
     box(g, 0.14, 0.03, 0.03, 0, 0.25 + i * 0.35, 0.31, mat("#4a4f57"));
   }
+  makeEditable("arquivo", "Arquivo", g);
 }
 
 export function printer(x: number, z: number): void {
@@ -105,6 +109,7 @@ export function printer(x: number, z: number): void {
   box(g, 0.5, 0.28, 0.45, 0, 0.88, 0, mat("#eceff3"));
   box(g, 0.5, 0.03, 0.3, 0, 1.04, 0, mat("#2b2f36"));
   box(g, 0.1, 0.02, 0.12, 0.15, 1.0, 0.15, mat("#3a88ff"), false);
+  makeEditable("impressora", "Impressora", g);
 }
 
 export function cooler(x: number, z: number): void {
@@ -112,6 +117,7 @@ export function cooler(x: number, z: number): void {
   box(g, 0.38, 0.95, 0.38, 0, 0.48, 0, mat("#e9edf2"));
   cyl(g, 0.15, 0.15, 0.42, 0, 1.2, 0, mat("#7fc4ff", { transparent: true, opacity: 0.7, roughness: 0.1 }));
   box(g, 0.1, 0.06, 0.06, 0, 0.85, 0.2, mat("#3a88ff"));
+  makeEditable("bebedouro", "Bebedouro", g);
 }
 
 export function coffeeStation(x: number, z: number): void {
@@ -370,6 +376,7 @@ function vending(x: number, z: number): void {
   box(g, 0.9, 1.9, 0.7, 0, 0.95, 0, mat("#b53a3a"));
   box(g, 0.6, 1.0, 0.04, -0.08, 1.2, 0.35, mat("#8fd0ff", { transparent: true, opacity: 0.55, roughness: 0.1 }), false);
   box(g, 0.16, 0.5, 0.04, 0.32, 1.2, 0.35, mat("#222"), false);
+  makeEditable("venda", "Máquina de venda", g);
 }
 
 function buildWing(): void {

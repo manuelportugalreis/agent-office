@@ -39,6 +39,12 @@ function initLights(): void {
 
 const nightFactor = (h: number): number => (h >= 7 && h <= 18 ? 0 : h >= 20 || h <= 5 ? 1 : h > 18 ? (h - 18) / 2 : 1 - (h - 5) / 2);
 
+export interface EditHook {
+  down(e: PointerEvent): boolean;
+  move(e: PointerEvent): void;
+  up(e: PointerEvent): void;
+}
+
 export interface Stage {
   readonly dom: HTMLCanvasElement;
   setTimeMode(mode: TimeMode): void;
@@ -54,6 +60,10 @@ export interface Stage {
   pickAgent(e: PointerEvent, groups: readonly THREE.Object3D[]): string | null;
   /** Ponto do chão (y = 0) sob o cursor, ou null se o raio não o atinge. */
   pickGround(e: PointerEvent): { x: number; z: number } | null;
+  /** O primeiro objeto dos grupos dados sob o cursor (para o modo editar), ou null. */
+  pickObject(e: PointerEvent, groups: readonly THREE.Object3D[]): THREE.Object3D | null;
+  /** Ganchos do modo editar: se `down` devolver true, o arrasto é da peça e não da câmara. */
+  setEditHook(hook: EditHook | null): void;
   /** Define o zoom (1 = mapa inteiro). */
   setZoom(value: number): void;
   /** A câmara segue o ponto devolvido por `getPoint` (null para deixar de seguir). `onBreak` é chamado quando o utilizador arrasta o mapa. */
@@ -110,7 +120,8 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   new ResizeObserver(resize).observe(container);
   resize();
 
-  installControls(dom, {
+  const editHook: { current: EditHook | null } = { current: null };
+  installControls(dom, editHook, {
     rotate: (dx) => {
       azimuth -= dx * 0.006;
       applyCamera();
@@ -183,6 +194,15 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       tmp.set(x, y, z).project(cam);
       return { x: (tmp.x * 0.5 + 0.5) * dom.clientWidth, y: (-tmp.y * 0.5 + 0.5) * dom.clientHeight };
     },
+    pickObject: (e, groups) => {
+      const r = dom.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
+      ray.setFromCamera(ndc, cam);
+      return ray.intersectObjects([...groups], true)[0]?.object ?? null;
+    },
+    setEditHook: (hook) => {
+      editHook.current = hook;
+    },
     pickAgent: (e, groups) => {
       const r = dom.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
@@ -202,13 +222,20 @@ interface ControlHandlers {
   onHover(e: PointerEvent): void;
 }
 
-function installControls(dom: HTMLCanvasElement, h: ControlHandlers): void {
+function installControls(dom: HTMLCanvasElement, edit: { current: EditHook | null }, h: ControlHandlers): void {
   let drag: { x: number; y: number; button: number; moved: boolean } | null = null;
+  let editing = false;
   dom.addEventListener("pointerdown", (e) => {
+    if (e.button === 0 && edit.current?.down(e)) {
+      editing = true;
+      dom.setPointerCapture(e.pointerId);
+      return;
+    }
     drag = { x: e.clientX, y: e.clientY, button: e.button, moved: false };
     dom.setPointerCapture(e.pointerId);
   });
   dom.addEventListener("pointermove", (e) => {
+    if (editing) return edit.current?.move(e);
     if (!drag) return h.onHover(e);
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
@@ -220,16 +247,25 @@ function installControls(dom: HTMLCanvasElement, h: ControlHandlers): void {
     drag.y = e.clientY;
   });
   dom.addEventListener("pointerup", (e) => {
+    if (editing) {
+      editing = false;
+      edit.current?.up(e);
+      if (dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId);
+      return;
+    }
     if (drag && !drag.moved && drag.button === 0 && e.target === dom) h.onClick(e);
     drag = null;
     if (dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId);
   });
   // Se o browser perder o gesto (por exemplo, o rato sai da janela), não deixar um arrasto "preso":
   // um arrasto preso fazia o próximo clique noutro sítio ser tratado como clique no mapa.
-  dom.addEventListener("pointercancel", () => {
+  dom.addEventListener("pointercancel", (e) => {
+    if (editing) edit.current?.up(e);
+    editing = false;
     drag = null;
   });
   dom.addEventListener("lostpointercapture", () => {
+    editing = false;
     drag = null;
   });
   dom.addEventListener(

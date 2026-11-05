@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { box, cyl, group, mat } from "./util";
 import { sign } from "./props";
+import { makeEditable } from "./editable";
 
 /**
  * Cantos novos do escritório: o ginásio (sul da sala de jogos) e a sala de servidores (canto nascente da sala Job Search).
@@ -52,6 +53,7 @@ function treadmill(x: number, z: number): void {
   }
   box(g, 0.74, 0.32, 0.1, 0, 1.2, -0.72, mat("#1b1e24"), false);
   box(g, 0.5, 0.16, 0.02, 0, 1.22, -0.665, new THREE.MeshBasicMaterial({ color: 0x4ad0ff, toneMapped: false }), false);
+  makeEditable("passadeira", "Passadeira", g);
 }
 
 function weightRack(x: number, z: number): void {
@@ -62,11 +64,14 @@ function weightRack(x: number, z: number): void {
   const iron = mat("#14161a", { metalness: 0.7, roughness: 0.4 });
   for (let i = 0; i < 4; i++) {
     for (const y of [0.62, 0.25]) {
-      const d = group(x - 0.4 + i * 0.27, y, z);
+      const d = new THREE.Group();
+      d.position.set(-0.4 + i * 0.27, y, 0);
+      g.add(d);
       cyl(d, 0.012, 0.012, 0.26, 0, 0, 0, mat("#9aa1ab", { metalness: 0.8 }), 8).rotation.z = Math.PI / 2;
       for (const s of [-1, 1]) cyl(d, 0.07 + i * 0.008, 0.07 + i * 0.008, 0.06, s * 0.1, 0, 0, iron, 12).rotation.z = Math.PI / 2;
     }
   }
+  makeEditable("pesos", "Pesos", g);
 }
 
 export function buildAnnex(): void {
@@ -74,7 +79,9 @@ export function buildAnnex(): void {
   box(group(20.85, 0, 11.05), 4.2, 0.02, 1.75, 0, 0.012, 0, mat("#2b2f36", { roughness: 1 }), false);
   treadmill(19.3, 11.0);
   weightRack(20.6, 11.72);
-  box(group(22.2, 0, 11.0), 1.5, 0.025, 0.6, 0, 0.026, 0, mat("#6d4cc2", { roughness: 0.95 }), false);
+  const yogaMat = group(22.2, 0, 11.0);
+  box(yogaMat, 1.5, 0.025, 0.6, 0, 0.026, 0, mat("#6d4cc2", { roughness: 0.95 }), false);
+  makeEditable("tapete", "Tapete de ioga", yogaMat, { w: 1.5, d: 0.6 });
 
   // Sala de servidores: chão técnico escuro, quatro bastidores encostados à parede nascente e o letreiro.
   box(group(11.05, 0, 2.5), 1.9, 0.02, 4.6, 0, 0.012, 0, mat("#39424d", { roughness: 0.6 }), false);
