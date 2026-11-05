@@ -8,11 +8,13 @@ import { createPost, loadQuality, saveQuality, type Quality } from "./post";
 export type TimeMode = "auto" | "day" | "night";
 
 const ELEVATION = 0.62;
-const MIN_ZOOM = 0.6;
+const MIN_ZOOM = 0.4;
+/** Zoom por defeito: mostra o prédio inteiro, com a rua e os vizinhos. */
+export const DEFAULT_ZOOM = 0.95;
 const MAX_ZOOM = 3.5;
 const DRAG_THRESHOLD_PX = 4;
 const FOLLOW_RATE = 3;
-const MAP_CENTER = new THREE.Vector3(12, 0, 5.6);
+const MAP_CENTER = new THREE.Vector3(12, -1.3, 5.6);
 
 const clamp = THREE.MathUtils.clamp;
 const dayBg = new THREE.Color(0xd8d2c6);
@@ -45,6 +47,8 @@ export interface Stage {
   /** Qualidade gráfica: "alta" (oclusão ambiente, brilho, reflexos) ou "normal". */
   setQuality(q: Quality): void;
   readonly quality: () => Quality;
+  /** Ângulo da câmara à volta do escritório (radianos), para andar relativamente ao ecrã. */
+  azimuth(): number;
   /** Converte uma posição do mundo em pixels dentro do contentor. */
   project(x: number, y: number, z: number): { x: number; y: number };
   pickAgent(e: PointerEvent, groups: readonly THREE.Object3D[]): string | null;
@@ -71,7 +75,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   const target = MAP_CENTER.clone();
   let azimuth = Math.PI / 4;
-  let zoom = 1;
+  let zoom = DEFAULT_ZOOM;
   let halfH = 12;
   let timeMode: TimeMode = "auto";
   let quality: Quality = loadQuality();
@@ -174,6 +178,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       post.setQuality(q);
     },
     quality: () => quality,
+    azimuth: () => azimuth,
     project: (x, y, z) => {
       tmp.set(x, y, z).project(cam);
       return { x: (tmp.x * 0.5 + 0.5) * dom.clientWidth, y: (-tmp.y * 0.5 + 0.5) * dom.clientHeight };

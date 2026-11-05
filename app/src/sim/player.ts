@@ -1,5 +1,6 @@
 import type { AgentDef } from "../data/agents";
 import { createAgent, interruptedRoute, type Agent } from "./agent";
+import { slide } from "./collision";
 import { LANE, routeBetween, type Loc, type LocMap, type Pt } from "./locations";
 
 /** O avatar do utilizador: anda pelos corredores e vai até à secretária de qualquer pessoa. Não faz parte da equipa. */
@@ -112,5 +113,27 @@ export function nearestDesk<T extends { readonly def: { readonly id: string; rea
 export function clickCorridor(p: Agent, at: Pt): boolean {
   if (Math.abs(at.z - LANE) > 1 || at.x < CORRIDOR_MIN_X - 0.5 || at.x > CORRIDOR_MAX_X + 0.5) return false;
   walkTo(p, corridorSpot(at.x, at.x >= p.x ? "east" : "west"));
+  return true;
+}
+
+const FREE_SPEED = 1.9;
+const FREE_LOC: Loc = { key: "player-free", pts: [{ x: 0, z: LANE }], yaw: 0, sit: 0, owner: null };
+
+/** Anda a pé em qualquer direção, com colisões e a deslizar ao longo das paredes. `dir` já vem relativo ao mundo. Devolve falso se não houve movimento. */
+export function freeWalk(p: Agent, dirX: number, dirZ: number, dt: number): boolean {
+  const len = Math.hypot(dirX, dirZ);
+  if (len === 0) return false;
+  const step = FREE_SPEED * dt;
+  const next = slide(p.x, p.z, (dirX / len) * step, (dirZ / len) * step);
+  p.route = [];
+  p.dest = null;
+  p.loc = FREE_LOC;
+  p.sit = 0;
+  p.sitTarget = 0;
+  p.x = next.x;
+  p.z = next.z;
+  p.yawTarget = Math.atan2(dirX, dirZ);
+  p.walk = 1;
+  p.phase += dt * 8;
   return true;
 }

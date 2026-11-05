@@ -3,12 +3,13 @@ import "./chat/chat.css";
 import { AGENTS } from "./data/agents";
 import type { Light } from "three";
 import { buildBuilding, ground as groundMesh } from "./scene/building";
+import { buildLisbon } from "./scene/lisbon";
 import { scene } from "./scene/world";
 import { createPerson, STATE_INFO, updatePerson, type PersonView } from "./scene/person";
 import { buildAmbient } from "./scene/ambient";
 import { buildProps } from "./scene/props";
 import { createScreen, drawScreen, type ScreenHandle } from "./scene/screens";
-import { createStage, type TimeMode } from "./scene/stage";
+import { createStage, DEFAULT_ZOOM, type TimeMode } from "./scene/stage";
 import type { ChatActions, ChatAgent } from "./chat/ChatPanel";
 import type { ChatMount } from "./chat/mount";
 import { createChatStore } from "./chat/store";
@@ -22,22 +23,13 @@ import { connect } from "./net/client";
 import { createAgent, sendTo, stateOf, stepAgent, teleport, type Agent } from "./sim/agent";
 import { createFeed } from "./ui/feed";
 import { buildReviewTray, createDossierProp } from "./scene/dossier";
-import { createDossierBoard } from "./scene/dossier-board";
 import { createDossierUi } from "./ui/dossier";
 import { waitingForUser } from "./ui/dossier-model";
 import type { Dossier } from "../../shared/protocol";
+import { createGuard, GUARD_DEF } from "./sim/guard";
 import { shortcutAllowed } from "./ui/keys";
 import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
-import {
-  arrivedAtDesk,
-  clickCorridor,
-  createPlayer,
-  goToDesk,
-  nearestDesk,
-  stopWalking,
-  walkAlongCorridor,
-  PLAYER_DEF,
-} from "./sim/player";
+import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, freeWalk, PLAYER_DEF } from "./sim/player";
 
 interface LogEvent {
   readonly agent: Agent;
@@ -59,6 +51,7 @@ document.documentElement.dataset.theme = darkQuery.matches ? "dark" : "light";
 
 // ---- mundo
 buildBuilding();
+buildLisbon();
 const locs = buildLocations(AGENTS);
 const agents: Agent[] = AGENTS.map((d) => createAgent(d, locs[`desk-${d.id}`]));
 const screens = new Map<string, ScreenHandle>(agents.map((a) => [a.def.id, createScreen()]));
@@ -69,13 +62,14 @@ const staticRoots = scene.children.filter((c) => !(c as Light).isLight && c !== 
 if (new URLSearchParams(location.search).has("baked")) void import("./scene/baked").then((m) => m.loadBakedOffice(staticRoots));
 if (new URLSearchParams(location.search).has("export")) void import("./dev/export-static").then((m) => m.exportStatic(staticRoots));
 const dossierProp = createDossierProp();
-const dossierBoard = createDossierBoard();
 const reviewTray = buildReviewTray();
 const updateAmbient = buildAmbient();
 const views = new Map<string, PersonView>(agents.map((a) => [a.def.id, createPerson(a.def)]));
 const byAgentId = new Map<string, Agent>(agents.map((a) => [a.def.id, a]));
 const player = createPlayer();
 const playerView = createPerson(PLAYER_DEF);
+const guard = createGuard();
+const guardView = createPerson(GUARD_DEF);
 playerView.group.visible = false;
 const walk = { on: false, follow: true, keys: new Set<string>(), arrivedFor: null as string | null };
 for (const a of agents) if (a.def.startsResting) teleport(a, locs.rest0, "rest");
@@ -159,9 +153,9 @@ function setWalkMode(on: boolean): void {
   btn.setAttribute("aria-pressed", String(on));
   btn.classList.toggle("on", on);
   byId("hint").textContent = on
-    ? "Andar: ← → no corredor · clica no chão ou numa pessoa para ir lá · F segue-te · W para sair"
+    ? "Andar: WASD ou setas · Q/E rodam a câmara · clica numa pessoa para ir lá · F segue-te · G para sair"
     : "Arrastar: mover · Roda: zoom · Botão direito ou Q/E: rodar · Clica numa pessoa";
-  stage.setZoom(on ? WALK_ZOOM : 1);
+  stage.setZoom(on ? WALK_ZOOM : DEFAULT_ZOOM);
   if (on) {
     setFollow(true);
   } else {
@@ -195,16 +189,27 @@ function handleArrival(now: number): void {
   panel.open(worker, "chat");
 }
 
-const WALK_KEYS: Record<string, -1 | 1> = { ArrowLeft: -1, ArrowRight: 1 };
+/** Teclas de andar: setas e WASD (em relação ao ecrã, não ao mundo). */
+const MOVE_KEYS: Readonly<Record<string, readonly [right: number, up: number]>> = {
+  ArrowUp: [0, 1],
+  w: [0, 1],
+  ArrowDown: [0, -1],
+  s: [0, -1],
+  ArrowLeft: [-1, 0],
+  a: [-1, 0],
+  ArrowRight: [1, 0],
+  d: [1, 0],
+};
 addEventListener("keydown", (e) => {
   if (!shortcutAllowed(e)) return;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   // Os atalhos de ligar/desligar não repetem quando a tecla fica carregada (o autorrepeat do browser).
-  if ((e.key === "w" || e.key === "W") && !e.repeat) return setWalkMode(!walk.on);
+  if (k === "g" && !e.repeat) return setWalkMode(!walk.on);
   if (!walk.on) return;
-  if ((e.key === "f" || e.key === "F") && !e.repeat) return setFollow(!walk.follow);
-  if (e.key in WALK_KEYS) {
+  if (k === "f" && !e.repeat) return setFollow(!walk.follow);
+  if (k in MOVE_KEYS) {
     e.preventDefault();
-    walk.keys.add(e.key);
+    walk.keys.add(k);
     walk.arrivedFor = null;
   }
 });
@@ -212,15 +217,16 @@ addEventListener("keydown", (e) => {
 function releaseWalkKeys(): void {
   if (walk.keys.size === 0) return;
   walk.keys.clear();
-  stopWalking(player);
+  player.route = [];
 }
 addEventListener("blur", releaseWalkKeys);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) releaseWalkKeys();
 });
 addEventListener("keyup", (e) => {
-  if (!walk.keys.delete(e.key) || walk.keys.size > 0) return;
-  stopWalking(player);
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (!walk.keys.delete(k) || walk.keys.size > 0) return;
+  player.route = [];
 });
 byId("walkBtn").onclick = () => setWalkMode(!walk.on);
 
@@ -228,7 +234,7 @@ const DOSSIER_ID = "dossier";
 
 /** O que está sob o cursor: o id de um agente ou o do dossier. */
 function pickId(e: PointerEvent): string | null {
-  return stage.pickAgent(e, [...[...views.values()].map((v) => v.group), dossierProp.group, dossierBoard.group]);
+  return stage.pickAgent(e, [...[...views.values()].map((v) => v.group), dossierProp.group]);
 }
 
 function pickAt(e: PointerEvent): Agent | null {
@@ -453,7 +459,6 @@ function onServerMsg(m: ServerMsg): void {
 function applyDossier(d: Dossier | null): void {
   dossierUi.update(d);
   dossierProp.set(d);
-  dossierBoard.set(d);
   reviewTray.setAttention(waitingForUser(d));
 }
 
@@ -539,10 +544,19 @@ function frame(now: number): void {
     const view = views.get(a.def.id);
     if (view) updatePerson(view, a, dt, t);
   }
+  updatePerson(guardView, guard, dt, t);
   if (walk.on) {
-    const held = [...walk.keys].at(-1);
-    if (held) walkAlongCorridor(player, WALK_KEYS[held]);
+    let right = 0;
+    let up = 0;
+    for (const k of walk.keys) {
+      right += MOVE_KEYS[k][0];
+      up += MOVE_KEYS[k][1];
+    }
+    const az = stage.azimuth();
+    // Frente no ecrã = para longe da câmara; direita no ecrã = (cos, -sin).
+    const moving = right !== 0 || up !== 0;
     stepAgent(player, dt);
+    if (moving) freeWalk(player, -Math.sin(az) * up + Math.cos(az) * right, -Math.cos(az) * up - Math.sin(az) * right, dt);
     updatePerson(playerView, player, dt, t);
     handleArrival(now);
   }

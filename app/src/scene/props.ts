@@ -252,6 +252,7 @@ export function buildProps(screens: ReadonlyMap<string, ScreenHandle>): void {
   buildBoards();
   buildMeetingAndRest();
   buildWing();
+  buildEntrance();
 }
 
 function buildBoards(): void {
@@ -394,4 +395,47 @@ function buildWing(): void {
   vending(23.4, 11.4);
   plant(18.6, 7.6, 0.9);
   pendantLamps(21, 9.5);
+}
+
+function signTexture(text: string, bg: string, fg: string): THREE.CanvasTexture {
+  const { c, g } = canvas2d(512, 128);
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 512, 128);
+  g.fillStyle = fg;
+  g.font = "bold 64px system-ui";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, 256, 68);
+  return canvasTexture(c);
+}
+
+function sign(x: number, y: number, z: number, rotY: number, text: string, bg: string, fg: string, w = 1.4): void {
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, w / 4),
+    new THREE.MeshBasicMaterial({ map: signTexture(text, bg, fg), toneMapped: false }),
+  );
+  face.position.set(x, y, z);
+  face.rotation.y = rotY;
+  scene.add(face);
+}
+
+/** Entrada do andar (ponta este do corredor): porta de vidro, receção e o segurança. A porta da casa de banho ganha o seu letreiro. */
+function buildEntrance(): void {
+  const frame = mat("#2d3137", { metalness: 0.5, roughness: 0.4 });
+  const door = group(24.02, 0, 6);
+  box(door, 0.1, 2.5, 0.1, 0, 1.25, -1, frame);
+  box(door, 0.1, 2.5, 0.1, 0, 1.25, 1, frame);
+  box(door, 0.12, 0.12, 2.1, 0, 2.55, 0, frame);
+  box(door, 0.04, 2.3, 0.9, 0, 1.15, -0.5, mat("#bcd9ea", { transparent: true, opacity: 0.35, roughness: 0.05 }), false);
+  box(door, 0.04, 2.3, 0.9, 0, 1.15, 0.5, mat("#bcd9ea", { transparent: true, opacity: 0.35, roughness: 0.05 }), false);
+  box(door, 0.06, 0.1, 1.9, 0, 1.0, 0, frame, false);
+  sign(23.9, 2.85, 6, -Math.PI / 2, "SEGURANÇA", "#1f2a44", "#ffffff", 1.6);
+  // Receção do segurança.
+  const desk = group(22.7, 0, 5.35);
+  box(desk, 1.3, 1.05, 0.5, 0, 0.52, 0, mat("#3a4256", { roughness: 0.6 }));
+  box(desk, 1.4, 0.05, 0.6, 0, 1.07, 0, mat("#d9d4c8", { roughness: 0.4 }));
+  box(desk, 0.35, 0.22, 0.03, 0.2, 1.25, -0.1, mat("#15171b"), false);
+  // Casa de banho: letreiro por cima da porta (entre x = 20 e 22) e portas das cabines.
+  sign(21, 2.45, 5.02, 0, "WC", "#2f6f8f", "#ffffff", 0.9);
+  [18.9, 20.1].forEach((x) => box(group(x, 0, 1.95), 0.95, 1.75, 0.04, 0, 0.88, 0, mat("#8fb0c4")));
 }
