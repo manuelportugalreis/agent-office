@@ -247,7 +247,11 @@ export function updatePerson(v: PersonView, a: Agent, dt: number, t: number): vo
     v.bubble.material.needsUpdate = true;
     v.bubbleState = state;
   }
-  // Só as pessoas com algo a dizer mostram o balão; quem está livre não tem balão.
-  v.bubble.visible = state !== "idle";
+  // O balão é para o que importa: pedidos de aprovação, erros e quem está a pensar ou a trabalhar (mais pequeno).
+  // A vida calma do escritório (conversa, café, ténis de mesa, descanso) não leva balão.
+  const loud = state === "appr" || state === "err" || state === "think";
+  v.bubble.visible = loud || state === "work" || state === "visit";
+  const size = loud ? 0.5 : 0.34;
+  v.bubble.scale.set(size, size, 1);
   v.bubble.position.y = 2.3 - a.sit * 0.45;
 }
