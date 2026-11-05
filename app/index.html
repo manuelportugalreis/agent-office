@@ -13,7 +13,11 @@
   <body>
     <header>
       <h1>🏢 Agent Office</h1>
-      <span class="mock">com o servidor ligado, todos os agentes são reais</span>
+      <div id="nextAction" class="next-action tone-idle" role="status" aria-live="polite">
+        <span class="na-dot" aria-hidden="true"></span>
+        <span class="na-text"><b class="na-title">Sem dossier ativo</b><span class="na-sub">Nada à espera de ti.</span></span>
+        <button id="naBtn" class="na-btn" type="button">Novo dossier</button>
+      </div>
       <span class="sp"></span>
       <span class="mock" id="conn" title="Servidor de agentes">servidor: offline</span>
       <span class="mock" id="quota" style="display: none" title="Uso do plano (5h / 7 dias)"></span>
@@ -38,8 +42,7 @@
     <main id="main">
       <section id="stage">
         <div id="tag"></div>
-        <button id="dossierChip" class="dossier-chip" hidden></button>
-        <div id="dossierCard" class="dossier-card" hidden></div>
+        <button id="dossierChip" class="dossier-chip" hidden tabindex="-1" aria-hidden="true"></button>
         <div id="hint">Arrastar: mover · Roda: zoom · Botão direito ou Q/E: rodar · Clica numa pessoa</div>
         <form id="cmd">
           <input id="cmdIn" placeholder="Dá uma ordem ao CEO…  ex: encontra 10 vagas de Business Analyst" autocomplete="off" /><button
@@ -49,6 +52,7 @@
           </button>
         </form>
       </section>
+      <section id="dossierCard" class="dossier-card" role="complementary" aria-label="Dossier de candidatura" hidden></section>
       <aside>
         <div id="resizer" title="Arrastar para alargar"></div>
         <div id="empty">Clica numa pessoa<br />para abrir o painel dela.</div>

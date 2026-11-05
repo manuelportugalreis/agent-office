@@ -4,6 +4,7 @@ import { byId, escapeHtml } from "./dom";
 import {
   checkSummary,
   chipText,
+  nextActionOf,
   findingsPreview,
   hasQuestion,
   holderName,
@@ -160,7 +161,7 @@ function clarificationHtml(d: Dossier, answer: string): string {
 }
 
 /** O cartão do dossier: quem o tem, o que o prende, o que aconteceu, a pesquisa, a verificação, o rascunho e as tuas decisões. */
-function cardHtml(d: Dossier, note: string, answer: string): string {
+function cardHtml(d: Dossier, note: string, answer: string, tab: DossierTab): string {
   const status = statusOf(d);
   const steps = timelineOf(d)
     .map((s) => `<li class="dz-step is-${s.state}"><span>${escapeHtml(s.label)}</span></li>`)
@@ -193,23 +194,45 @@ function cardHtml(d: Dossier, note: string, answer: string): string {
     : d.findings
       ? `<section><div class="lbl">Pesquisa da Mira</div><div class="dz-findings">${escapeHtml(findingsPreview(d.findings))}</div><details><summary>Ver tudo</summary><pre class="dz-pre">${escapeHtml(d.findings)}</pre></details></section>`
       : "";
+  const draftBlock = d.draft
+    ? `<section class="dz-draftwrap"><div class="lbl">Último rascunho (v${d.draftVersion})</div><article class="dz-draft">${escapeHtml(d.draft)}</article></section>`
+    : `<section><div class="dz-empty">Ainda não há rascunho. ${escapeHtml(status.next)}</div></section>`;
+  const panes: Record<DossierTab, string> = {
+    draft: `${draftBlock}${questionsHtml(d)}${claimsHtml(d)}`,
+    research: research || `<section><div class="dz-empty">A Mira ainda não entregou a pesquisa.</div></section>`,
+    check: checkHtml(d) || `<section><div class="dz-empty">A Nina ainda não verificou nenhum rascunho.</div></section>`,
+    activity: `<section><div class="lbl">Quem tem agora</div><div class="dz-holder"><span class="dz-av">${emojiOf(d.holder)}</span> ${escapeHtml(holderName(d.holder))}</div></section>
+      <section><div class="lbl">Pedido</div><div>${escapeHtml(d.request)}</div>${d.language ? `<small>Idioma da carta: ${escapeHtml(d.language)}</small>` : ""}</section>
+      <section><div class="lbl">O que aconteceu</div><ul class="dz-history">${history}</ul></section>
+      ${reviews ? `<section><div class="lbl">Revisões</div><ul class="dz-history">${reviews}</ul></section>` : ""}`,
+  };
+  const tabBtns = TABS.map(
+    (t) =>
+      `<button role="tab" type="button" class="dz-tab${t.id === tab ? " is-on" : ""}" aria-selected="${t.id === tab}" data-tab="${t.id}">${t.label}${t.id === "check" && d.check ? (d.check.passed ? " ✓" : " ✕") : ""}</button>`,
+  ).join("");
+  const decision = `${blocked}${clarificationHtml(d, answer)}${review}`;
   return `
-    <header class="dz-head"><h3>📁 ${escapeHtml(d.title)}</h3><button class="dz-close" data-act="close" aria-label="Fechar">✕</button></header>
+    <header class="dz-head"><h3>📁 ${escapeHtml(d.title)}</h3><button class="dz-close" data-act="close" aria-label="Fechar o dossier e voltar ao escritório">← Escritório</button></header>
     <div class="dz-banner tone-${status.tone}"><b>${escapeHtml(status.headline)}</b><small>${escapeHtml(status.next)}</small></div>
-    ${blocked}
     <ol class="dz-steps" aria-label="Percurso do dossier">${steps}</ol>
-    ${clarificationHtml(d, answer)}
-    ${review}
-    <section><div class="lbl">Quem tem agora</div><div class="dz-holder"><span class="dz-av">${emojiOf(d.holder)}</span> ${escapeHtml(holderName(d.holder))}</div></section>
-    <section><div class="lbl">Pedido</div><div>${escapeHtml(d.request)}</div>${d.language ? `<small>Idioma da carta: ${escapeHtml(d.language)}</small>` : ""}</section>
-    ${questionsHtml(d)}
-    ${checkHtml(d)}
-    ${research}
-    ${d.draft ? `<section><div class="lbl">Último rascunho (v${d.draftVersion})</div><pre class="dz-pre dz-draft">${escapeHtml(d.draft)}</pre></section>` : ""}
-    ${claimsHtml(d)}
-    <section><div class="lbl">O que aconteceu</div><ul class="dz-history">${history}</ul></section>
-    ${reviews ? `<section><div class="lbl">Revisões</div><ul class="dz-history">${reviews}</ul></section>` : ""}
-    ${fresh}`;
+    <div class="dz-tabs" role="tablist" aria-label="Secções do dossier">${tabBtns}</div>
+    <div class="dz-body" role="tabpanel">${panes[tab]}${fresh}</div>
+    ${decision ? `<div class="dz-decision">${decision}</div>` : ""}`;
+}
+
+export type DossierTab = "draft" | "research" | "check" | "activity";
+const TABS: readonly { id: DossierTab; label: string }[] = [
+  { id: "draft", label: "Rascunho" },
+  { id: "research", label: "Pesquisa" },
+  { id: "check", label: "Verificação" },
+  { id: "activity", label: "Atividade" },
+];
+
+/** Em que separador abrir: o rascunho se existe, senão a pesquisa, senão a atividade. */
+export function defaultTab(d: Dossier): DossierTab {
+  if (d.draft) return "draft";
+  if (d.research || d.findings) return "research";
+  return "activity";
 }
 
 function newForm(label: string): string {
@@ -222,7 +245,7 @@ function newForm(label: string): string {
 }
 
 const emptyHtml = `
-  <header class="dz-head"><h3>📁 Dossier de candidatura</h3><button class="dz-close" data-act="close" aria-label="Fechar">✕</button></header>
+  <header class="dz-head"><h3>📁 Dossier de candidatura</h3><button class="dz-close" data-act="close" aria-label="Fechar o dossier e voltar ao escritório">← Escritório</button></header>
   <p class="dz-intro">Um processo que passa de mão em mão: o Atlas planeia, a Mira pesquisa a vaga, a Lena redige a carta, a Nina verifica-a e tu decides. Vês a pasta a andar pelo escritório.</p>
   ${newForm("Abrir dossier")}`;
 
@@ -231,6 +254,9 @@ export function createDossierUi(actions: DossierActions): DossierUi {
   const card = byId("dossierCard");
   let dossier: Dossier | null = null;
   let opened = false;
+  let opener: HTMLElement | null = null;
+  let tab: DossierTab = "draft";
+  let tabFor = 0;
   /** O que escreveste, para não se perder quando o servidor manda uma atualização. */
   let note = "";
   let answer = "";
@@ -249,8 +275,13 @@ export function createDossierUi(actions: DossierActions): DossierUi {
 
   function render(): void {
     card.hidden = !opened;
+    document.getElementById("main")?.classList.toggle("dossier-open", opened);
     if (!opened) return;
-    card.innerHTML = dossier ? cardHtml(dossier, note, answer) : emptyHtml;
+    if (dossier && tabFor !== dossier.id) {
+      tab = defaultTab(dossier);
+      tabFor = dossier.id;
+    }
+    card.innerHTML = dossier ? cardHtml(dossier, note, answer, tab) : emptyHtml;
     const returnBtn = card.querySelector<HTMLButtonElement>('[data-act="return"]');
     const answerBtn = card.querySelector<HTMLButtonElement>('[data-act="answer"]');
     bind(
@@ -275,6 +306,13 @@ export function createDossierUi(actions: DossierActions): DossierUi {
       () => materials,
       (v) => (materials = v),
     );
+    card.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) => {
+      b.onclick = () => {
+        tab = b.dataset.tab as DossierTab;
+        render();
+        card.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)?.focus();
+      };
+    });
     card.querySelectorAll<HTMLButtonElement>("[data-act]").forEach((b) => {
       b.onclick = () => run(b.dataset.act ?? "");
     });
@@ -303,21 +341,46 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     chip.title = `${s.headline}. ${s.next}`;
   }
 
-  chip.onclick = () => ui.open();
+  card.onkeydown = (e) => {
+    if (e.key === "Escape" && opened) ui.close();
+  };
+  chip.onclick = () => {
+    opener = chip;
+    ui.open();
+  };
+
+  const strip = byId("nextAction");
+  const naBtn = byId<HTMLButtonElement>("naBtn");
+  function renderStrip(): void {
+    const n = nextActionOf(dossier);
+    strip.className = `next-action tone-${n.tone}`;
+    strip.querySelector(".na-title")!.textContent = n.title;
+    strip.querySelector(".na-sub")!.textContent = n.sub;
+    naBtn.textContent = n.cta;
+    naBtn.className = `na-btn${n.tone === "wait" || n.tone === "blocked" ? " primary" : ""}`;
+  }
+  naBtn.onclick = () => {
+    opener = naBtn;
+    ui.open();
+  };
 
   const ui: DossierUi = {
     update(next) {
       dossier = next;
       renderChip();
+      renderStrip();
       render();
     },
     open() {
       opened = true;
       render();
+      card.querySelector<HTMLElement>(".dz-tab.is-on, .dz-close")?.focus();
     },
     close() {
       opened = false;
       render();
+      opener?.focus();
+      opener = null;
     },
     toggle() {
       if (opened) ui.close();
@@ -325,5 +388,6 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     },
   };
   renderChip();
+  renderStrip();
   return ui;
 }

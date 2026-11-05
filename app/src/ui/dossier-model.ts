@@ -235,3 +235,60 @@ export function boardView(d: Dossier | null): BoardView {
   const doing = d.stage === "drafting" && d.pendingNote !== undefined ? "A rever com a tua nota" : DOING[d.stage];
   return { tone: "work", headline: `Com ${NAMES[d.holder]}`, title, lines: [doing], hint: "Em curso" };
 }
+
+/** O que fazer a seguir, numa linha para a barra de topo: quem precisa de quê e o botão que leva lá. */
+export interface NextAction {
+  readonly tone: Tone | "idle";
+  readonly title: string;
+  readonly sub: string;
+  /** Texto do botão. */
+  readonly cta: string;
+  /** Que vista do painel abrir: o rascunho, a pergunta, o andamento, um bloqueio ou o formulário de novo dossier. */
+  readonly view: "draft" | "question" | "progress" | "blocked" | "new";
+}
+
+const WHERE = {
+  atlas: "no planeamento do Atlas",
+  research: "na pesquisa da Mira",
+  drafting: "na redação da Lena",
+  checking: "na verificação da Nina",
+} as const;
+
+export function nextActionOf(d: Dossier | null): NextAction {
+  if (!d) return { tone: "idle", title: "Sem dossier ativo", sub: "Nada à espera de ti.", cta: "Novo dossier", view: "new" };
+  const sub = clip(d.title, 56);
+  if (d.blocked) {
+    return {
+      tone: "blocked",
+      title: `Parado ${WHERE[d.blocked.stage]}`,
+      sub: clip(d.blocked.reason, 90),
+      cta: "Ver e tentar outra vez",
+      view: "blocked",
+    };
+  }
+  if (hasQuestion(d)) return { tone: "wait", title: "A Mira precisa de uma resposta", sub, cta: "Responder", view: "question" };
+  switch (d.stage) {
+    case "review":
+      return reviewHasProblems(d)
+        ? { tone: "blocked", title: `A Nina vê problemas na v${d.draftVersion}`, sub, cta: "Devolver à Lena", view: "draft" }
+        : {
+            tone: "wait",
+            title: `Rascunho v${d.draftVersion} à tua espera`,
+            sub: d.check ? `${sub} · verificado pela Nina` : sub,
+            cta: "Rever rascunho",
+            view: "draft",
+          };
+    case "approved":
+      return { tone: "done", title: "Dossier aprovado", sub: "Nada foi enviado.", cta: "Novo dossier", view: "new" };
+    default: {
+      const doing = d.stage === "drafting" && d.pendingNote !== undefined ? "A rever com a tua nota" : DOING[d.stage];
+      return {
+        tone: "work",
+        title: `${NAMES[d.holder].replace(/^./, (c) => c.toUpperCase())} · ${doing}`,
+        sub,
+        cta: "Ver andamento",
+        view: "progress",
+      };
+    }
+  }
+}

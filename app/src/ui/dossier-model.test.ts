@@ -7,6 +7,7 @@ import {
   findingsPreview,
   hasQuestion,
   holderName,
+  nextActionOf,
   openQuestions,
   reviewHasProblems,
   sceneLabel,
@@ -254,5 +255,56 @@ describe("quadro da sala de Gestão", () => {
 
   it("um título comprido é cortado para caber no quadro", () => {
     expect(boardView(at({ title: "x".repeat(100) })).title).toHaveLength(40);
+  });
+});
+
+describe("próxima ação (barra de topo)", () => {
+  it("sem dossier não há nada à espera de ti e o botão abre um novo", () => {
+    expect(nextActionOf(null)).toMatchObject({ tone: "idle", title: "Sem dossier ativo", cta: "Novo dossier", view: "new" });
+  });
+
+  it("um rascunho à espera traz o título, a versão e leva direto ao rascunho", () => {
+    const n = nextActionOf(at({ stage: "review", holder: "user", draftVersion: 3, check: passed }));
+    expect(n).toMatchObject({ tone: "wait", title: "Rascunho v3 à tua espera", cta: "Rever rascunho", view: "draft" });
+    expect(n.sub).toBe("Candidatura ACME · verificado pela Nina");
+  });
+
+  it("com problemas da Nina o botão manda devolver; uma pergunta da Mira manda responder", () => {
+    expect(nextActionOf(at({ stage: "review", holder: "user", draftVersion: 2, check: failed }))).toMatchObject({
+      tone: "blocked",
+      title: "A Nina vê problemas na v2",
+      cta: "Devolver à Lena",
+      view: "draft",
+    });
+    expect(nextActionOf(at({ stage: "research", holder: "user", clarification: { questions: ["?"], reason: "x" } }))).toMatchObject({
+      tone: "wait",
+      title: "A Mira precisa de uma resposta",
+      view: "question",
+    });
+  });
+
+  it("em curso diz quem está a trabalhar e em quê; parado diz onde e porquê", () => {
+    expect(nextActionOf(at({ stage: "research", holder: "mira" }))).toMatchObject({
+      tone: "work",
+      title: "A Mira · A pesquisar a vaga",
+      cta: "Ver andamento",
+      view: "progress",
+    });
+    expect(nextActionOf(at({ stage: "checking", holder: "nina" })).title).toBe("A Nina · A verificar o rascunho");
+    expect(nextActionOf(at({ stage: "drafting", holder: "lena", pendingNote: "x" })).title).toBe("A Lena · A rever com a tua nota");
+    const blocked = nextActionOf(
+      at({ stage: "research", holder: "mira", blocked: { stage: "research", reason: "A pesquisa da Mira falhou: sem quota" } }),
+    );
+    expect(blocked).toMatchObject({ tone: "blocked", title: "Parado na pesquisa da Mira", cta: "Ver e tentar outra vez", view: "blocked" });
+    expect(blocked.sub).toContain("sem quota");
+  });
+
+  it("aprovado é calmo e o botão abre um novo dossier", () => {
+    expect(nextActionOf(at({ stage: "approved", holder: "user" }))).toMatchObject({
+      tone: "done",
+      title: "Dossier aprovado",
+      cta: "Novo dossier",
+      view: "new",
+    });
   });
 });
