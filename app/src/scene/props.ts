@@ -287,21 +287,7 @@ function buildBoards(): void {
       ],
     ),
   );
-  standingBoard(
-    11.4,
-    8.0,
-    diag,
-    boardTexture(
-      "Objetivos da semana",
-      ["A fazer", "Em curso", "Feito"],
-      [
-        [0, "20 candidaturas", 0],
-        [1, "Shortlist empresas", 0],
-        [1, "Sync Canvas", 1],
-        [2, "Rever CV", 0],
-      ],
-    ),
-  );
+  // O quadro da sala de Gestão (11.4, 8.0) é o do dossier: ver scene/dossier-board.ts.
   wallBoard(
     0.08,
     1.7,

@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
-import type { CanvasItem, ChatEntry, LogEntry, PendingApproval, Snapshot } from "../../shared/protocol.ts";
+import type { CanvasItem, ChatEntry, Dossier, LogEntry, PendingApproval, Snapshot } from "../../shared/protocol.ts";
 
 // Carregado com require para o Vite/Vitest (que ainda não conhecem `node:sqlite`) não tentarem resolvê-lo.
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as { DatabaseSync: typeof DatabaseSyncType };
@@ -32,6 +32,11 @@ export interface Store {
   addApproval(agentId: string, title: string, draft?: string): number;
   /** Marca como decidida. Devolve o agente, ou null se o id não existe ou já foi decidido. */
   resolveApproval(id: number, approved?: boolean): string | null;
+  /** O dossier de candidatura ativo (só há um; guardar de novo substitui). */
+  saveDossier(dossier: Dossier): void;
+  loadDossier(): Dossier | null;
+  /** O rascunho exato de uma aprovação (null se não tiver). */
+  getApprovalDraft(id: number): string | null;
   /** Marca como substituídas as aprovações pendentes de um agente (um rascunho novo anula os anteriores) e devolve os ids. */
   supersedePending(agentId: string): number[];
   hasPending(agentId: string): boolean;
@@ -48,6 +53,7 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT NOT NULL, ts INTEGER NOT NULL, text TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT NOT NULL, ts INTEGER NOT NULL, from_me INTEGER NOT NULL, text TEXT NOT NULL, conv INTEGER NOT NULL DEFAULT 1, files TEXT);
   CREATE TABLE IF NOT EXISTS approvals (id INTEGER PRIMARY KEY AUTOINCREMENT, agent_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', ts INTEGER NOT NULL, draft TEXT);
+  CREATE TABLE IF NOT EXISTS dossier (id INTEGER PRIMARY KEY CHECK (id = 1), json TEXT NOT NULL, updated_at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS canvas (id INTEGER PRIMARY KEY CHECK (id = 1), items TEXT NOT NULL, synced_at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS sessions (agent_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, started INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS conversations (agent_id TEXT PRIMARY KEY, conv INTEGER NOT NULL);
@@ -150,6 +156,26 @@ export function openStore(path: string): Store {
       const rows = db.prepare("SELECT id FROM approvals WHERE agent_id = ? AND status = 'pending'").all(agentId) as Row[];
       db.prepare("UPDATE approvals SET status = 'superseded' WHERE agent_id = ? AND status = 'pending'").run(agentId);
       return rows.map((r) => Number(r.id));
+    },
+    saveDossier(dossier) {
+      db.prepare(
+        "INSERT INTO dossier (id, json, updated_at) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at",
+      ).run(JSON.stringify(dossier), dossier.updatedAt);
+    },
+    loadDossier() {
+      const row = db.prepare("SELECT json FROM dossier WHERE id = 1").get() as Row | undefined;
+      if (typeof row?.json !== "string") return null;
+      try {
+        const data = JSON.parse(row.json) as Partial<Dossier>;
+        // Só aceita o que tem a forma mínima esperada (a base pode ter sido mexida à mão).
+        return typeof data.id === "number" && typeof data.title === "string" && typeof data.stage === "string" ? (data as Dossier) : null;
+      } catch {
+        return null;
+      }
+    },
+    getApprovalDraft(id) {
+      const row = db.prepare("SELECT draft FROM approvals WHERE id = ?").get(id) as Row | undefined;
+      return typeof row?.draft === "string" ? row.draft : null;
     },
     resolveApproval(id, approved = true) {
       const row = db.prepare("SELECT agent_id FROM approvals WHERE id = ? AND status = 'pending'").get(id) as Row | undefined;

@@ -41,7 +41,11 @@ function memorySessions(): SessionStore {
 
 export interface Hub {
   /** Corre uma tarefa num agente. `silent` não mostra a resposta no chat (útil para respostas internas, como o plano do CEO). `fresh` começa uma sessão nova do Claude Code. `label` é o que se mostra como tarefa (por defeito, o próprio texto). */
-  run(agentId: string, text: string, opts?: { silent?: boolean; fresh?: boolean; label?: string; isolated?: boolean }): Promise<RunResult>;
+  run(
+    agentId: string,
+    text: string,
+    opts?: { silent?: boolean; fresh?: boolean; label?: string; isolated?: boolean; skipComplete?: boolean },
+  ): Promise<RunResult>;
   isRunning(agentId: string): boolean;
   /** Há vaga para mais uma tarefa (limite global de agentes em simultâneo). */
   hasCapacity(): boolean;
@@ -61,6 +65,8 @@ interface Running {
   readonly handle: RunHandle;
   readonly timer: NodeJS.Timeout;
   readonly silent: boolean;
+  /** Não chama `onComplete` (quem pediu a tarefa trata do resultado, ex.: o dossier pede a aprovação ele próprio). */
+  readonly skipComplete: boolean;
   readonly task: string;
   /** Sessão descartável: não faz parte da conversa do agente (ex.: o pedido de plano ao CEO). */
   readonly isolated: boolean;
@@ -106,7 +112,7 @@ export function createHub({
     emit({ type: "status", agentId, status: ok ? "idle" : "err" });
     const result: RunResult = { ok, reply: r.replies.join("\n\n"), costUsd, error };
     r.resolve(result);
-    onComplete?.(agentId, result);
+    if (!r.skipComplete) onComplete?.(agentId, result);
   }
 
   function onEvent(agentId: string, runId: number, e: AgentEvent): void {
@@ -137,7 +143,15 @@ export function createHub({
     return Promise.resolve({ ok: false, reply: "", error: message });
   };
 
-  function start(agentId: string, text: string, silent: boolean, fresh: boolean, isolated: boolean, label?: string): Promise<RunResult> {
+  function start(
+    agentId: string,
+    text: string,
+    silent: boolean,
+    fresh: boolean,
+    isolated: boolean,
+    label?: string,
+    skipComplete = false,
+  ): Promise<RunResult> {
     const agent = findAgent(agentId);
     if (!agent) return refuse(agentId, "Este agente ainda não é real.");
     if (running.has(agentId)) return refuse(agentId, "O agente ainda está a trabalhar.");
@@ -161,12 +175,24 @@ export function createHub({
         handle.kill();
         finish(agentId, runId, false, undefined, "Tempo máximo excedido.");
       }, limits.timeoutMs);
-      running.set(agentId, { runId, handle, timer, silent, task: label ?? text, isolated, replies: [], resolve, finished: false });
+      running.set(agentId, {
+        runId,
+        handle,
+        timer,
+        silent,
+        skipComplete,
+        task: label ?? text,
+        isolated,
+        replies: [],
+        resolve,
+        finished: false,
+      });
     });
   }
 
   return {
-    run: (agentId, text, opts) => start(agentId, text, opts?.silent ?? false, opts?.fresh ?? false, opts?.isolated ?? false, opts?.label),
+    run: (agentId, text, opts) =>
+      start(agentId, text, opts?.silent ?? false, opts?.fresh ?? false, opts?.isolated ?? false, opts?.label, opts?.skipComplete ?? false),
     isRunning: (agentId) => running.has(agentId),
     hasCapacity: () => running.size < limits.maxConcurrent,
     active: () => [...running.entries()].map(([agentId, r]) => ({ agentId, task: r.task })),

@@ -4,7 +4,9 @@ import { WebSocket, WebSocketServer } from "ws";
 import { parseClientMsg, type ServerMsg } from "../../shared/protocol.ts";
 import { courseFor, findAgent, REAL_AGENTS } from "./agents.ts";
 import { createApprovals } from "./approvals.ts";
+import { createDossierService } from "./dossier.ts";
 import { runGuardSelfTest } from "./selftest.ts";
+import { saveApprovedDraft } from "./vaultNotes.ts";
 import { canvasContext, createCanvasSync } from "./canvas.ts";
 import { createChatService } from "./chat.ts";
 import { allowedOrigins, config, isAllowedHost } from "./config.ts";
@@ -72,7 +74,12 @@ const background = (task: Promise<unknown>, what: string): void => {
   });
 };
 
-const approvals = createApprovals(broadcast, store, (agentId) => hub.isRunning(agentId));
+const approvals = createApprovals(
+  broadcast,
+  store,
+  (agentId) => hub.isRunning(agentId),
+  (agentId, draft) => saveApprovedDraft(config.vaultDir, findAgent(agentId)?.name ?? agentId, draft),
+);
 const hub = createHub({
   emit: broadcast,
   sessions: store,
@@ -88,6 +95,7 @@ const hub = createHub({
 const orchestrator = createOrchestrator(hub, broadcast);
 const canvas = createCanvasSync(hub, broadcast);
 const chat = createChatService(hub, store, broadcast);
+const dossier = createDossierService({ hub, store, approvals, emit: broadcast });
 
 const hello = (): ServerMsg => ({
   type: "hello",
@@ -115,6 +123,7 @@ wss.on("connection", (ws) => {
   log.info(`interface ligada (${clients.size})`);
   const allow = createRateLimiter(RATE_MAX, RATE_WINDOW_MS);
   send(ws, hello());
+  send(ws, { type: "dossier", dossier: dossier.current() });
   send(ws, { type: "snapshot", ...store.snapshot() });
   // Quem já está a trabalhar (a página foi recarregada a meio): a interface não pode achar que está livre.
   for (const { agentId, task } of hub.active()) send(ws, { type: "status", agentId, status: "work", task });
@@ -137,6 +146,14 @@ wss.on("connection", (ws) => {
         store.addChat("ceo", true, msg.text);
         broadcast({ type: "user-message", agentId: "ceo", text: msg.text, files: [] });
         return background(orchestrator.order(msg.text), "ordem ao CEO");
+      case "dossier-start":
+        return background(dossier.start(msg.request), "dossier");
+      case "dossier-return":
+        return background(dossier.returnDraft(msg.id, msg.note), "dossier");
+      case "dossier-approve":
+        return dossier.approve(msg.id);
+      case "dossier-retry":
+        return background(dossier.retry(msg.id), "dossier");
       case "decide":
         return approvals.decide(msg.id, msg.approved);
       case "sync":

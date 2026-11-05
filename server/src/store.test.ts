@@ -158,3 +158,27 @@ describe("equipa", () => {
     for (const a of REAL_AGENTS) expect(a.tools.every((t) => t === "WebSearch" || t === "WebFetch")).toBe(true);
   });
 });
+
+describe("store: dossier", () => {
+  it("guarda um só dossier e devolve-o igual (sobrevive a recarregar)", () => {
+    const s = openStore(":memory:");
+    expect(s.loadDossier()).toBeNull();
+    const d = {
+      id: 1,
+      title: "ACME",
+      request: "ACME",
+      stage: "review" as const,
+      holder: "user" as const,
+      draftVersion: 1,
+      draft: "Carta",
+      reviews: [{ ts: 1, kind: "returned" as const, note: "mais curta", version: 1 }],
+      history: [{ ts: 1, text: "x" }],
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    s.saveDossier(d);
+    expect(s.loadDossier()).toEqual(d);
+    s.saveDossier({ ...d, id: 2, title: "Outra" });
+    expect(s.loadDossier()?.id).toBe(2);
+  });
+});

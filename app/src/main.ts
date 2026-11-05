@@ -19,6 +19,11 @@ import type { CanvasItem, ClientMsg, ServerMsg, Snapshot } from "../../shared/pr
 import { connect } from "./net/client";
 import { createAgent, sendTo, stateOf, stepAgent, teleport, type Agent } from "./sim/agent";
 import { createFeed } from "./ui/feed";
+import { buildReviewTray, createDossierProp } from "./scene/dossier";
+import { createDossierBoard } from "./scene/dossier-board";
+import { createDossierUi } from "./ui/dossier";
+import { waitingForUser } from "./ui/dossier-model";
+import type { Dossier } from "../../shared/protocol";
 import { shortcutAllowed } from "./ui/keys";
 import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
 import {
@@ -56,6 +61,9 @@ const locs = buildLocations(AGENTS);
 const agents: Agent[] = AGENTS.map((d) => createAgent(d, locs[`desk-${d.id}`]));
 const screens = new Map<string, ScreenHandle>(agents.map((a) => [a.def.id, createScreen()]));
 buildProps(screens);
+const dossierProp = createDossierProp();
+const dossierBoard = createDossierBoard();
+const reviewTray = buildReviewTray();
 const updateAmbient = buildAmbient();
 const views = new Map<string, PersonView>(agents.map((a) => [a.def.id, createPerson(a.def)]));
 const byAgentId = new Map<string, Agent>(agents.map((a) => [a.def.id, a]));
@@ -109,13 +117,15 @@ const note = (agent: Agent, text: string): void => {
 const stage = createStage(
   byId("stage"),
   (e) => {
+    // Clicar no dossier (a pasta ou o rótulo) abre o cartão com tudo o que interessa.
+    if (pickId(e) === DOSSIER_ID) return dossierUi.open();
     const a = pickAt(e);
     if (walk.on) return clickInWalkMode(e, a);
     if (a) panel.open(a, "chat");
   },
   (e) => {
     hovered = pickAt(e);
-    stage.dom.style.cursor = hovered ? "pointer" : "grab";
+    stage.dom.style.cursor = hovered || pickId(e) === DOSSIER_ID ? "pointer" : "grab";
   },
 );
 /** Modo andar: clicar numa pessoa leva-te à secretária dela; no corredor, ao sítio clicado; numa sala, à secretária mais próxima. */
@@ -207,12 +217,16 @@ addEventListener("keyup", (e) => {
 });
 byId("walkBtn").onclick = () => setWalkMode(!walk.on);
 
+const DOSSIER_ID = "dossier";
+
+/** O que está sob o cursor: o id de um agente ou o do dossier. */
+function pickId(e: PointerEvent): string | null {
+  return stage.pickAgent(e, [...[...views.values()].map((v) => v.group), dossierProp.group, dossierBoard.group]);
+}
+
 function pickAt(e: PointerEvent): Agent | null {
-  const id = stage.pickAgent(
-    e,
-    [...views.values()].map((v) => v.group),
-  );
-  return id ? (byAgentId.get(id) ?? null) : null;
+  const id = pickId(e);
+  return id && id !== DOSSIER_ID ? (byAgentId.get(id) ?? null) : null;
 }
 
 const agentNamed = (name: string): Agent | undefined => agents.find((a) => a.def.name === name);
@@ -374,6 +388,7 @@ function onServerMsg(m: ServerMsg): void {
   }
   if (m.type === "canvas") return applyCanvas(m.items, m.syncedAt);
   if (m.type === "snapshot") return applySnapshot(m);
+  if (m.type === "dossier") return applyDossier(m.dossier);
   if (m.type === "approval-resolved") return approvals.remove(m.id, m.superseded === true);
   if (m.type === "user-message") return chatStore.addUserIfNew(m.agentId, m.text, m.files);
   if (m.type === "delegate") return queueVisit(agents, locs, m.from, m.to, performance.now());
@@ -427,6 +442,14 @@ function onServerMsg(m: ServerMsg): void {
   }
 }
 
+/** O dossier mudou (ou foi restaurado ao ligar): atualiza o cartão, o rótulo e a pasta na cena. */
+function applyDossier(d: Dossier | null): void {
+  dossierUi.update(d);
+  dossierProp.set(d);
+  dossierBoard.set(d);
+  reviewTray.setAttention(waitingForUser(d));
+}
+
 const client = connect(onServerMsg, (isOnline) => {
   online = isOnline;
   chat.setOnline(isOnline);
@@ -435,6 +458,19 @@ const client = connect(onServerMsg, (isOnline) => {
   realAgents.clear();
   for (const a of agents) if (busy.has(a.def.id)) setBusy(a, false);
 });
+
+const sendDossier = (msg: ClientMsg): boolean => {
+  const sent = client.send(msg);
+  if (!sent) toast("Servidor offline: o dossier só avança com o servidor ligado.");
+  return sent;
+};
+const dossierUi = createDossierUi({
+  start: (request) => sendDossier({ type: "dossier-start", request }),
+  returnDraft: (id, note) => sendDossier({ type: "dossier-return", id, note }),
+  approve: (id) => sendDossier({ type: "dossier-approve", id }),
+  retry: (id) => sendDossier({ type: "dossier-retry", id }),
+});
+byId("dossierBtn").onclick = () => dossierUi.toggle();
 
 // ---- comportamento
 // A vida de ambiente (café, conversas, gestos) só envolve quem está livre; o resto do tempo é tempo real.
@@ -502,6 +538,8 @@ function frame(now: number): void {
     }
   }
   updateAmbient(t);
+  dossierProp.update(dt, t);
+  reviewTray.update(t);
   stage.update(dt);
   placeTag(panel.selected ?? hovered);
   stage.render();

@@ -525,3 +525,210 @@ header button.on {
   border-left: 3px solid var(--line);
   padding-left: 10px;
 }
+
+/* ---- dossier de candidatura ---- */
+.dossier-chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 6;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dossier-chip[hidden],
+.dossier-card[hidden] {
+  display: none;
+}
+.dossier-chip.tone-work {
+  border-color: #3b82f6;
+}
+.dossier-chip.tone-wait {
+  border-color: #f59e0b;
+  background: #3a2a0a;
+  color: #fde7b0;
+}
+.dossier-chip.tone-blocked {
+  border-color: #ef4444;
+  background: #3a1414;
+  color: #fecaca;
+}
+.dossier-chip.tone-done {
+  border-color: #22c55e;
+}
+.dossier-chip.is-waiting {
+  animation: dossier-pulse 1.4s ease-in-out infinite;
+}
+@keyframes dossier-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.28);
+  }
+}
+.dossier-card {
+  position: absolute;
+  top: 56px;
+  left: 12px;
+  z-index: 7;
+  width: 380px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 150px);
+  overflow: auto;
+  padding: 14px 16px 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.dz-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.dz-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.dz-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.dz-intro {
+  color: var(--muted);
+  margin: 10px 0;
+}
+.dz-banner {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border-left: 5px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dz-banner.tone-wait {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+}
+.dz-banner.tone-blocked {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.14);
+}
+.dz-banner.tone-done {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+.dz-blocked {
+  margin: 6px 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #ef4444;
+}
+.dz-blocked button {
+  margin-top: 8px;
+}
+.dz-steps {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+}
+.dz-step {
+  flex: 1;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dz-step.is-done {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--text);
+}
+.dz-step.is-active {
+  background: #3b82f6;
+  color: #fff;
+}
+.dz-step.is-blocked {
+  background: #ef4444;
+  color: #fff;
+}
+.dossier-card section {
+  margin-top: 10px;
+}
+.dz-holder {
+  font-weight: 600;
+}
+.dz-av {
+  font-size: 18px;
+  margin-right: 4px;
+}
+.dz-history {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.dz-history small {
+  color: var(--muted);
+}
+.dz-findings {
+  color: var(--muted);
+}
+.dz-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 200px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.12);
+  font: 12px/1.5 inherit;
+}
+.dz-review {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+}
+.dz-review textarea,
+.dz-new textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.dz-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.dz-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

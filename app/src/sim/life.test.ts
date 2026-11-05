@@ -203,6 +203,27 @@ describe("entregar uma tarefa (visita)", () => {
     expect(ceo.loc.key).toBe("desk-ceo");
   });
 
+  it("a Lena leva o dossier até à bandeja de revisão e volta à secretária", () => {
+    const { agents, locs, get } = world();
+    const now = { t: 0 };
+    queueVisit(agents, locs, "lena", "tray", now.t);
+    const lena = get("lena");
+    expect(lena.kind).toBe("visit");
+    expect(lena.carrying).toBe(true);
+    for (let i = 0; i < 20 * 90 && !(lena.kind === "visit" && isSettled(lena)); i++) {
+      now.t += 50;
+      agents.forEach((a) => stepAgent(a, 0.05));
+    }
+    expect(lena.loc.key).toBe("visit-tray");
+    expect(lena.x).toBeLessThan(2.2);
+    now.t += 4000;
+    lifeUpdate(agents, locs, now.t);
+    lifeUpdate(agents, locs, now.t + 4000);
+    settle(agents, now, locs, 90);
+    expect(lena.carrying).toBe(false);
+    expect(lena.loc.key).toBe("desk-lena");
+  });
+
   it("várias entregas seguidas fazem-se por ordem, uma de cada vez", () => {
     const { agents, locs, get } = world();
     const now = { t: 0 };

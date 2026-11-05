@@ -17,11 +17,12 @@ Tudo corre **no teu computador**, através da ferramenta `claude` e do teu próp
 ## Funcionalidades
 
 - **Um escritório vivo.** Cena 3D isométrica (Three.js) com ciclo dia/noite. As personagens (com rosto, cabelo e crachá) sentam-se, lavam as mãos, jogam ténis de mesa, conversam no corredor, fazem reuniões, entregam um papel a um colega quando o CEO delega e acenam quando precisam da tua aprovação. Só quem está livre passeia; quem tem uma tarefa real fica na secretária.
+- **Um dossier que vês a andar.** Abre um dossier de candidatura (📁 Dossier): o Atlas planeia, a Mira pesquisa, a Lena redige a carta e a pasta viaja pelo escritório até cada secretária e, no fim, até à bandeja de revisão junto ao relógio do corredor. Clica nela para veres o pedido, quem a tem, o que a prendeu, a pesquisa da Mira e o rascunho; aprova ou devolve à Lena com uma nota. O quadro da sala de Gestão mostra de relance quem a tem e se precisas de agir («À tua espera»). Nada é enviado. Sobrevive a recarregar a página e a reiniciar o servidor.
 - **Anda pelo escritório.** Carrega em `W` (ou no botão 🚶) para teres o teu avatar: setas ao longo do corredor, clica no chão ou numa pessoa para ires à secretária dela (a conversa abre quando chegas) e `F` liga ou desliga a câmara que te segue.
 - **Chat como o do Claude.** Respostas em streaming, Markdown, editar e regenerar a última mensagem, parar, anexos (`.md`, PDF, imagens, `.docx`), conversa nova quando quiseres, `Ctrl+K` para ir ter com qualquer um e `@nome` para passar a conversa a outro agente.
 - **Agentes a sério.** Cada um é um processo do Claude Code com prompt, ferramentas, pasta e memória (`CLAUDE.md`) próprios.
 - **Um CEO que delega.** Uma ordem vira um plano validado de até três tarefas, com dependências: quem escreve espera pela investigadora e recebe o resultado dela. No fim, o CEO resume o que a equipa fez de facto.
-- **Tu decides.** Os rascunhos vão para uma fila de aprovações. Nada é enviado sem ti.
+- **Tu decides.** Os rascunhos vão para uma fila de aprovações. Nada é enviado sem ti. Com `vaultDir` definido e a pasta `01 Candidaturas/00 Aprovações` presente, aprovar um rascunho guarda-o também aí como nota (`enviado: não`); o servidor nunca cria pastas no teu vault.
 - **Persistente.** Conversas, registos, aprovações e sessões sobrevivem a reinícios (SQLite).
 - **Sincronização do Canvas, só de leitura (opcional).** Um agente lê o painel da tua plataforma de ensino pelo teu Chrome, só quando carregas, e só no único domínio que configurares.
 - **As tuas notas, opcional.** Define `vaultDir` com um vault do Obsidian e os agentes com ficheiros podem ler, criar e editar notas lá.

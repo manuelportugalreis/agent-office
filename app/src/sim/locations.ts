@@ -23,6 +23,9 @@ const FACE_SOUTH = 0;
 const FACE_EAST = Math.PI / 2;
 const FACE_WEST = -Math.PI / 2;
 const CHAT_Z = 5.45;
+/** Identificador do lugar junto à bandeja de revisão (usado como destino de uma entrega: `visit-tray`). */
+export const TRAY_ID = "tray";
+const TRAY_VISIT_KEY = `visit-${TRAY_ID}`;
 
 const make = (key: string, pts: Pt[], yaw: number, sit: 0 | 1): Loc => ({ key, pts, yaw, sit, owner: null });
 
@@ -240,6 +243,8 @@ export function buildLocations(defs: readonly AgentDef[]): LocMap {
       ),
     ),
   );
+  // Bandeja de revisão (no fim do corredor): quem leva o dossier para o utilizador rever pára aqui, virado para ela.
+  add(make(TRAY_VISIT_KEY, [{ x: 1.45, z: LANE }], FACE_WEST, 0));
   return locs;
 }
 

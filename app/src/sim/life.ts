@@ -1,6 +1,6 @@
 import { MEETING_IDS } from "../data/agents";
 import { isSettled, sendTo, type Agent, type FidgetKind } from "./agent";
-import { freeLoc, type LocMap } from "./locations";
+import { freeLoc, TRAY_ID, type LocMap } from "./locations";
 
 /**
  * A vida do escritório. Tudo o que está aqui é ambiente: pessoas que vão ao café, conversam, se espreguiçam.
@@ -113,7 +113,9 @@ export function startMeeting(agents: readonly Agent[], locs: LocMap, _now: numbe
 /** O CEO (ou quem delega) leva um papel a `toId`. Várias entregas seguidas fazem-se por ordem. */
 export function queueVisit(agents: readonly Agent[], locs: LocMap, fromId: string, toId: string, now: number): void {
   const from = agents.find((a) => a.def.id === fromId);
-  if (!from || fromId === toId || !locs[`visit-${toId}`] || !agents.some((a) => a.def.id === toId)) return;
+  // O destino é a secretária de alguém ou a bandeja de revisão (não é uma pessoa).
+  const destinationExists = toId === TRAY_ID || agents.some((a) => a.def.id === toId);
+  if (!from || fromId === toId || !locs[`visit-${toId}`] || !destinationExists) return;
   from.visitQueue.push(toId);
   if (from.kind !== "visit") startNextVisit(from, locs, now);
 }

@@ -5,13 +5,17 @@ export interface Approvals {
   /** Pede a tua aprovação para um rascunho. O texto do rascunho já foi mostrado no chat do agente. */
   request(agentId: string, title: string, draft?: string): number;
   decide(id: number, approved: boolean): void;
+  /** Retira da fila as aprovações pendentes de um agente (o rascunho foi devolvido para rever). */
+  supersede(agentId: string): void;
 }
 
 /** Fila de aprovações (guardada na base de dados). Nesta fase nada é enviado: aprovar só regista a decisão. */
 export function createApprovals(
   emit: (m: ServerMsg) => void,
-  store: Pick<Store, "addApproval" | "resolveApproval" | "hasPending" | "supersedePending">,
+  store: Pick<Store, "addApproval" | "resolveApproval" | "hasPending" | "supersedePending" | "getApprovalDraft">,
   isRunning: (agentId: string) => boolean = () => false,
+  /** Chamado ao aprovar um rascunho: devolve onde ficou guardado (ex.: nota no Obsidian) ou null. Nunca envia nada. */
+  onApproved: (agentId: string, draft: string | null) => string | null = () => null,
 ): Approvals {
   return {
     request(agentId, title, draft) {
@@ -22,11 +26,20 @@ export function createApprovals(
       emit({ type: "approval", id, agentId, title, ...(draft ? { draft } : {}) });
       return id;
     },
+    supersede(agentId) {
+      for (const old of store.supersedePending(agentId))
+        emit({ type: "approval-resolved", id: old, agentId, approved: false, superseded: true });
+    },
     decide(id, approved) {
       const agentId = store.resolveApproval(id, approved);
       if (agentId === null) return;
       emit({ type: "approval-resolved", id, agentId, approved });
-      const text = approved ? "Aprovado por ti. Nada foi enviado: o envio ainda não está implementado." : "Rejeitado por ti.";
+      const savedAt = approved ? onApproved(agentId, store.getApprovalDraft(id)) : null;
+      const text = !approved
+        ? "Rejeitado por ti."
+        : savedAt
+          ? `Aprovado por ti. Guardei o rascunho no Obsidian (${savedAt}). Nada foi enviado.`
+          : "Aprovado por ti. Nada foi enviado: o envio ainda não está implementado.";
       emit({ type: "log", agentId, text });
       if (!store.hasPending(agentId) && !isRunning(agentId)) emit({ type: "status", agentId, status: "idle" });
     },

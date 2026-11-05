@@ -2,7 +2,49 @@
 
 export type RemoteStatus = "idle" | "think" | "work" | "err";
 
+/** Onde está o dossier de candidatura: com o Atlas a planear, com a Mira a pesquisar, com a Lena a redigir, ou à espera de ti. */
+export type DossierStage = "atlas" | "research" | "drafting" | "review" | "approved";
+export type DossierHolder = "ceo" | "mira" | "lena" | "user";
+
+export interface DossierReview {
+  readonly ts: number;
+  readonly kind: "returned" | "approved";
+  readonly note?: string;
+  /** Versão do rascunho a que a decisão se refere. */
+  readonly version: number;
+}
+
+export interface DossierEvent {
+  readonly ts: number;
+  readonly text: string;
+}
+
+/** Um processo de candidatura que passa de mão em mão: Atlas, Mira, Lena e tu. Nada é enviado: aprovar só regista. */
+export interface Dossier {
+  readonly id: number;
+  /** Título curto escolhido pelo Atlas. */
+  readonly title: string;
+  readonly request: string;
+  readonly stage: DossierStage;
+  readonly holder: DossierHolder;
+  /** Se o passo falhou: onde e porquê (o dossier fica parado até tentares outra vez). */
+  readonly blocked?: { readonly stage: "atlas" | "research" | "drafting"; readonly reason: string };
+  /** Instruções que o Atlas deu à Mira e à Lena. */
+  readonly briefs?: { readonly mira: string; readonly lena: string };
+  readonly findings?: string;
+  readonly draft?: string;
+  readonly draftVersion: number;
+  /** Nota que devolveste à Lena e que ainda não deu origem a um rascunho novo. */
+  readonly pendingNote?: string;
+  readonly approvalId?: number;
+  readonly reviews: readonly DossierReview[];
+  readonly history: readonly DossierEvent[];
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
 export type ServerMsg =
+  | { readonly type: "dossier"; readonly dossier: Dossier | null }
   | {
       readonly type: "hello";
       readonly realAgents: readonly string[];
@@ -57,7 +99,11 @@ export type ClientMsg =
   | { readonly type: "stop"; readonly agentId: string }
   | { readonly type: "order"; readonly text: string }
   | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
-  | { readonly type: "sync" };
+  | { readonly type: "sync" }
+  | { readonly type: "dossier-start"; readonly request: string }
+  | { readonly type: "dossier-return"; readonly id: number; readonly note: string }
+  | { readonly type: "dossier-approve"; readonly id: number }
+  | { readonly type: "dossier-retry"; readonly id: number };
 
 export const MAX_TEXT_LENGTH = 8000;
 export const MAX_FILES_PER_MESSAGE = 8;
@@ -113,6 +159,18 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "sync":
       return { type: "sync" };
+    case "dossier-start": {
+      const request = cleanText(m.request);
+      return request ? { type: "dossier-start", request } : null;
+    }
+    case "dossier-return": {
+      const note = cleanText(m.note);
+      return Number.isInteger(m.id) && note ? { type: "dossier-return", id: m.id as number, note } : null;
+    }
+    case "dossier-approve":
+      return Number.isInteger(m.id) ? { type: "dossier-approve", id: m.id as number } : null;
+    case "dossier-retry":
+      return Number.isInteger(m.id) ? { type: "dossier-retry", id: m.id as number } : null;
     case "decide":
       return Number.isInteger(m.id) && typeof m.approved === "boolean"
         ? { type: "decide", id: m.id as number, approved: m.approved }

@@ -17,11 +17,12 @@ Everything runs **on your machine**, through the `claude` command-line tool and 
 ## Features
 
 - **A living office.** Isometric 3D scene (Three.js) with a day/night cycle. Characters with faces, hair and badges sit at their desks, wash their hands, play table tennis, chat in the corridor, hold meetings, hand a paper to a colleague when the CEO delegates, and wave when they need your approval. Only idle people wander; anyone with a real task stays at the desk.
+- **A dossier you can watch.** Open a job-application dossier (📁 Dossier): Atlas plans, Mira researches, Lena drafts the cover letter, and the folder travels across the office to each desk and finally to the review tray by the corridor clock. Click it for the request, who has it, what held it up, Mira's findings and the draft; approve it or send it back to Lena with a note. The board in the Management room shows at a glance who has it and whether you need to act ("À tua espera"). Nothing is ever sent. It survives reloads and restarts.
 - **Walk around.** Press `W` (or the 🚶 button) to get your own avatar: arrow keys along the corridor, click the floor or a person to walk to their desk (their chat opens when you arrive), `F` toggles the follow camera.
 - **Chat that feels like Claude.** Streaming answers, Markdown, edit and regenerate the last message, stop, file attachments (`.md`, PDF, images, `.docx`), a new conversation at any time, `Ctrl+K` to jump to anyone and `@name` to hand a conversation to another agent.
 - **Real agents, not mock-ups.** Each one is a separate Claude Code process with its own system prompt, tools, folder and memory (`CLAUDE.md`).
 - **A CEO that delegates.** One order becomes a validated plan of up to three tasks, with dependencies: the writer waits for the researcher and receives her result. When the team finishes, the CEO summarises what was actually done.
-- **Human in the loop.** Drafts land in an approval queue. Nothing is ever sent without you.
+- **Human in the loop.** Drafts land in an approval queue. Nothing is ever sent without you. With `vaultDir` set and the folder `01 Candidaturas/00 Aprovações` present, approving a draft also saves it there as a note (`enviado: não`); the server never creates folders in your vault.
 - **Persistent.** Chats, logs, approvals and sessions survive restarts (SQLite).
 - **Read-only Canvas sync (optional).** One agent reads your LMS dashboard through your own Chrome, only when you click, and only on the one domain you configure.
 - **Your notes, optionally.** Set `vaultDir` to an Obsidian vault and file agents can read, create and edit notes there.
