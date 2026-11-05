@@ -56,7 +56,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
   container.prepend(renderer.domElement);
@@ -242,13 +242,13 @@ function applyLighting(dt: number, current: number, mode: TimeMode): number {
   const n = current + (nightFactor(hour) - current) * Math.min(1, dt * 2);
   const t = clamp((hour - 6) / 12, 0, 1);
   sun.position.set(14 - Math.cos(Math.PI * t) * 9, Math.max(8, Math.sin(Math.PI * t) * 14 + 6), 18);
-  sun.intensity = 1.05 * (1 - n) + 0.12;
+  sun.intensity = (1.05 * (1 - n) + 0.12) * Math.PI;
   sun.color.setHex(t < 0.15 || t > 0.85 ? 0xffc08a : 0xffe9cc);
-  hemi.intensity = 0.3 * (1 - n) + 0.14;
+  hemi.intensity = (0.3 * (1 - n) + 0.14) * Math.PI;
   scene.background = dayBg.clone().lerp(nightBg, n);
   (ground.material as THREE.MeshStandardMaterial).color.copy(dayGround).lerp(nightGround, n);
   lamps.forEach((l) => {
-    l.intensity = 0.25 + 0.7 * n;
+    l.intensity = (0.25 + 0.7 * n) * Math.PI * 3;
   });
   glassMaterial.emissiveIntensity = 0.04 + 0.7 * n;
   return n;

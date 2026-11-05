@@ -89,7 +89,7 @@ export function canvas2d(w: number, h: number): { c: HTMLCanvasElement; g: Canva
 
 export function canvasTexture(c: HTMLCanvasElement): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(c);
-  t.encoding = THREE.sRGBEncoding;
+  t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
   return t;
 }
