@@ -7,7 +7,7 @@ interface Placement {
 }
 
 /** Ganchos que a app só expõe com `?debug`, para arrastar uma peça sem adivinhar píxeis no ecrã. */
-async function dragPiece(page: Page, id: string, to: { x: number; z: number }): Promise<void> {
+async function dragPiece(page: Page, id: string, to: { x: number; z: number }, release = true): Promise<void> {
   const points = await page.evaluate(
     ({ id, to }) => {
       const office = (window as unknown as { __office: OfficeDebug }).__office;
@@ -26,7 +26,7 @@ async function dragPiece(page: Page, id: string, to: { x: number; z: number }): 
   await page.mouse.move(points.from.x, points.from.y);
   await page.mouse.down();
   await page.mouse.move(points.to.x, points.to.y, { steps: 4 });
-  await page.mouse.up();
+  if (release) await page.mouse.up();
 }
 
 interface OfficeDebug {
@@ -58,9 +58,9 @@ test("o modo andar liga e desliga", async ({ page }) => {
 });
 
 test.describe("modo mobília", () => {
-  // A impressora é uma peça com colisão; (15, 3.8) é chão livre na sala Job Application.
+  // A impressora é uma peça com colisão; (14.1, 3.8) é chão livre na sala Job Application, entre os caminhos das secretárias.
   const PIECE = "impressora-1";
-  const FREE = { x: 15, z: 3.8 };
+  const FREE = { x: 14.1, z: 3.8 };
 
   test("a barra abre e fecha, e sair pelo botão Concluir volta ao normal", async ({ page }) => {
     await page.locator("#editBtn").click({ force: true });
@@ -86,6 +86,28 @@ test.describe("modo mobília", () => {
     await page.locator("#editBtn").click({ force: true });
     await page.locator("#editReset").click({ force: true });
     expect((await placementOf(page, PIECE))?.x).toBeCloseTo(12.8);
+  });
+
+  test("uma disposição guardada inválida é ignorada ao abrir", async ({ page }) => {
+    await page.evaluate((id) => localStorage.setItem("agent-office-layout", JSON.stringify({ [id]: { x: 12, z: 6, turns: 0 } })), PIECE);
+    await page.reload();
+    await expect(page.locator("#stage canvas")).toBeVisible();
+    expect((await placementOf(page, PIECE))?.x).toBeCloseTo(12.8);
+  });
+
+  test("sair do modo a meio de um arrasto devolve a peça ao sítio", async ({ page }) => {
+    await page.locator("#editBtn").click({ force: true });
+    const before = await placementOf(page, PIECE);
+    await dragPiece(page, PIECE, FREE, false);
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    await expect(page.locator("#editBar")).toBeHidden();
+    const rendered = await page.evaluate((id) => {
+      const office = (window as unknown as { __office: { editables(): { id: string; group: { position: { x: number } } }[] } }).__office;
+      return office.editables().find((e) => e.id === id)?.group.position.x;
+    }, PIECE);
+    expect(rendered).toBeCloseTo(before?.x ?? NaN);
+    expect(await placementOf(page, PIECE)).toEqual(before);
   });
 
   test("não deixa pousar uma peça no corredor: volta para onde estava", async ({ page }) => {

@@ -167,7 +167,12 @@ describe("serviço de chat", () => {
     store.addChat("lena", true, "x");
     chat.newChat("lena");
     expect(store.chat("lena")).toEqual([]);
-    expect(out.at(-1)).toMatchObject({ type: "conversation", chat: [] });
+    expect(out.at(-1)).toMatchObject({ type: "conversation", chat: [], cleared: true });
+  });
+  it("newChat recusado não confirma a limpeza", () => {
+    const { chat, out } = setup();
+    chat.newChat("nao-existe");
+    expect(out.some((m) => m.type === "conversation")).toBe(false);
   });
   it("withAttachments e withHistory", () => {
     expect(withAttachments("lena", "olá", undefined)).toBe("olá");

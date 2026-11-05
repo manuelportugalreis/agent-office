@@ -1,6 +1,6 @@
 import type * as THREE from "three";
 import { SOLIDS, type Rect } from "../sim/collision";
-import { LAYOUT_KEY, footprint, parseLayout, type Layout, type Placement } from "../sim/layout";
+import { LAYOUT_KEY, applyWhilePossible, canPlace, footprint, parseLayout, type Layout, type Placement } from "../sim/layout";
 
 /**
  * Peças que o modo editar pode mover. Só peças soltas: o que tem lugares marcados (secretárias, sofá, ginásio) fica fixo,
@@ -98,11 +98,13 @@ export function loadLayout(): void {
   } catch {
     return;
   }
-  const saved = parseLayout(raw);
-  for (const [id, p] of Object.entries(saved)) {
+  // O que está guardado passa pelas mesmas regras de quando se larga uma peça: o inválido fica na posição de origem.
+  applyWhilePossible(Object.entries(parseLayout(raw)), ([id, p]) => {
     const item = items.get(id);
-    if (item) place(item, p);
-  }
+    if (!item || !canPlace(rectFor(item, p), SOLIDS, item.solidIndex)) return false;
+    place(item, p);
+    return true;
+  });
 }
 
 export function resetLayout(): void {

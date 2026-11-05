@@ -320,12 +320,7 @@ const chatActions: ChatActions = {
   // "Sincroniza o Canvas" no chat do Dean é tratado pelo servidor (guarda a mensagem, sincroniza e responde com o resultado).
   send: (agentId, text, files) => sendToServer(agentId, { type: "send", agentId, text, ...(files.length ? { files } : {}) }),
   redo: (agentId, text, files) => sendToServer(agentId, { type: "redo", agentId, text, ...(files.length ? { files } : {}) }),
-  newChat: (agentId) => {
-    // O servidor recusa limpar a conversa de quem está a trabalhar: nesse caso o Joaquim não sai do sítio.
-    const accepted = !busy.has(agentId) && sendToServer(agentId, { type: "newchat", agentId });
-    if (accepted) requestCleaning(janitor, agentId);
-    return accepted;
-  },
+  newChat: (agentId) => sendToServer(agentId, { type: "newchat", agentId }),
   stop: (agentId) => void client.send({ type: "stop", agentId }),
   upload: uploadFile,
   notify: toast,
@@ -483,6 +478,8 @@ function onServerMsg(m: ServerMsg): void {
   } else if (m.type === "reply") {
     chatStore.reply(a.def.id, m.text);
   } else if (m.type === "conversation") {
+    // Só com a confirmação do servidor: um pedido recusado nunca faz o Joaquim sair do sítio.
+    if (m.cleared) requestCleaning(janitor, m.agentId);
     chatStore.replace(a.def.id, m.chat);
   } else if (m.type === "done") {
     a.lastError = m.ok ? null : (m.error ?? "erro desconhecido");

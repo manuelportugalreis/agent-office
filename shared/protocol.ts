@@ -179,7 +179,7 @@ export type ServerMsg =
   | { readonly type: "quota"; readonly fiveHour: number; readonly sevenDay: number }
   | { readonly type: "canvas"; readonly items: readonly CanvasItem[]; readonly syncedAt: number }
   /** A conversa de um agente recomeçou (nova conversa, ou editar/regenerar): a interface recarrega-a. */
-  | { readonly type: "conversation"; readonly agentId: string; readonly chat: readonly ChatEntry[] }
+  | { readonly type: "conversation"; readonly agentId: string; readonly chat: readonly ChatEntry[]; readonly cleared?: boolean }
   | ({ readonly type: "snapshot" } & Snapshot)
   /** `op`: que operação do chat falhou (só o envio recusado faz a interface tirar a mensagem otimista). */
   | { readonly type: "error"; readonly agentId?: string; readonly message: string; readonly op?: "send" | "redo" | "newchat" };

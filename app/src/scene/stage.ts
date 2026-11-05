@@ -43,6 +43,8 @@ export interface EditHook {
   down(e: PointerEvent): boolean;
   move(e: PointerEvent): void;
   up(e: PointerEvent): void;
+  /** O gesto perdeu-se a meio (o rato saiu da janela, por exemplo): a peça volta para onde estava. */
+  cancel(): void;
 }
 
 export interface Stage {
@@ -259,12 +261,13 @@ function installControls(dom: HTMLCanvasElement, edit: { current: EditHook | nul
   });
   // Se o browser perder o gesto (por exemplo, o rato sai da janela), não deixar um arrasto "preso":
   // um arrasto preso fazia o próximo clique noutro sítio ser tratado como clique no mapa.
-  dom.addEventListener("pointercancel", (e) => {
-    if (editing) edit.current?.up(e);
+  dom.addEventListener("pointercancel", () => {
+    if (editing) edit.current?.cancel();
     editing = false;
     drag = null;
   });
   dom.addEventListener("lostpointercapture", () => {
+    if (editing) edit.current?.cancel();
     editing = false;
     drag = null;
   });

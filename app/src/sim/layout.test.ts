@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SOLIDS } from "./collision";
-import { canPlace, footprint, parseLayout, snap } from "./layout";
+import { applyWhilePossible, canPlace, footprint, parseLayout, snap } from "./layout";
 
 describe("disposição do mobiliário", () => {
   it("lê só o que é válido e ignora lixo", () => {
@@ -25,6 +25,21 @@ describe("disposição do mobiliário", () => {
     expect(canPlace(footprint(12, 6, 0.5, 0.5, 0), SOLIDS, -1)).toBe(false);
     expect(canPlace(footprint(3, 1.4, 0.5, 0.5, 0), SOLIDS, -1)).toBe(false);
     expect(canPlace(footprint(30, 3, 0.5, 0.5, 0), SOLIDS, -1)).toBe(false);
-    expect(canPlace(footprint(9, 3.8, 0.5, 0.5, 0), SOLIDS, -1)).toBe(true);
+    expect(canPlace(footprint(8.1, 3.8, 0.5, 0.5, 0), SOLIDS, -1)).toBe(true);
+  });
+
+  it("não deixa tapar o lugar onde alguém fica nem o caminho para a secretária", () => {
+    expect(canPlace(footprint(10.5, 1.75, 0.5, 0.5, 0), SOLIDS, -1)).toBe(false); // em frente aos servidores
+    expect(canPlace(footprint(9, 3.8, 0.5, 0.5, 0), SOLIDS, -1)).toBe(false); // caminho até à secretária em x = 9
+  });
+
+  it("aplica por passagens e devolve o que nunca coube", () => {
+    const free = new Set(["b"]);
+    const rejected = applyWhilePossible(["a", "b", "c"], (item) => {
+      if (!free.has(item)) return false;
+      if (item === "b") free.add("a"); // "b" sai do sítio e só então "a" cabe
+      return true;
+    });
+    expect(rejected).toEqual(["c"]);
   });
 });

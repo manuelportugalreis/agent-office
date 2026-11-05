@@ -77,7 +77,8 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
       if (!findAgent(agentId)) return error(agentId, "Este agente ainda não é real.");
       if (hub.isRunning(agentId)) return error(agentId, "O agente ainda está a trabalhar.");
       store.newConversation(agentId);
-      conversation(agentId);
+      // `cleared`: a conversa foi mesmo limpa (é a confirmação que faz o Joaquim sair do sítio).
+      emit({ type: "conversation", agentId, chat: store.chat(agentId), cleared: true });
     },
   };
 }

@@ -51,6 +51,14 @@ export function createEditor(stage: Stage, onChange: () => void): Editor {
 
   const fits = (item: Editable, p: Placement): boolean => canPlace(rectFor(item, p), SOLIDS, item.solidIndex);
 
+  /** Larga o arrasto em curso e devolve a peça ao último sítio guardado. */
+  const cancelDrag = (): void => {
+    if (selected && drag) place(selected, drag.start);
+    drag = null;
+    valid = true;
+    refreshOutline();
+  };
+
   const hook = {
     down(e: PointerEvent): boolean {
       const item = itemOf(
@@ -94,6 +102,7 @@ export function createEditor(stage: Stage, onChange: () => void): Editor {
       saveLayout();
       onChange();
     },
+    cancel: cancelDrag,
   };
 
   return {
@@ -101,16 +110,16 @@ export function createEditor(stage: Stage, onChange: () => void): Editor {
     selected: () => selected?.label ?? null,
     setActive(value) {
       on = value;
-      stage.setEditHook(value ? hook : null);
       if (!value) {
+        cancelDrag();
         selected = null;
-        drag = null;
         refreshOutline();
       }
+      stage.setEditHook(value ? hook : null);
       onChange();
     },
     rotate() {
-      if (!selected) return;
+      if (!selected || drag) return;
       const next: Placement = { ...selected.placement, turns: (selected.placement.turns + 1) % 4 };
       if (!fits(selected, next)) return;
       place(selected, next);
@@ -118,6 +127,7 @@ export function createEditor(stage: Stage, onChange: () => void): Editor {
       saveLayout();
     },
     reset() {
+      drag = null;
       resetLayout();
       selected = null;
       refreshOutline();
