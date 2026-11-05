@@ -8,6 +8,7 @@ import { scene } from "./scene/world";
 import { createPerson, STATE_INFO, updatePerson, type PersonView } from "./scene/person";
 import { buildAmbient } from "./scene/ambient";
 import { buildProps } from "./scene/props";
+import { buildAnnex, updateServers } from "./scene/annex";
 import { createScreen, drawScreen, type ScreenHandle } from "./scene/screens";
 import { createStage, DEFAULT_ZOOM, type TimeMode } from "./scene/stage";
 import type { ChatActions, ChatAgent } from "./chat/ChatPanel";
@@ -56,6 +57,7 @@ const locs = buildLocations(AGENTS);
 const agents: Agent[] = AGENTS.map((d) => createAgent(d, locs[`desk-${d.id}`]));
 const screens = new Map<string, ScreenHandle>(agents.map((a) => [a.def.id, createScreen()]));
 buildProps(screens);
+buildAnnex();
 // Tudo o que existe até aqui é edifício e mobília (estático); as pessoas, o dossier e o resto vêm depois.
 const staticRoots = scene.children.filter((c) => !(c as Light).isLight && c !== groundMesh && !c.userData.live);
 // A versão cozinhada no Blender é experimental e fica desligada por defeito (abre com ?baked).
@@ -546,6 +548,7 @@ function frame(now: number): void {
   }
   updatePerson(guardView, guard, dt, t);
   updateLisbon(dt);
+  updateServers(t);
   if (walk.on) {
     let right = 0;
     let up = 0;

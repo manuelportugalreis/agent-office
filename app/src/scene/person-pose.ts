@@ -165,10 +165,45 @@ function standingPose(a: Agent, t: number, seed: number, p: Pose): void {
     p.elL = -0.6;
     p.torsoY = Math.sin(t * 3.1 + seed) * 0.18;
     p.headX = 0.12;
+  } else if (state === "gym") {
+    gymPose(a, t, seed, p);
+  } else if (state === "server") {
+    // Em frente aos bastidores: o tablet nas mãos e a cabeça a seguir as luzes a piscar.
+    p.shL = -1.0;
+    p.elL = -1.3;
+    p.shR = -0.9;
+    p.elR = -1.45;
+    p.headX = 0.18;
+    p.headY = Math.sin(t * 0.7 + seed) * 0.35;
   } else {
     p.shL = -0.2;
     p.shR = -0.2;
   }
+}
+
+/** Ginásio: corrida na passadeira (gym0), flexões de bíceps com halteres (gym1) ou alongamentos no tapete (gym2). */
+function gymPose(a: Agent, t: number, seed: number, p: Pose): void {
+  if (a.loc.key === "gym0") {
+    const swing = Math.sin(t * 8) * 0.9;
+    p.shL = -swing;
+    p.shR = swing;
+    p.elL = p.elR = -1.1;
+    p.torsoX = 0.12;
+    return;
+  }
+  if (a.loc.key === "gym1") {
+    const curl = (Math.sin(t * 2.2 + seed) + 1) / 2;
+    p.shL = p.shR = -0.15;
+    p.elL = -0.2 - curl * 1.9;
+    p.elR = -0.2 - (1 - curl) * 1.9;
+    p.headX = -0.05;
+    return;
+  }
+  const reach = (Math.sin(t * 0.9 + seed) + 1) / 2;
+  p.shL = p.shR = -2.6 + reach * 0.4;
+  p.elL = p.elR = -0.1;
+  p.torsoX = 0.5 * Math.max(0, Math.sin(t * 0.45 + seed));
+  p.headX = -0.15;
 }
 
 /** Para onde olha quem está a falar ou a ouvir: a cabeça (e um pouco o tronco) viram-se para o outro. */
@@ -214,7 +249,11 @@ export function updatePerson(v: PersonView, a: Agent, dt: number, t: number): vo
   const f = Math.min(1, dt * 9);
   const p = computePose(a, t, v.seed);
 
-  r.hips.position.y = 0.93 - a.sit * 0.45 + Math.abs(Math.sin(a.phase)) * 0.02 * a.walk;
+  // Na passadeira as pernas correm no sítio.
+  const running = a.kind === "gym" && a.loc.key === "gym0" && a.walk <= 0.1;
+  const stride = running ? 0.9 : a.walk;
+  const phase = running ? t * 8 : a.phase;
+  r.hips.position.y = 0.93 - a.sit * 0.45 + Math.abs(Math.sin(phase)) * 0.02 * stride;
   // Respirar.
   r.torso.scale.y = 1 + Math.sin(t * 1.6 + v.seed) * 0.012;
   lerpRot(r.shL, "x", p.shL, f);
@@ -231,13 +270,13 @@ export function updatePerson(v: PersonView, a: Agent, dt: number, t: number): vo
   r.paper.visible = p.paper;
   animateFace(v, p, t, f);
 
-  const swing = Math.sin(a.phase) * 0.75 * a.walk;
+  const swing = Math.sin(phase) * 0.75 * stride;
   const hip = (-a.sit * Math.PI) / 2;
   const knee = (a.sit * Math.PI) / 2;
   r.hpL.rotation.x = hip + swing;
   r.hpR.rotation.x = hip - swing;
-  r.knL.rotation.x = knee + Math.max(0, -Math.sin(a.phase)) * 0.9 * a.walk;
-  r.knR.rotation.x = knee + Math.max(0, Math.sin(a.phase)) * 0.9 * a.walk;
+  r.knL.rotation.x = knee + Math.max(0, -Math.sin(phase)) * 0.9 * stride;
+  r.knR.rotation.x = knee + Math.max(0, Math.sin(phase)) * 0.9 * stride;
 
   v.group.position.set(a.x, 0, a.z);
   v.group.rotation.y = a.yaw;

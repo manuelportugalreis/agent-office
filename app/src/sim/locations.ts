@@ -23,6 +23,8 @@ const FACE_SOUTH = 0;
 const FACE_EAST = Math.PI / 2;
 const FACE_WEST = -Math.PI / 2;
 const CHAT_Z = 5.45;
+/** Onde se fica em pé em frente aos bastidores dos servidores. */
+const SERVER_X = 10.6;
 /** Identificador do lugar junto à bandeja de revisão (usado como destino de uma entrega: `visit-tray`). */
 export const TRAY_ID = "tray";
 const TRAY_VISIT_KEY = `visit-${TRAY_ID}`;
@@ -239,6 +241,66 @@ export function buildLocations(defs: readonly AgentDef[]): LocMap {
           { x, z: 9.5 },
         ],
         yaw,
+        0,
+      ),
+    ),
+  );
+  // Ginásio (sul da sala de jogos): passadeira, pesos e tapete. Os caminhos contornam a mesa de ténis de mesa.
+  const gymRoute = (via: readonly Pt[], end: Pt): Pt[] => [{ x: playDoor, z: LANE }, { x: playDoor, z: 8.0 }, ...via, end];
+  add(
+    make(
+      "gym0",
+      gymRoute(
+        [
+          { x: 19.0, z: 8.0 },
+          { x: 19.0, z: 10.4 },
+        ],
+        { x: 19.3, z: 10.95 },
+      ),
+      FACE_NORTH,
+      0,
+    ),
+  );
+  add(
+    make(
+      "gym1",
+      gymRoute(
+        [
+          { x: 22.6, z: 8.0 },
+          { x: 22.6, z: 10.5 },
+          { x: 20.6, z: 10.5 },
+        ],
+        { x: 20.6, z: 11.05 },
+      ),
+      FACE_SOUTH,
+      0,
+    ),
+  );
+  add(
+    make(
+      "gym2",
+      gymRoute(
+        [
+          { x: 22.6, z: 8.0 },
+          { x: 22.6, z: 10.5 },
+        ],
+        { x: 22.2, z: 11.0 },
+      ),
+      FACE_NORTH,
+      0,
+    ),
+  );
+
+  // Sala de servidores (canto nascente da sala Job Search): dois sítios em frente aos bastidores.
+  [1.7, 2.8].forEach((z, i) =>
+    add(
+      make(
+        `srv${i}`,
+        [
+          { x: SERVER_X, z: LANE },
+          { x: SERVER_X, z },
+        ],
+        FACE_EAST,
         0,
       ),
     ),

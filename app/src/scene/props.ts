@@ -225,7 +225,8 @@ export function buildProps(screens: ReadonlyMap<string, ScreenHandle>): void {
     desk(d[0], d[1], d[2], a.hue, screens.get(a.id) ?? null);
     chair(a.x, a.z, Math.PI, `hsl(${a.hue},30%,28%)`);
   }
-  for (const roomX of [0, 6]) {
+  // O segundo canto da sala Job Search é a sala de servidores (annex.ts).
+  for (const roomX of [0]) {
     desk(topX(roomX, 2), 1.4, 1.4, 200, null);
     chair(topX(roomX, 2) + 0.1, 2.5, Math.PI + 0.4, "#3a3f4a");
   }
@@ -364,13 +365,6 @@ function pingPong(x: number, z: number): void {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.06, 0.75, 0.06, sx * 1.1, 0.37, sz * 0.55, mat("#33373f"));
 }
 
-function beanbag(x: number, z: number, color: string): void {
-  const g = group(x, 0, z);
-  const m = mat(color, { roughness: 0.9 });
-  box(g, 0.8, 0.32, 0.8, 0, 0.18, 0, m);
-  box(g, 0.65, 0.2, 0.65, 0, 0.42, -0.05, m);
-}
-
 function vending(x: number, z: number): void {
   const g = group(x, 0, z);
   box(g, 0.9, 1.9, 0.7, 0, 0.95, 0, mat("#b53a3a"));
@@ -390,8 +384,6 @@ function buildWing(): void {
   // Sala de jogos.
   rug(21, 9.5, 5, 3.4, "#4f7a63");
   pingPong(21, 9.5);
-  beanbag(19.2, 11.4, "#e0893a");
-  beanbag(20.3, 11.6, "#3a86e0");
   vending(23.4, 11.4);
   plant(18.6, 7.6, 0.9);
   pendantLamps(21, 9.5);
@@ -409,7 +401,7 @@ function signTexture(text: string, bg: string, fg: string): THREE.CanvasTexture 
   return canvasTexture(c);
 }
 
-function sign(x: number, y: number, z: number, rotY: number, text: string, bg: string, fg: string, w = 1.4): void {
+export function sign(x: number, y: number, z: number, rotY: number, text: string, bg: string, fg: string, w = 1.4): void {
   const face = new THREE.Mesh(
     new THREE.PlaneGeometry(w, w / 4),
     new THREE.MeshBasicMaterial({ map: signTexture(text, bg, fg), toneMapped: false }),

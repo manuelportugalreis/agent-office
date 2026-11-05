@@ -15,10 +15,14 @@ const CHAT_CHANCE = 0.1;
 const MEETING_CHANCE = 0.015;
 const WC_CHANCE = 0.06;
 const PLAY_CHANCE = 0.07;
+const GYM_CHANCE = 0.06;
+const SERVER_CHANCE = 0.04;
 const FIDGET_CHANCE = 0.08;
 const MIN_MEETING_SIZE = 3;
 const WC_DWELL_MS: readonly [number, number] = [5000, 8000];
 const PLAY_DWELL_MS: readonly [number, number] = [14000, 22000];
+const GYM_DWELL_MS: readonly [number, number] = [12000, 20000];
+const SERVER_DWELL_MS: readonly [number, number] = [8000, 14000];
 
 const REST_DWELL_MS: readonly [number, number] = [9000, 16000];
 const CHAT_DWELL_MS: readonly [number, number] = [8000, 13000];
@@ -35,7 +39,9 @@ const home = (a: Agent, locs: LocMap) => locs[`desk-${a.def.id}`];
 export const isIdleAtDesk = (a: Agent): boolean =>
   a.kind === "desk" && isSettled(a) && !a.pinned && a.state === "idle" && !a.carrying && a.visitQueue.length === 0;
 
-function goAway(a: Agent, loc: Parameters<typeof sendTo>[1], kind: "rest" | "chat" | "meet" | "wc" | "play", stayMs: number): void {
+type AwayKind = "rest" | "chat" | "meet" | "wc" | "play" | "gym" | "server";
+
+function goAway(a: Agent, loc: Parameters<typeof sendTo>[1], kind: AwayKind, stayMs: number): void {
   sendTo(a, loc, kind);
   a.dwellUntil = 0;
   a.dwellFor = stayMs;
@@ -62,6 +68,16 @@ export function lifeTick(agents: readonly Agent[], locs: LocMap, now: number, rn
   if (free.length > 0 && rng() < WC_CHANCE) {
     const spot = freeLoc(locs, "wc");
     if (spot) goAway(pick(free, rng), spot, "wc", between(WC_DWELL_MS, rng));
+    return;
+  }
+  if (free.length > 0 && rng() < GYM_CHANCE) {
+    const spot = freeLoc(locs, "gym");
+    if (spot) goAway(pick(free, rng), spot, "gym", between(GYM_DWELL_MS, rng));
+    return;
+  }
+  if (free.length > 0 && rng() < SERVER_CHANCE) {
+    const spot = freeLoc(locs, "srv");
+    if (spot) goAway(pick(free, rng), spot, "server", between(SERVER_DWELL_MS, rng));
     return;
   }
   if (free.length >= 2 && rng() < PLAY_CHANCE) {
@@ -130,7 +146,8 @@ function startNextVisit(a: Agent, locs: LocMap, now: number): void {
   void now;
 }
 
-const isAway = (kind: Agent["kind"]): boolean => kind === "rest" || kind === "chat" || kind === "meet" || kind === "wc" || kind === "play";
+const isAway = (kind: Agent["kind"]): boolean =>
+  kind === "rest" || kind === "chat" || kind === "meet" || kind === "wc" || kind === "play" || kind === "gym" || kind === "server";
 
 /** Quando uma tarefa real começa: larga entregas, passeios e gestos e volta à secretária. */
 export function cancelAmbient(a: Agent): void {
