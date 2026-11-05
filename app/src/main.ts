@@ -465,7 +465,8 @@ const sendDossier = (msg: ClientMsg): boolean => {
   return sent;
 };
 const dossierUi = createDossierUi({
-  start: (request) => sendDossier({ type: "dossier-start", request }),
+  start: (request, materials) => sendDossier({ type: "dossier-start", request, ...(materials ? { materials } : {}) }),
+  answer: (id, answer, companyOnly) => sendDossier({ type: "dossier-answer", id, answer, ...(companyOnly ? { companyOnly } : {}) }),
   returnDraft: (id, note) => sendDossier({ type: "dossier-return", id, note }),
   approve: (id) => sendDossier({ type: "dossier-approve", id }),
   retry: (id) => sendDossier({ type: "dossier-retry", id }),

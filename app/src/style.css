@@ -732,3 +732,131 @@ header button.on {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ---- dossier: pesquisa com fontes, verificação da Nina, perguntas ---- */
+.dz-step.is-wait {
+  background: #f59e0b;
+  color: #1f1300;
+}
+.dz-sub {
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.dz-list {
+  margin: 2px 0 0;
+  padding-left: 18px;
+}
+.dz-src a,
+.dz-findings a,
+.dossier-card a {
+  color: #60a5fa;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.dz-nosrc {
+  color: #f87171;
+  font-size: 11px;
+  font-weight: 600;
+}
+.dz-ok {
+  color: #22c55e;
+  font-weight: 700;
+}
+.dz-maybe {
+  color: #f59e0b;
+  font-weight: 700;
+}
+.dz-kind {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(59, 130, 246, 0.2);
+}
+.dz-kind.kind-vaga_verificada {
+  background: rgba(34, 197, 94, 0.22);
+}
+.dz-kind.kind-vaga_ambigua,
+.dz-kind.kind-vaga_nao_encontrada {
+  background: rgba(239, 68, 68, 0.22);
+}
+.dz-kind.kind-so_empresa {
+  background: rgba(245, 158, 11, 0.22);
+}
+.dz-check {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.dz-check.is-passed {
+  border-color: #22c55e;
+}
+.dz-check.is-failed {
+  border-color: #ef4444;
+}
+.dz-verdict {
+  font-weight: 700;
+}
+.dz-issues {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+.dz-issue {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border-left: 4px solid var(--line);
+  background: rgba(127, 127, 127, 0.1);
+}
+.dz-issue.sev-bloqueia {
+  border-color: #ef4444;
+}
+.dz-issue.sev-opcional {
+  border-color: #9ca3af;
+}
+.dz-sev {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.dz-quote {
+  font-style: italic;
+}
+.dz-prev {
+  margin-top: 6px;
+}
+.dz-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(127, 127, 127, 0.25);
+}
+.dz-badge.src-PERFIL {
+  background: rgba(34, 197, 94, 0.25);
+}
+.dz-badge.src-NOTA,
+.dz-badge.src-RESPOSTA {
+  background: rgba(245, 158, 11, 0.3);
+}
+.dz-badge.src-PESQUISA {
+  background: rgba(59, 130, 246, 0.25);
+}
+.dz-questions {
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px dashed #f59e0b;
+}
+.dz-review label,
+.dz-new label {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}

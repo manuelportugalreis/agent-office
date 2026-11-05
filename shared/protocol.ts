@@ -2,9 +2,76 @@
 
 export type RemoteStatus = "idle" | "think" | "work" | "err";
 
-/** Onde está o dossier de candidatura: com o Atlas a planear, com a Mira a pesquisar, com a Lena a redigir, ou à espera de ti. */
-export type DossierStage = "atlas" | "research" | "drafting" | "review" | "approved";
-export type DossierHolder = "ceo" | "mira" | "lena" | "user";
+/**
+ * Onde está o dossier de candidatura: com o Atlas a planear, com a Mira a pesquisar, com a Lena a redigir,
+ * com a Nina a verificar o rascunho, ou à espera de ti. (`checking` só existe em dossiers criados depois da Nina entrar no fluxo.)
+ */
+export type DossierStage = "atlas" | "research" | "drafting" | "checking" | "review" | "approved";
+export type DossierHolder = "ceo" | "mira" | "lena" | "nina" | "user";
+
+/** O que a Mira apurou sobre a vaga: anúncio verificado, só a empresa, vaga ambígua ou não encontrada. */
+export type ResearchKind = "vaga_verificada" | "so_empresa" | "vaga_ambigua" | "vaga_nao_encontrada";
+
+/** Um facto com a fonte de onde veio (`verified`: confirmado na fonte e não apenas deduzido). */
+export interface SourcedFact {
+  readonly text: string;
+  readonly source?: string;
+  readonly verified?: boolean;
+}
+
+/** O resumo de pesquisa que a Mira entrega (e que a Lena e a Nina usam): validado na passagem de mão. */
+export interface ResearchBrief {
+  readonly kind: ResearchKind;
+  readonly role: string;
+  readonly company: string;
+  /** O anúncio original (se foi encontrado). */
+  readonly sourceUrl?: string;
+  /** Data em que a Mira viu a fonte (AAAA-MM-DD). */
+  readonly checkedAt: string;
+  readonly mandatory: readonly SourcedFact[];
+  readonly desirable: readonly SourcedFact[];
+  /** Factos sobre a empresa. */
+  readonly findings: readonly SourcedFact[];
+  /** O que não se conseguiu confirmar. */
+  readonly unknowns: readonly string[];
+  /** O que é preciso que digas para resolver uma vaga ambígua ou não encontrada. */
+  readonly clarifications: readonly string[];
+  readonly summary: string;
+}
+
+/** De onde vem um facto usado na carta. */
+export type EvidenceSource = "PERFIL" | "MATERIAIS" | "RESPOSTA" | "NOTA" | "PESQUISA";
+
+/** Uma afirmação da carta e a evidência que a sustenta (feita pela Lena, conferida pela Nina). */
+export interface DraftClaim {
+  readonly claim: string;
+  readonly source: EvidenceSource;
+  readonly detail?: string;
+}
+
+export interface CheckIssue {
+  /** `bloqueia`: tem de ser corrigido antes de chegar a ti. `opcional`: sugestão de estilo. */
+  readonly severity: "bloqueia" | "opcional";
+  /** A frase exata da carta, ou "omissão" quando falta algo. */
+  readonly quote: string;
+  readonly problem: string;
+  readonly fix: string;
+}
+
+/** O resultado da verificação da Nina a uma versão do rascunho. */
+export interface NinaCheck {
+  readonly version: number;
+  /** Passou: não há problemas que bloqueiem. */
+  readonly passed: boolean;
+  /** O que a Nina conferiu (curto). */
+  readonly checked: readonly string[];
+  readonly issues: readonly CheckIssue[];
+  /** Factos de que precisa que confirmes. */
+  readonly confirmations: readonly string[];
+  readonly ts: number;
+  /** Esta verificação foi feita depois de uma devolução automática à Lena. */
+  readonly afterAutoReturn: boolean;
+}
 
 export interface DossierReview {
   readonly ts: number;
@@ -19,7 +86,7 @@ export interface DossierEvent {
   readonly text: string;
 }
 
-/** Um processo de candidatura que passa de mão em mão: Atlas, Mira, Lena e tu. Nada é enviado: aprovar só regista. */
+/** Um processo de candidatura que passa de mão em mão: Atlas, Mira, Lena, Nina e tu. Nada é enviado: aprovar só regista. */
 export interface Dossier {
   readonly id: number;
   /** Título curto escolhido pelo Atlas. */
@@ -28,12 +95,39 @@ export interface Dossier {
   readonly stage: DossierStage;
   readonly holder: DossierHolder;
   /** Se o passo falhou: onde e porquê (o dossier fica parado até tentares outra vez). */
-  readonly blocked?: { readonly stage: "atlas" | "research" | "drafting"; readonly reason: string };
+  readonly blocked?: { readonly stage: "atlas" | "research" | "drafting" | "checking"; readonly reason: string };
   /** Instruções que o Atlas deu à Mira e à Lena. */
   readonly briefs?: { readonly mira: string; readonly lena: string };
+  /** Se o pedido é sobre uma vaga concreta ou só sobre a empresa. */
+  readonly scope?: "vaga" | "empresa";
+  /** Idioma da carta. */
+  readonly language?: string;
+  /** Links que deste no pedido (ponto de partida da Mira). */
+  readonly sourceUrls?: readonly string[];
+  /** Materiais que deste (ex.: pontos do CV): factos que a Lena pode usar. */
+  readonly materials?: string;
+  /** Respostas tuas às perguntas da Mira. */
+  readonly answers?: readonly string[];
+  readonly research?: ResearchBrief;
+  /** A Mira precisa de uma resposta tua antes de a Lena escrever. */
+  readonly clarification?: { readonly questions: readonly string[]; readonly reason: string };
+  /** Texto da pesquisa (versão legível; nos dossiers antigos é a resposta da Mira tal como veio). */
   readonly findings?: string;
   readonly draft?: string;
   readonly draftVersion: number;
+  /** Afirmações da carta e de onde vêm. */
+  readonly claims?: readonly DraftClaim[];
+  /** Perguntas da Lena para ti (fora da carta). */
+  readonly questions?: readonly string[];
+  /** Perfil usado neste rascunho (o mesmo que a Nina vê). */
+  readonly profileSnapshot?: string;
+  /** A última verificação da Nina e as anteriores. */
+  readonly check?: NinaCheck;
+  readonly checks?: readonly NinaCheck[];
+  /** Correções que a Nina pediu e que a Lena ainda não aplicou. */
+  readonly pendingCorrections?: readonly CheckIssue[];
+  /** Quantas vezes a Nina já devolveu este rascunho à Lena neste ciclo (no máximo uma). */
+  readonly autoReturns?: number;
   /** Nota que devolveste à Lena e que ainda não deu origem a um rascunho novo. */
   readonly pendingNote?: string;
   readonly approvalId?: number;
@@ -100,7 +194,8 @@ export type ClientMsg =
   | { readonly type: "order"; readonly text: string }
   | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
   | { readonly type: "sync" }
-  | { readonly type: "dossier-start"; readonly request: string }
+  | { readonly type: "dossier-start"; readonly request: string; readonly materials?: string }
+  | { readonly type: "dossier-answer"; readonly id: number; readonly answer: string; readonly companyOnly?: boolean }
   | { readonly type: "dossier-return"; readonly id: number; readonly note: string }
   | { readonly type: "dossier-approve"; readonly id: number }
   | { readonly type: "dossier-retry"; readonly id: number };
@@ -161,7 +256,15 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return { type: "sync" };
     case "dossier-start": {
       const request = cleanText(m.request);
-      return request ? { type: "dossier-start", request } : null;
+      const materials = m.materials === undefined || m.materials === "" ? undefined : cleanText(m.materials);
+      if (m.materials !== undefined && m.materials !== "" && !materials) return null;
+      return request ? { type: "dossier-start", request, ...(materials ? { materials } : {}) } : null;
+    }
+    case "dossier-answer": {
+      const answer = typeof m.answer === "string" ? m.answer.trim() : "";
+      const companyOnly = m.companyOnly === true;
+      if (!Number.isInteger(m.id) || answer.length > MAX_TEXT_LENGTH || (!answer && !companyOnly)) return null;
+      return { type: "dossier-answer", id: m.id as number, answer, ...(companyOnly ? { companyOnly } : {}) };
     }
     case "dossier-return": {
       const note = cleanText(m.note);

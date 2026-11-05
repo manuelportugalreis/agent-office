@@ -4,7 +4,9 @@ import { WebSocket, WebSocketServer } from "ws";
 import { parseClientMsg, type ServerMsg } from "../../shared/protocol.ts";
 import { courseFor, findAgent, REAL_AGENTS } from "./agents.ts";
 import { createApprovals } from "./approvals.ts";
+import { readFileSync } from "node:fs";
 import { createDossierService } from "./dossier.ts";
+import { COMPANY_DIR } from "./workspace.ts";
 import { runGuardSelfTest } from "./selftest.ts";
 import { saveApprovedDraft } from "./vaultNotes.ts";
 import { canvasContext, createCanvasSync } from "./canvas.ts";
@@ -31,7 +33,8 @@ if (!selfTest.ok) {
 }
 
 const root = join(import.meta.dirname, "..", "..");
-const store = openStore(join(import.meta.dirname, "..", "data", "office.db"));
+// AGENT_OFFICE_DB permite correr uma instância isolada (testes ao vivo) sem tocar na tua base de dados.
+const store = openStore(process.env.AGENT_OFFICE_DB ?? join(import.meta.dirname, "..", "data", "office.db"));
 const origins = allowedOrigins(config);
 
 const clients = new Set<WebSocket>();
@@ -95,7 +98,20 @@ const hub = createHub({
 const orchestrator = createOrchestrator(hub, broadcast);
 const canvas = createCanvasSync(hub, broadcast);
 const chat = createChatService(hub, store, broadcast);
-const dossier = createDossierService({ hub, store, approvals, emit: broadcast });
+const dossier = createDossierService({
+  hub,
+  store,
+  approvals,
+  emit: broadcast,
+  // O perfil partilhado: o mesmo texto vai à Lena e à Nina (só leitura; quem o edita és tu).
+  readProfile: () => {
+    try {
+      return readFileSync(join(COMPANY_DIR, "perfil.md"), "utf8");
+    } catch {
+      return "";
+    }
+  },
+});
 
 const hello = (): ServerMsg => ({
   type: "hello",
@@ -147,7 +163,9 @@ wss.on("connection", (ws) => {
         broadcast({ type: "user-message", agentId: "ceo", text: msg.text, files: [] });
         return background(orchestrator.order(msg.text), "ordem ao CEO");
       case "dossier-start":
-        return background(dossier.start(msg.request), "dossier");
+        return background(dossier.start(msg.request, msg.materials), "dossier");
+      case "dossier-answer":
+        return background(dossier.answer(msg.id, msg.answer, msg.companyOnly), "dossier");
       case "dossier-return":
         return background(dossier.returnDraft(msg.id, msg.note), "dossier");
       case "dossier-approve":
