@@ -92,6 +92,13 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
   };
 }
 
+/** Onde o servidor escuta. Só muda dentro de um contentor: o servidor não tem login, logo nunca aceita outro endereço. */
+export function bindHost(env: Readonly<Record<string, string | undefined>> = process.env): string {
+  const host = env.AGENT_OFFICE_BIND ?? "127.0.0.1";
+  if (host !== "127.0.0.1" && host !== "0.0.0.0") throw new ConfigError("AGENT_OFFICE_BIND tem de ser 127.0.0.1 ou 0.0.0.0");
+  return host;
+}
+
 /** Lê `office.config.json` da raiz do projeto (se existir). `AGENT_OFFICE_CONFIG=none` ignora o ficheiro (usado nos testes). */
 export function loadConfig(env: Readonly<Record<string, string | undefined>> = process.env): OfficeConfig {
   const path = env.AGENT_OFFICE_CONFIG ?? join(import.meta.dirname, "..", "..", "office.config.json");

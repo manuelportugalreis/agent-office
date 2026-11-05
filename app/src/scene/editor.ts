@@ -6,7 +6,7 @@ import type { Stage } from "./stage";
 import { scene } from "./world";
 
 /**
- * Modo editar: arrastar peças soltas do escritório (plantas, estantes, impressora, ginásio…), rodá-las e guardar a disposição.
+ * Modo editar: arrastar peças soltas do escritório (plantas, estantes, arquivos, impressora, bebedouros, máquina de venda), rodá-las e guardar a disposição.
  * A peça só pousa onde cabe (dentro do edifício, fora do corredor e das portas, sem pisar outra peça).
  */
 export interface Editor {

@@ -90,6 +90,15 @@ Edita `server/workspaces/_company/perfil.md` (criado à primeira execução) par
 
 Ninguém tem terminal. Ninguém pode enviar email. Para mudar a equipa vê [docs/architecture.md](docs/architecture.md#adding-or-changing-an-agent).
 
+## Docker
+
+```bash
+docker compose up --build -d
+docker compose exec office claude   # inicia sessão uma vez (fica guardada num volume)
+```
+
+Abre http://127.0.0.1:8787. A porta só fica aberta nesta máquina, porque o servidor não tem login. Para usar o teu vault do Obsidian, tira o comentário dos volumes em `docker-compose.yml`. A sincronização do Canvas precisa do teu Chrome, por isso não funciona a partir do contentor. A configuração Docker ainda não foi testada: usa a instalação normal se algo falhar.
+
 ## Desenvolvimento
 
 ```bash

@@ -131,10 +131,20 @@ Edit `server/workspaces/_company/perfil.md` (created on first run) to tell every
 
 Nobody has a shell. Nobody can send email. See [docs/architecture.md](docs/architecture.md#adding-or-changing-an-agent) to change the team.
 
+## Docker
+
+```bash
+docker compose up --build -d
+docker compose exec office claude   # log in once (saved in a volume)
+```
+
+Open http://127.0.0.1:8787. The port is published on this machine only, because the server has no login. To use your Obsidian vault, uncomment the volumes in `docker-compose.yml`. The Canvas sync needs your Chrome, so it does not work from the container. The Docker setup has not been tested yet: use the normal install if something fails.
+
 ## Development
 
 ```bash
 npm run check        # typecheck + lint + format check + tests + build
+npm run e2e          # browser tests (first: npx playwright install chromium); no agents, no quota
 npm test             # app and server tests
 npm run typecheck
 npm run lint

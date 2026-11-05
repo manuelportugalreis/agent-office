@@ -1,0 +1,17 @@
+services:
+  office:
+    build: .
+    restart: unless-stopped
+    ports:
+      # Só nesta máquina: o servidor não tem login, por isso nunca o publiques na rede.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - office-data:/data
+      - claude-login:/home/node/.claude
+      # Opcional: configuração e vault do Obsidian. Em office.config.json usa "vaultDir": "/vault".
+      # - ./office.config.json:/app/office.config.json:ro
+      # - /caminho/para/o/teu/vault:/vault
+
+volumes:
+  office-data:
+  claude-login:

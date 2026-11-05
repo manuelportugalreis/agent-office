@@ -11,7 +11,7 @@ import { runGuardSelfTest } from "./selftest.ts";
 import { saveApprovedDraft } from "./vaultNotes.ts";
 import { canvasContext, createCanvasSync } from "./canvas.ts";
 import { createChatService } from "./chat.ts";
-import { allowedOrigins, config, isAllowedHost } from "./config.ts";
+import { allowedOrigins, bindHost, config, isAllowedHost } from "./config.ts";
 import { createHub } from "./hub.ts";
 import { createRequestHandler } from "./http.ts";
 import { log } from "./log.ts";
@@ -194,7 +194,7 @@ server.on("error", (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
-server.listen(config.port, "127.0.0.1", () => {
+server.listen(config.port, bindHost(), () => {
   log.info(`Agent Office a correr em http://127.0.0.1:${config.port}`);
   log.info(`origens aceites: ${origins.join(", ")}`);
 });

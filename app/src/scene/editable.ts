@@ -3,7 +3,8 @@ import { SOLIDS, type Rect } from "../sim/collision";
 import { LAYOUT_KEY, footprint, parseLayout, type Layout, type Placement } from "../sim/layout";
 
 /**
- * Peças que o modo editar pode mover. Cada uma guarda a posição de origem, para "repor", e (se bloqueia a passagem)
+ * Peças que o modo editar pode mover. Só peças soltas: o que tem lugares marcados (secretárias, sofá, ginásio) fica fixo,
+ * senão as pessoas continuavam a usá-lo no sítio antigo. Cada uma guarda a posição de origem, para "repor", e (se bloqueia a passagem)
  * a posição do seu retângulo em SOLIDS, para a colisão acompanhar a peça.
  */
 export interface Editable {
@@ -38,7 +39,7 @@ function solidAt(x: number, z: number): number {
 }
 
 /** Regista uma peça móvel. O id é "tipo-n", pela ordem de criação (que é sempre a mesma). */
-export function makeEditable(kind: string, label: string, g: THREE.Group, flat?: { w: number; d: number }): void {
+export function makeEditable(kind: string, label: string, g: THREE.Group): void {
   const n = (counters.get(kind) ?? 0) + 1;
   counters.set(kind, n);
   const id = `${kind}-${n}`;
@@ -50,7 +51,7 @@ export function makeEditable(kind: string, label: string, g: THREE.Group, flat?:
     group: g,
     origin: { x: g.position.x, z: g.position.z, turns: 0 },
     originRotation: g.rotation.y,
-    size: rect ? { w: rect.x1 - rect.x0, d: rect.z1 - rect.z0 } : (flat ?? null),
+    size: rect ? { w: rect.x1 - rect.x0, d: rect.z1 - rect.z0 } : null,
     solidIndex,
     placement: { x: g.position.x, z: g.position.z, turns: 0 },
   };

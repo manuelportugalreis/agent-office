@@ -3,10 +3,21 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { allowedOrigins, ConfigError, DEFAULTS, isAllowedHost, loadConfig, parseConfig } from "./config.ts";
+import { allowedOrigins, bindHost, ConfigError, DEFAULTS, isAllowedHost, loadConfig, parseConfig } from "./config.ts";
 import { createRequestHandler } from "./http.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { resolveStatic, securityHeaders } from "./static.ts";
+
+describe("onde o servidor escuta", () => {
+  it("por defeito só nesta máquina", () => {
+    expect(bindHost({})).toBe("127.0.0.1");
+  });
+
+  it("aceita 0.0.0.0 para o contentor e recusa qualquer outro endereço", () => {
+    expect(bindHost({ AGENT_OFFICE_BIND: "0.0.0.0" })).toBe("0.0.0.0");
+    expect(() => bindHost({ AGENT_OFFICE_BIND: "192.168.1.5" })).toThrow(ConfigError);
+  });
+});
 
 describe("configuração", () => {
   it("sem ficheiro nem variáveis usa as predefinições (sem dados pessoais)", () => {
