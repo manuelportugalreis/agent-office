@@ -26,7 +26,7 @@ export interface DossierActions {
 export interface DossierUi {
   /** Aplica o estado recebido do servidor (ou null se não há dossier). */
   update(dossier: Dossier | null): void;
-  open(): void;
+  open(view?: NextView): void;
   close(): void;
   toggle(): void;
 }
@@ -220,6 +220,8 @@ function cardHtml(d: Dossier, note: string, answer: string, tab: DossierTab): st
     ${decision ? `<div class="dz-decision">${decision}</div>` : ""}`;
 }
 
+/** Para onde a ação da barra de topo leva dentro do painel. */
+export type NextView = "draft" | "question" | "progress" | "blocked" | "new";
 export type DossierTab = "draft" | "research" | "check" | "activity";
 const TABS: readonly { id: DossierTab; label: string }[] = [
   { id: "draft", label: "Rascunho" },
@@ -257,6 +259,8 @@ export function createDossierUi(actions: DossierActions): DossierUi {
   let opener: HTMLElement | null = null;
   let tab: DossierTab = "draft";
   let tabFor = 0;
+  const scrolls = new Map<string, number>();
+  const bodyKey = (): string => `${dossier?.id ?? 0}:${tab}`;
   /** O que escreveste, para não se perder quando o servidor manda uma atualização. */
   let note = "";
   let answer = "";
@@ -276,6 +280,11 @@ export function createDossierUi(actions: DossierActions): DossierUi {
   function render(): void {
     card.hidden = !opened;
     document.getElementById("main")?.classList.toggle("dossier-open", opened);
+    const covers = opened && window.matchMedia("(max-width: 820px)").matches;
+    for (const id of ["stage", "aside"]) {
+      const el = id === "stage" ? document.getElementById("stage") : document.querySelector("aside");
+      if (el) (el as HTMLElement).inert = covers;
+    }
     if (!opened) return;
     if (dossier && tabFor !== dossier.id) {
       tab = defaultTab(dossier);
@@ -291,8 +300,12 @@ export function createDossierUi(actions: DossierActions): DossierUi {
             ? `[data-act="${active.dataset.act}"]`
             : ""
       : "";
+    const body = card.querySelector<HTMLElement>(".dz-body");
+    if (body) scrolls.set(bodyKey(), body.scrollTop);
     const caret = active instanceof HTMLTextAreaElement ? active.selectionStart : null;
     card.innerHTML = dossier ? cardHtml(dossier, note, answer, tab) : emptyHtml;
+    const nextBody = card.querySelector<HTMLElement>(".dz-body");
+    if (nextBody) nextBody.scrollTop = scrolls.get(bodyKey()) ?? 0;
     const again = key ? card.querySelector<HTMLElement>(key) : null;
     if (again) {
       again.focus();
@@ -357,9 +370,12 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     chip.title = `${s.headline}. ${s.next}`;
   }
 
-  card.onkeydown = (e) => {
-    if (e.key === "Escape" && opened) ui.close();
-  };
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !opened) return;
+    const t = e.target as HTMLElement | null;
+    if (t && /^(INPUT|SELECT)$/.test(t.tagName)) return;
+    ui.close();
+  });
   chip.onclick = () => {
     opener = chip;
     ui.open();
@@ -377,7 +393,7 @@ export function createDossierUi(actions: DossierActions): DossierUi {
   }
   naBtn.onclick = () => {
     opener = naBtn;
-    ui.open();
+    ui.open(nextActionOf(dossier).view);
   };
 
   const ui: DossierUi = {
@@ -387,8 +403,15 @@ export function createDossierUi(actions: DossierActions): DossierUi {
       renderStrip();
       render();
     },
-    open() {
+    open(view) {
+      if (!opener && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+        opener = document.activeElement;
+      }
       opened = true;
+      if (dossier && view) {
+        tab = view === "progress" || view === "new" ? "activity" : "draft";
+        tabFor = dossier.id;
+      }
       render();
       card.querySelector<HTMLElement>(".dz-tab.is-on, .dz-close")?.focus();
     },
