@@ -1,0 +1,11 @@
+{
+  "userName": "Alex",
+  "port": 8787,
+  "canvasHost": "canvas.instructure.com",
+  "vaultDir": "",
+  "courses": [
+    { "agent": "ada", "code": "CS 101", "title": "Introduction to Computer Science" },
+    { "agent": "turing", "code": "CS 102", "title": "Data Structures" }
+  ],
+  "extraOrigins": []
+}

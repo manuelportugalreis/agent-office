@@ -1,0 +1,48 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A 3D isometric office where every person is a Claude Code agent. Click a character to chat with it, give orders to the CEO and watch the team work.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "app",
+    "server"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w app",
+    "start": "npm run build && node server/src/index.ts",
+    "doctor": "node scripts/doctor.mjs",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm test --workspaces",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.0",
+    "typescript-eslint": "^8.19.0"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.4"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/manuelportugalreis/agent-office.git"
+  },
+  "homepage": "https://github.com/manuelportugalreis/agent-office#readme",
+  "bugs": {
+    "url": "https://github.com/manuelportugalreis/agent-office/issues"
+  }
+}

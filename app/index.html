@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Office</title>
+    <meta name="description" content="Um escritório 3D onde cada pessoa é um agente Claude Code." />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%A2%3C/text%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <header>
+      <h1>🏢 Agent Office</h1>
+      <span class="mock">com o servidor ligado, todos os agentes são reais</span>
+      <span class="sp"></span>
+      <span class="mock" id="conn" title="Servidor de agentes">servidor: offline</span>
+      <span class="mock" id="quota" style="display: none" title="Uso do plano (5h / 7 dias)"></span>
+      <button id="walkBtn" title="Andar pelo escritório (tecla W)" aria-pressed="false">🚶 Andar</button>
+      <button id="palBtn" title="Falar com um agente (Ctrl+K)">Ctrl+K</button>
+      <button id="timeBtn" title="Hora do dia">🕒 Auto</button>
+      <button id="feedBtn" title="O que se passou nesta sessão">Atividade</button>
+      <button id="apBtn">Aprovações<span class="badge" id="apCount">0</span></button>
+      <button id="themeBtn" aria-label="Tema da interface">🌓</button>
+    </header>
+    <div id="appr"></div>
+    <div id="feed"></div>
+    <div id="palette">
+      <div class="pal-box">
+        <input id="palInput" placeholder="Falar com… (nome ou função)" autocomplete="off" aria-label="Procurar agente" />
+        <ul id="palList"></ul>
+        <div class="pal-hint">↑↓ para escolher · Enter para abrir · Esc para fechar</div>
+      </div>
+    </div>
+    <div id="toast"></div>
+    <main id="main">
+      <section id="stage">
+        <div id="tag"></div>
+        <div id="hint">Arrastar: mover · Roda: zoom · Botão direito ou Q/E: rodar · Clica numa pessoa</div>
+        <form id="cmd">
+          <input id="cmdIn" placeholder="Dá uma ordem ao CEO…  ex: encontra 10 vagas de Business Analyst" autocomplete="off" /><button
+            class="primary"
+          >
+            Enviar ao CEO
+          </button>
+        </form>
+      </section>
+      <aside>
+        <div id="resizer" title="Arrastar para alargar"></div>
+        <div id="empty">Clica numa pessoa<br />para abrir o painel dela.</div>
+        <div id="panel">
+          <div class="ph">
+            <div class="av" id="pAv"></div>
+            <div class="pwho"><b id="pName"></b><span id="pRole"></span><span id="pAct"></span></div>
+            <div class="pill" id="pState"></div>
+          </div>
+          <div class="tabs">
+            <button data-t="sum" class="on">Resumo</button><button data-t="log">Log</button><button data-t="chat">Chat</button>
+          </div>
+          <div class="tc" id="tSum"></div>
+          <div class="tc" id="tLog" style="display: none"></div>
+          <div id="chatbox"><div id="chatRoot"></div></div>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

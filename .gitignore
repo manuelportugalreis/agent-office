@@ -1,0 +1,23 @@
+# dependências e compilação
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# dados locais e privados (nunca vão para o Git)
+server/data/
+server/workspaces/
+office.config.json
+.env
+.env.*
+!.env.example
+
+# protótipos antigos (substituídos pela app)
+mockup/
+
+# sistema e editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
