@@ -1,7 +1,9 @@
 import "./style.css";
 import "./chat/chat.css";
 import { AGENTS } from "./data/agents";
-import { buildBuilding } from "./scene/building";
+import type { Light } from "three";
+import { buildBuilding, ground as groundMesh } from "./scene/building";
+import { scene } from "./scene/world";
 import { createPerson, STATE_INFO, updatePerson, type PersonView } from "./scene/person";
 import { buildAmbient } from "./scene/ambient";
 import { buildProps } from "./scene/props";
@@ -61,6 +63,11 @@ const locs = buildLocations(AGENTS);
 const agents: Agent[] = AGENTS.map((d) => createAgent(d, locs[`desk-${d.id}`]));
 const screens = new Map<string, ScreenHandle>(agents.map((a) => [a.def.id, createScreen()]));
 buildProps(screens);
+// Tudo o que existe até aqui é edifício e mobília (estático); as pessoas, o dossier e o resto vêm depois.
+const staticRoots = scene.children.filter((c) => !(c as Light).isLight && c !== groundMesh && !c.userData.live);
+// A versão cozinhada no Blender é experimental e fica desligada por defeito (abre com ?baked).
+if (new URLSearchParams(location.search).has("baked")) void import("./scene/baked").then((m) => m.loadBakedOffice(staticRoots));
+if (new URLSearchParams(location.search).has("export")) void import("./dev/export-static").then((m) => m.exportStatic(staticRoots));
 const dossierProp = createDossierProp();
 const dossierBoard = createDossierBoard();
 const reviewTray = buildReviewTray();

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ground, glassMaterial } from "./building";
 import { shortcutAllowed } from "../ui/keys";
 import { lamps, scene } from "./world";
+import { bakedNight } from "./baked";
 import { createPost, loadQuality, saveQuality, type Quality } from "./post";
 
 export type TimeMode = "auto" | "day" | "night";
@@ -253,6 +254,7 @@ function hourFor(mode: TimeMode): number {
 function applyLighting(dt: number, current: number, mode: TimeMode): number {
   const hour = hourFor(mode);
   const n = current + (nightFactor(hour) - current) * Math.min(1, dt * 2);
+  bakedNight.value = n;
   const t = clamp((hour - 6) / 12, 0, 1);
   sun.position.set(14 - Math.cos(Math.PI * t) * 9, Math.max(8, Math.sin(Math.PI * t) * 14 + 6), 18);
   sun.intensity = (1.05 * (1 - n) + 0.12) * Math.PI;

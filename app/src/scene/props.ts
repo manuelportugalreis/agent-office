@@ -35,8 +35,10 @@ export function desk(x: number, z: number, w: number, hue: number, screen: Scree
   box(g, 0.62, 0.37, 0.03, 0, 1.07, -0.2, dark);
   const screenMat = screen ? screen.material : new THREE.MeshStandardMaterial({ color: 0x07090d, roughness: 0.2, metalness: 0.5 });
   const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.57, 0.32), screenMat);
-  sc.position.set(0, 1.07, -0.1835);
-  g.add(sc);
+  // O ecrã é vivo (textura que muda), por isso fica solto na cena e não faz parte do edifício cozinhado.
+  sc.position.set(x, 1.07, z - 0.1835);
+  sc.userData.live = true;
+  scene.add(sc);
   box(g, 0.42, 0.018, 0.14, -0.02, 0.77, 0.12, mat("#cfd3da"));
   box(g, 0.06, 0.025, 0.1, 0.32, 0.775, 0.14, mat("#cfd3da"));
   cyl(g, 0.04, 0.04, 0.09, -0.4, 0.82, 0.05, mat(`hsl(${hue},60%,55%)`, { roughness: 0.4 }));
@@ -193,8 +195,11 @@ export function standingBoard(x: number, z: number, rotY: number, tex: THREE.Tex
   const g = group(x, 0, z, rotY);
   box(g, 1.7, 1.1, 0.05, 0, 1.5, 0, mat("#f2f2f2"));
   const face = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-  face.position.set(0, 1.5, 0.03);
-  g.add(face);
+  // A face do quadro é vista sem luz e solta na cena (não faz parte do edifício cozinhado).
+  face.position.set(x + Math.sin(rotY) * 0.03, 1.5, z + Math.cos(rotY) * 0.03);
+  face.rotation.y = rotY;
+  face.userData.live = true;
+  scene.add(face);
   box(g, 1.7, 0.04, 0.1, 0, 0.93, 0.05, mat("#9aa1ab"));
   for (const s of [-1, 1]) {
     box(g, 0.05, 1.0, 0.05, s * 0.7, 0.5, -0.1, mat("#6b727d"));
@@ -206,6 +211,7 @@ export function wallBoard(x: number, y: number, z: number, tex: THREE.Texture, w
   const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
   face.position.set(x, y, z);
   face.rotation.y = Math.PI / 2;
+  face.userData.live = true;
   scene.add(face);
   box(group(x - 0.02, y, z), 0.03, h + 0.1, w + 0.1, 0, 0, 0, mat("#9aa1ab"));
 }
