@@ -10,23 +10,25 @@ const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 3.5;
 const DRAG_THRESHOLD_PX = 4;
 const FOLLOW_RATE = 3;
-const MAP_CENTER = new THREE.Vector3(12, 0, 6.2);
+const MAP_CENTER = new THREE.Vector3(12, 0, 5.6);
 
 const clamp = THREE.MathUtils.clamp;
-const dayBg = new THREE.Color(0xa9c4dc);
-const nightBg = new THREE.Color(0x0a1020);
-const dayGround = new THREE.Color(0x6f8f6c);
-const nightGround = new THREE.Color(0x141c26);
+const dayBg = new THREE.Color(0xd8d2c6);
+const nightBg = new THREE.Color(0x151517);
+const dayGround = new THREE.Color(0xc9c2b4);
+const nightGround = new THREE.Color(0x1e1d1b);
 
-const hemi = new THREE.HemisphereLight(0xdfeeff, 0x8a8f99, 0.6);
+const hemi = new THREE.HemisphereLight(0xfff4e6, 0x9a8f80, 0.6);
 const sun = new THREE.DirectionalLight(0xfff1dc, 1.55);
 
 function initLights(): void {
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 90 });
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.03;
+  Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 90 });
+  sun.shadow.bias = -0.0003;
+  sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 3;
+  ground.receiveShadow = false;
   sun.target.position.set(12, 0, 6);
   scene.add(hemi, sun, sun.target);
 }
@@ -56,7 +58,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.9;
+  renderer.toneMappingExposure = 1.0;
   container.prepend(renderer.domElement);
   const dom = renderer.domElement;
   initLights();
@@ -239,9 +241,9 @@ function applyLighting(dt: number, current: number, mode: TimeMode): number {
   const hour = hourFor(mode);
   const n = current + (nightFactor(hour) - current) * Math.min(1, dt * 2);
   const t = clamp((hour - 6) / 12, 0, 1);
-  sun.position.set(9 - Math.cos(Math.PI * t) * 20, Math.max(4, Math.sin(Math.PI * t) * 22 + 3), 16);
-  sun.intensity = 1.55 * (1 - n) + 0.12;
-  sun.color.setHex(t < 0.15 || t > 0.85 ? 0xffc08a : 0xfff1dc);
+  sun.position.set(14 - Math.cos(Math.PI * t) * 9, Math.max(8, Math.sin(Math.PI * t) * 14 + 6), 18);
+  sun.intensity = 1.35 * (1 - n) + 0.12;
+  sun.color.setHex(t < 0.15 || t > 0.85 ? 0xffc08a : 0xffe9cc);
   hemi.intensity = 0.38 * (1 - n) + 0.14;
   scene.background = dayBg.clone().lerp(nightBg, n);
   (ground.material as THREE.MeshStandardMaterial).color.copy(dayGround).lerp(nightGround, n);

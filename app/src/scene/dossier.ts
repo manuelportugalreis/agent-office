@@ -8,6 +8,10 @@ import { scene } from "./world";
 /** O dossier no escritório: uma pasta de papéis que pousa na secretária de quem a tem ou na bandeja de revisão. */
 
 /** Onde está a bandeja de revisão: numa consola encostada à parede, debaixo do relógio, no fim do corredor. */
+const reducedMotion = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+/** Respiração lenta para chamar a atenção; fica parada (valor médio) se a pessoa pediu menos movimento. */
+const breathe = (t: number, rate: number): number => (reducedMotion?.matches ? 0 : Math.sin(t * rate));
+
 export const TRAY = { x: 0.62, z: 6 } as const;
 const TRAY_TOP_Y = 0.86;
 const DESK_TOP_Y = 0.79;
@@ -78,7 +82,7 @@ export function buildReviewTray(): { setAttention(on: boolean): void; update(t: 
       attention = on;
     },
     update: (t) => {
-      (glow.material as THREE.MeshBasicMaterial).opacity = attention ? 0.25 + Math.sin(t * 4) * 0.2 : 0;
+      (glow.material as THREE.MeshBasicMaterial).opacity = attention ? 0.22 + breathe(t, 2.4) * 0.1 : 0;
     },
   };
 }
@@ -184,15 +188,9 @@ export function createDossierProp(): DossierProp {
       const lift = Math.min(MAX_LIFT, Math.hypot(dx, dz) * LIFT_PER_METER);
       root.position.y += (target.y + lift - root.position.y) * k;
       const pulse =
-        tone === "wait"
-          ? 0.55 + Math.sin(t * 5) * 0.35
-          : tone === "blocked"
-            ? 0.5 + Math.sin(t * 9) * 0.4
-            : tone === "done"
-              ? 0.55
-              : 0.4 + Math.sin(t * 2) * 0.15;
+        tone === "wait" ? 0.6 + breathe(t, 2.4) * 0.25 : tone === "blocked" ? 0.6 + breathe(t, 3) * 0.25 : tone === "done" ? 0.55 : 0.4;
       (ring.material as THREE.MeshBasicMaterial).opacity = pulse;
-      ring.scale.setScalar(1 + (tone === "wait" ? Math.sin(t * 5) * 0.12 : 0));
+      ring.scale.setScalar(1 + (tone === "wait" ? breathe(t, 2.4) * 0.06 : 0));
     },
   };
 }
