@@ -20,8 +20,35 @@ export const glassMaterial = new THREE.MeshStandardMaterial({
 });
 export let ground: THREE.Mesh;
 
-function addFloor(x: number, z: number, w: number, d: number, tex: THREE.Texture): void {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 }));
+const textureLoader = new THREE.TextureLoader();
+const tex = (id: string, map: string, repeat: readonly [number, number], srgb: boolean): THREE.Texture => {
+  const t = textureLoader.load(`${import.meta.env.BASE_URL}textures/${id}/${map}.jpg`);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat[0], repeat[1]);
+  t.anisotropy = 8;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+};
+
+/** Piso real (texturas PBR CC0 da Poly Haven) com uma ligeira cor por sala para manter a identidade de cada uma. */
+function pbrFloor(id: string, repeat: readonly [number, number], tint: string): THREE.MeshStandardMaterial {
+  const color = new THREE.Color(tint).lerp(new THREE.Color(0xffffff), 0.35);
+  return new THREE.MeshStandardMaterial({
+    color,
+    map: tex(id, "diff", repeat, true),
+    normalMap: tex(id, "nor", repeat, false),
+    roughnessMap: tex(id, "rough", repeat, false),
+    roughness: 1,
+  });
+}
+
+const FLOOR_FOR = {
+  wood: { id: "laminate_floor_02", repeat: [2.5, 2] },
+  tile: { id: "floor_tiles_06", repeat: [3, 2.5] },
+} as const;
+
+function addFloor(x: number, z: number, w: number, d: number, material: THREE.Material): void {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), material);
   m.rotation.x = -Math.PI / 2;
   m.position.set(x + w / 2, 0.005, z + d / 2);
   m.receiveShadow = true;
@@ -83,8 +110,17 @@ export function buildBuilding(): void {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  for (const r of ROOMS) addFloor(r.x0, r.z0, ROOM_W, ROOM_D, floorTexture(r.floor[0], r.floor[1], r.floor[2], 3, 2.5));
-  addFloor(0, 5, 24, 2, floorTexture("tile", "#dfe3e8", "#b9c0ca", 12, 1));
+  for (const r of ROOMS) {
+    if (r.floor[0] === "carpet") {
+      // Alcatifa: a textura pintada à mão fica mais limpa e arrumada do que as digitalizações disponíveis.
+      const carpet = new THREE.MeshStandardMaterial({ map: floorTexture("carpet", r.floor[1], r.floor[2], 3, 2.5), roughness: 0.95 });
+      addFloor(r.x0, r.z0, ROOM_W, ROOM_D, carpet);
+      continue;
+    }
+    const f = FLOOR_FOR[r.floor[0] as "wood" | "tile"];
+    addFloor(r.x0, r.z0, ROOM_W, ROOM_D, pbrFloor(r.id === "gestao" ? "herringbone_parquet" : f.id, f.repeat, r.floor[1]));
+  }
+  addFloor(0, 5, 24, 2, pbrFloor("large_floor_tiles_02", [8, 1], "#e8e6e1"));
 
   ROOMS.filter((r) => r.z0 === 0).forEach(windowWall);
   solidLeftWall(0);
