@@ -254,4 +254,5 @@ export function updatePerson(v: PersonView, a: Agent, dt: number, t: number): vo
   const size = loud ? 0.5 : 0.34;
   v.bubble.scale.set(size, size, 1);
   v.bubble.position.y = 2.3 - a.sit * 0.45;
+  v.character?.update();
 }

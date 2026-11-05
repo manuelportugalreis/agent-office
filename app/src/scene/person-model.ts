@@ -3,6 +3,7 @@ import type { AgentDef, HairStyle } from "../data/agents";
 import type { DisplayState } from "../sim/agent";
 import { box, canvas2d, canvasTexture, cyl, mat, sphere } from "./util";
 import { scene } from "./world";
+import { buildCharacter, preloadCharacters, type Character, type CharacterLook } from "./character";
 
 export const STATE_INFO: Record<DisplayState, { icon: string; label: string; color: string }> = {
   idle: { icon: "·", label: "Livre", color: "#64748b" },
@@ -44,6 +45,8 @@ export interface PersonView {
   /** Número estável derivado do id, para cada pessoa ter o seu ritmo (pestanejar, balançar…). */
   readonly seed: number;
   bubbleState: DisplayState | null;
+  /** Corpo realista, quando já carregou; até lá vê-se o boneco simples. */
+  character?: Character;
 }
 
 const bubbleTextures = new Map<DisplayState, THREE.CanvasTexture>();
@@ -305,5 +308,48 @@ export function createPerson(def: AgentDef): PersonView {
     o.userData.agentId = def.id;
   });
   scene.add(g);
-  return { group: g, rig, bubble, seed: seedOf(def.id), bubbleState: null };
+  const view: PersonView = { group: g, rig, bubble, seed: seedOf(def.id), bubbleState: null };
+  attachRealisticBody(view, def);
+  return view;
+}
+
+const FEMALE_HAIR: readonly HairStyle[] = ["long", "ponytail", "bun"];
+const HAIR_MODEL: Readonly<Record<HairStyle, string | null>> = {
+  short: "Hair_Buzzed",
+  sidepart: "Hair_SimpleParted",
+  long: "Hair_Long",
+  ponytail: "Hair_Long",
+  bun: "Hair_Long",
+  curly: "Hair_SimpleParted",
+  bald: null,
+};
+
+function lookOf(def: AgentDef): CharacterLook {
+  return {
+    female: FEMALE_HAIR.includes(def.hairStyle),
+    skin: def.skin,
+    hair: def.hair,
+    hairModel: HAIR_MODEL[def.hairStyle],
+    shirt: new THREE.Color(`hsl(${def.hue},${def.chief ? 28 : 50}%,${def.chief ? 26 : 46}%)`),
+    trousers: def.chief ? "#23262e" : "#2b3447",
+    shoes: "#17181c",
+    longSleeves: !!def.chief,
+  };
+}
+
+/** Troca o boneco simples pelo corpo realista assim que os modelos carregam; os ângulos continuam a vir do rig por código. */
+function attachRealisticBody(view: PersonView, def: AgentDef): void {
+  const { group, rig } = view;
+  void preloadCharacters(Object.values(HAIR_MODEL).filter((h): h is string => h !== null)).then(() => {
+    const character = buildCharacter(lookOf(def), rig);
+    if (!character) return;
+    const keep = new Set<THREE.Object3D>([rig.paper, rig.mug, view.bubble]);
+    group.traverse((o) => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      for (let p: THREE.Object3D | null = o; p; p = p.parent) if (keep.has(p)) return;
+      o.visible = false;
+    });
+    group.add(character.root);
+    view.character = character;
+  });
 }
