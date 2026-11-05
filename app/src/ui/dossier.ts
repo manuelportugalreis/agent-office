@@ -208,7 +208,7 @@ function cardHtml(d: Dossier, note: string, answer: string, tab: DossierTab): st
   };
   const tabBtns = TABS.map(
     (t) =>
-      `<button role="tab" type="button" class="dz-tab${t.id === tab ? " is-on" : ""}" aria-selected="${t.id === tab}" data-tab="${t.id}">${t.label}${t.id === "check" && d.check ? (d.check.passed ? " ✓" : " ✕") : ""}</button>`,
+      `<button role="tab" type="button" id="dzt-${t.id}" aria-controls="dzPanel" tabindex="${t.id === tab ? 0 : -1}" class="dz-tab${t.id === tab ? " is-on" : ""}" aria-selected="${t.id === tab}" data-tab="${t.id}">${t.label}${t.id === "check" && d.check ? (d.check.passed ? " ✓" : " ✕") : ""}</button>`,
   ).join("");
   const decision = `${blocked}${clarificationHtml(d, answer)}${review}`;
   return `
@@ -216,7 +216,7 @@ function cardHtml(d: Dossier, note: string, answer: string, tab: DossierTab): st
     <div class="dz-banner tone-${status.tone}"><b>${escapeHtml(status.headline)}</b><small>${escapeHtml(status.next)}</small></div>
     <ol class="dz-steps" aria-label="Percurso do dossier">${steps}</ol>
     <div class="dz-tabs" role="tablist" aria-label="Secções do dossier">${tabBtns}</div>
-    <div class="dz-body" role="tabpanel">${panes[tab]}${fresh}</div>
+    <div class="dz-body" id="dzPanel" role="tabpanel" aria-labelledby="dzt-${tab}">${panes[tab]}${fresh}</div>
     ${decision ? `<div class="dz-decision">${decision}</div>` : ""}`;
 }
 
@@ -260,6 +260,7 @@ export function createDossierUi(actions: DossierActions): DossierUi {
   let tab: DossierTab = "draft";
   let tabFor = 0;
   const scrolls = new Map<string, number>();
+  let renderedKey = "";
   const bodyKey = (): string => `${dossier?.id ?? 0}:${tab}`;
   /** O que escreveste, para não se perder quando o servidor manda uma atualização. */
   let note = "";
@@ -301,11 +302,12 @@ export function createDossierUi(actions: DossierActions): DossierUi {
             : ""
       : "";
     const body = card.querySelector<HTMLElement>(".dz-body");
-    if (body) scrolls.set(bodyKey(), body.scrollTop);
+    if (body && renderedKey) scrolls.set(renderedKey, body.scrollTop);
     const caret = active instanceof HTMLTextAreaElement ? active.selectionStart : null;
     card.innerHTML = dossier ? cardHtml(dossier, note, answer, tab) : emptyHtml;
     const nextBody = card.querySelector<HTMLElement>(".dz-body");
     if (nextBody) nextBody.scrollTop = scrolls.get(bodyKey()) ?? 0;
+    renderedKey = dossier ? bodyKey() : "";
     const again = key ? card.querySelector<HTMLElement>(key) : null;
     if (again) {
       again.focus();
@@ -335,7 +337,13 @@ export function createDossierUi(actions: DossierActions): DossierUi {
       () => materials,
       (v) => (materials = v),
     );
-    card.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) => {
+    card.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b, i, all) => {
+      b.onkeydown = (e) => {
+        const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        all[(i + step + all.length) % all.length]?.click();
+      };
       b.onclick = () => {
         tab = b.dataset.tab as DossierTab;
         render();
@@ -370,6 +378,7 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     chip.title = `${s.headline}. ${s.next}`;
   }
 
+  window.matchMedia("(max-width: 820px)").addEventListener("change", () => render());
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !opened) return;
     const t = e.target as HTMLElement | null;
