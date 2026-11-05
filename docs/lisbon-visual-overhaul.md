@@ -84,10 +84,23 @@ Resultado (`docs/img/lisbon/it2/`): 3241 draw calls (dia), FPS 22 (headless).
 - Depuração: `?debug` expõe `__office.tramPosition()`; o script de capturas segue o eléctrico.
 - E2E Playwright: 7/7 passam.
 
+### 4. Luz de Lisboa, de dia e de noite (feito)
+
+- Novo `app/src/scene/lighting.ts` (a luz saiu do `stage.ts`, que fica só com câmara e controlos):
+  - Sol com trajetória (nasce a nascente, passa a sul, põe-se a poente); o modo "Dia" usa as 15h30, com o sol a
+    sudoeste: fachadas a sul ao sol e fachadas a nascente na sombra, o que dá volume ao quarteirão. Cor mais quente
+    quando o sol está baixo.
+  - Céu azulado frio a encher as sombras contra o sol quente; menos luz de céu (mais contraste).
+  - Caixa de sombras a cobrir a maqueta inteira (±44 m, sol a 80 m), 4096² em "alta" e 2048² em "normal"
+    (`setShadowQuality` quando se muda a qualidade).
+  - Neblina suave (só se nota no fundo da maqueta) com a cor do fundo, dia e noite.
+  - Noite: luar azulado e fraco, céu escuro azul, fundo azul-noite, reflexos do ambiente reduzidos a 20%; a cidade
+    acende-se (janelas, montras, candeeiros, faróis do eléctrico) e o escritório iluminado fica o centro da cena.
+- Custo: FPS headless ~22 → ~18 (sombras 4096² e área maior). A rever na iteração de desempenho.
+
 ## Backlog (prioridade)
 
-1. Iluminação: noite real (ambiente desligado, candeeiros), sombras a cobrir a rua, exposição, sol quente.
-2. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
+1. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
    manjericos e arraial discreto.
-3. Vida: peões, roupa e bandeirolas a ondular, pombos.
-4. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.
+2. Vida: peões, roupa e bandeirolas a ondular, pombos.
+3. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.

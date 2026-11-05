@@ -1,0 +1,13 @@
+{
+  "metrics": {
+    "dayDefault": {
+      "fps": 18.1,
+      "drawsPerFrame": 3273
+    },
+    "nightDefault": {
+      "fps": 15.5,
+      "drawsPerFrame": 3281
+    }
+  },
+  "errors": []
+}

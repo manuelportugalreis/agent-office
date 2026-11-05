@@ -1,12 +1,10 @@
 import * as THREE from "three";
-import { ground, glassMaterial } from "./building";
 import { shortcutAllowed } from "../ui/keys";
-import { lamps, scene } from "./world";
-import { bakedNight } from "./baked";
-import { setCityNight } from "./lisbon/materials";
+import { scene } from "./world";
+import { applyLighting, initLights, setShadowQuality, type TimeMode } from "./lighting";
 import { createPost, loadQuality, saveQuality, type Quality } from "./post";
 
-export type TimeMode = "auto" | "day" | "night";
+export type { TimeMode } from "./lighting";
 
 const ELEVATION = 0.62;
 const MIN_ZOOM = 0.4;
@@ -18,27 +16,6 @@ const FOLLOW_RATE = 3;
 const MAP_CENTER = new THREE.Vector3(12, -1.3, 5.6);
 
 const clamp = THREE.MathUtils.clamp;
-const dayBg = new THREE.Color(0xd8d2c6);
-const nightBg = new THREE.Color(0x151517);
-const dayGround = new THREE.Color(0xc9c2b4);
-const nightGround = new THREE.Color(0x1e1d1b);
-
-const hemi = new THREE.HemisphereLight(0xfff4e6, 0x9a8f80, 0.6);
-const sun = new THREE.DirectionalLight(0xfff1dc, 1.55);
-
-function initLights(): void {
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 90 });
-  sun.shadow.bias = -0.0003;
-  sun.shadow.normalBias = 0.02;
-  sun.shadow.radius = 3;
-  ground.receiveShadow = false;
-  sun.target.position.set(12, 0, 6);
-  scene.add(hemi, sun, sun.target);
-}
-
-const nightFactor = (h: number): number => (h >= 7 && h <= 18 ? 0 : h >= 20 || h <= 5 ? 1 : h > 18 ? (h - 18) / 2 : 1 - (h - 5) / 2);
 
 export interface EditHook {
   down(e: PointerEvent): boolean;
@@ -85,7 +62,6 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   renderer.localClippingEnabled = true;
   container.prepend(renderer.domElement);
   const dom = renderer.domElement;
-  initLights();
 
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
   const target = MAP_CENTER.clone();
@@ -94,6 +70,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   let halfH = 12;
   let timeMode: TimeMode = "auto";
   let quality: Quality = loadQuality();
+  initLights(quality);
   const post = createPost(renderer, scene, cam, quality);
   let night = 0;
   let follow: (() => { x: number; z: number }) | null = null;
@@ -163,7 +140,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       timeMode = m;
     },
     update: (dt) => {
-      night = applyLighting(dt, night, timeMode);
+      night = applyLighting(dt, night, timeMode, quality);
       if (follow) {
         const p = follow();
         const k = Math.min(1, dt * FOLLOW_RATE);
@@ -192,6 +169,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       quality = q;
       saveQuality(q);
       post.setQuality(q);
+      setShadowQuality(q);
     },
     quality: () => quality,
     azimuth: () => azimuth,
@@ -288,31 +266,4 @@ function installControls(dom: HTMLCanvasElement, edit: { current: EditHook | nul
     if (e.key === "q") h.spin(-0.15);
     if (e.key === "e") h.spin(0.15);
   });
-}
-
-function hourFor(mode: TimeMode): number {
-  if (mode === "day") return 13;
-  if (mode === "night") return 22;
-  const now = new Date();
-  return now.getHours() + now.getMinutes() / 60;
-}
-
-/** Ajusta sol, céu e luzes interiores; devolve o novo fator de noite (0 = dia, 1 = noite). */
-function applyLighting(dt: number, current: number, mode: TimeMode): number {
-  const hour = hourFor(mode);
-  const n = current + (nightFactor(hour) - current) * Math.min(1, dt * 2);
-  bakedNight.value = n;
-  setCityNight(n);
-  const t = clamp((hour - 6) / 12, 0, 1);
-  sun.position.set(14 - Math.cos(Math.PI * t) * 9, Math.max(8, Math.sin(Math.PI * t) * 14 + 6), 18);
-  sun.intensity = (1.05 * (1 - n) + 0.12) * Math.PI;
-  sun.color.setHex(t < 0.15 || t > 0.85 ? 0xffc08a : 0xffe9cc);
-  hemi.intensity = (0.3 * (1 - n) + 0.14) * Math.PI;
-  scene.background = dayBg.clone().lerp(nightBg, n);
-  (ground.material as THREE.MeshStandardMaterial).color.copy(dayGround).lerp(nightGround, n);
-  lamps.forEach((l) => {
-    l.intensity = (0.25 + 0.7 * n) * Math.PI * 3;
-  });
-  glassMaterial.emissiveIntensity = 0.04 + 0.7 * n;
-  return n;
 }
