@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ground, glassMaterial } from "./building";
 import { shortcutAllowed } from "../ui/keys";
 import { lamps, scene } from "./world";
+import { createPost, loadQuality, saveQuality, type Quality } from "./post";
 
 export type TimeMode = "auto" | "day" | "night";
 
@@ -40,6 +41,9 @@ export interface Stage {
   setTimeMode(mode: TimeMode): void;
   update(dt: number): void;
   render(): void;
+  /** Qualidade gráfica: "alta" (oclusão ambiente, brilho, reflexos) ou "normal". */
+  setQuality(q: Quality): void;
+  readonly quality: () => Quality;
   /** Converte uma posição do mundo em pixels dentro do contentor. */
   project(x: number, y: number, z: number): { x: number; y: number };
   pickAgent(e: PointerEvent, groups: readonly THREE.Object3D[]): string | null;
@@ -69,6 +73,8 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   let zoom = 1;
   let halfH = 12;
   let timeMode: TimeMode = "auto";
+  let quality: Quality = loadQuality();
+  const post = createPost(renderer, scene, cam, quality);
   let night = 0;
   let follow: (() => { x: number; z: number }) | null = null;
   let onFollowBreak: (() => void) | undefined;
@@ -90,6 +96,7 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
     const h = container.clientHeight;
     if (w === 0 || h === 0) return;
     renderer.setSize(w, h, false);
+    post.resize(w, h);
     const aspect = w / h;
     halfH = Math.max(11.8, 15.5 / aspect);
     Object.assign(cam, { left: -halfH * aspect, right: halfH * aspect, top: halfH, bottom: -halfH });
@@ -159,7 +166,13 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       const hit = ray.ray.intersectPlane(groundPlane, tmp);
       return hit ? { x: hit.x, z: hit.z } : null;
     },
-    render: () => renderer.render(scene, cam),
+    render: () => post.render(),
+    setQuality: (q) => {
+      quality = q;
+      saveQuality(q);
+      post.setQuality(q);
+    },
+    quality: () => quality,
     project: (x, y, z) => {
       tmp.set(x, y, z).project(cam);
       return { x: (tmp.x * 0.5 + 0.5) * dom.clientWidth, y: (-tmp.y * 0.5 + 0.5) * dom.clientHeight };

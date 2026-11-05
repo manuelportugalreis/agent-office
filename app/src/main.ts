@@ -505,6 +505,14 @@ const TIME_CYCLE: Record<TimeMode, { label: string; next: TimeMode }> = {
   night: { label: "🌙 Noite", next: "auto" },
 };
 let timeMode: TimeMode = "auto";
+const showQuality = (): void => {
+  byId("qualBtn").textContent = stage.quality() === "alta" ? "✨ Alta" : "Normal";
+};
+byId("qualBtn").onclick = () => {
+  stage.setQuality(stage.quality() === "alta" ? "normal" : "alta");
+  showQuality();
+};
+showQuality();
 byId("timeBtn").onclick = () => {
   timeMode = TIME_CYCLE[timeMode].next;
   stage.setTimeMode(timeMode);
