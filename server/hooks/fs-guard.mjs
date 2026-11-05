@@ -49,6 +49,9 @@ const readRoots = [...writeRoots, ...readOnlyArgs.map((p) => realPath(resolve(p)
 function checkPath(raw, write) {
   if (typeof raw !== "string" || raw.length === 0) return block("caminho em falta");
   if (raw.startsWith("\\\\") || raw.startsWith("//")) return block("caminhos de rede não são permitidos");
+  // Fora do Windows "C:\..." seria um nome de ficheiro relativo: recusar, para a regra ser igual em todos os sistemas.
+  // (No Windows estes caminhos são normais e passam pela verificação de pastas abaixo.)
+  if (process.platform !== "win32" && /^[a-zA-Z]:/.test(raw)) return block("caminhos com letra de disco não são permitidos");
   const target = realPath(resolve(workspace, raw));
   const roots = write ? writeRoots : readRoots;
   if (!roots.some((r) => isInside(r, target)))
