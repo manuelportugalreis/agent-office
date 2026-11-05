@@ -268,9 +268,9 @@ export function calcadaTexture(waves: boolean): THREE.CanvasTexture {
   const P = S / 2;
   stones(g, S, waves ? 26 : 30, "#b9b1a0", (x, y, i) => {
     const band = (((y + Math.sin((x / S) * Math.PI * 4) * P * 0.28) % P) + P) % P;
-    const dark = waves && band < P * 0.3;
+    const dark = waves && band < P * 0.2;
     const v = 0.9 + rnd(i * 7.7) * 0.12;
-    return dark ? shade([72, 74, 80], v) : shade([236, 231, 220], v);
+    return dark ? shade([118, 120, 126], v) : shade([236, 231, 220], v);
   });
   grain(g, S, 12, 21);
   const t = repeatTex(c);

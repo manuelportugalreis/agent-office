@@ -44,7 +44,7 @@ function surfacesAndCurbs(b: Batch): void {
   slab(b, WALK(), EAST.curb1, WORLD.x1, SOUTH.walk0, SOUTH.curb0, WALK_H, 0.66, 2.2);
   slab(b, WALK(), EAST.curb1, EAST.walk1, WORLD.z0, SOUTH.walk0, WALK_H, 0.66, 2.2);
   slab(b, WALK(), WORLD.x0, WORLD.x1, SOUTH.curb1, SOUTH.walk1, WALK_H, 0.66, 2.2);
-  slab(b, LARGO(), WORLD.x0, WORLD.x1, SOUTH.walk1, WORLD.z1, WALK_H, 0.66, 4.4);
+  slab(b, LARGO(), WORLD.x0, WORLD.x1, SOUTH.walk1, WORLD.z1, WALK_H, 0.66, 6.5);
   // Chão dos quarteirões (logradouros) por baixo e à volta dos prédios.
   slab(b, GARDEN(), WORLD.x0, EAST.walk0, WORLD.z0, SOUTH.walk0, 0.08, 0.58, 6);
   slab(b, GARDEN(), EAST.walk1, WORLD.x1, WORLD.z0, SOUTH.walk0, 0.08, 0.58, 6);

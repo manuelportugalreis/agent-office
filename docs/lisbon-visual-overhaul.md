@@ -98,9 +98,24 @@ Resultado (`docs/img/lisbon/it2/`): 3241 draw calls (dia), FPS 22 (headless).
     acende-se (janelas, montras, candeeiros, faróis do eléctrico) e o escritório iluminado fica o centro da cena.
 - Custo: FPS headless ~22 → ~18 (sombras 4096² e área maior). A rever na iteração de desempenho.
 
+### 5. Pastelaria, largo e arraial (feito)
+
+- `pastelaria.ts` ("PASTELARIA LORETO", nos dois vãos reservados da fachada do escritório): caixilharia de madeira
+  verde-escura, lambril de azulejo azul (o único azulejo do prédio), montra com tabuleiros de pastéis de nata, porta
+  envidraçada, toldo de lona com o nome pintado e sanefa "PASTÉIS DE NATA · CAFÉ", esplanada com três mesas de tampo
+  de mármore, cadeiras de bistrô e chávenas, lousa de cavalete com preços em pt-PT.
+- `largo.ts`: cinco jacarandás em flor (copa em guarda-chuva com tufos lilás e alguma folha, flores caídas na
+  calçada, caldeira de pedra), quiosque octogonal de ferro verde com cúpula de zinco, balcão, toldo e letreiro
+  "QUIOSQUE · REFRESCOS" (vidros acesos à noite), bancos de jardim, mesas do quiosque, e um arraial discreto dos
+  Santos Populares só no largo (bandeirinhas de papel e balões que brilham à noite).
+- `facade.ts`: vasos de barro com sardinheiras/manjericos em ~metade das varandas (determinístico).
+- O "mar largo" do largo ficou mais suave (cinzento médio em vez de negro, bandas mais estreitas e maiores).
+- Removidos: toldo às riscas, letreiro azul colado à varanda, bandeira nacional e mesas antigas (`lisbon.ts` passou a
+  só orquestrar os módulos).
+
+Resultado: 3400 draw calls (dia).
+
 ## Backlog (prioridade)
 
-1. Pastelaria com esplanada, candeeiros lisboetas, placas toponímicas, números de polícia, sarjetas, árvores,
-   manjericos e arraial discreto.
-2. Vida: peões, roupa e bandeirolas a ondular, pombos.
-3. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.
+1. Vida: peões, roupa e bandeirolas a ondular, pombos.
+2. Desempenho: instanciar peças repetidas da rua, rever passagens de pós-processamento.

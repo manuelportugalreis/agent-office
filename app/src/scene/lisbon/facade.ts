@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { rnd } from "../util";
 import type { Batch } from "./batch";
 import {
@@ -178,6 +179,36 @@ function balcony(b: Batch, trim: ReturnType<typeof stoneMat>, cx: number, y: num
   b.box(trim, len, 0.09, depth, cx, y - 0.045, depth / 2);
   for (const s of [-1, 1]) b.box(trim, 0.12, 0.24, depth - 0.1, cx + s * (len / 2 - 0.2), y - 0.2, (depth - 0.1) / 2);
   railing(b, cx, y, len - 0.04, depth - 0.03);
+  pots(b, cx, y, len, depth);
+}
+
+const POT_SPOTS = [-0.42, -0.2, 0.25, 0.4];
+
+/** Vasos de barro com sardinheiras ou manjericos em algumas varandas (determinístico pela posição). */
+function pots(b: Batch, cx: number, y: number, len: number, depth: number): void {
+  const seed = cx * 7.31 + y * 3.17;
+  if (rnd(seed) < 0.45) return;
+  const count = 1 + Math.floor(rnd(seed + 1) * 2.5);
+  for (let k = 0; k < count; k++) {
+    const x = cx + POT_SPOTS[(k + Math.floor(rnd(seed + 2) * 4)) % 4] * len;
+    const z = depth * (0.45 + rnd(seed + k) * 0.2);
+    b.add(new THREE.CylinderGeometry(0.11, 0.08, 0.17, 10), plasterMat("#b5603f"), x, y + 0.085, z);
+    const leaf = new THREE.IcosahedronGeometry(0.16, 0);
+    leaf.scale(1, 0.8, 1);
+    b.add(leaf, plasterMat(rnd(seed + k * 3) > 0.5 ? "#4f7a3a" : "#5f8a43"), x, y + 0.27, z);
+    if (rnd(seed + k * 5) > 0.4) {
+      for (let f = 0; f < 3; f++) {
+        b.add(
+          new THREE.IcosahedronGeometry(0.045, 0),
+          plasterMat("#d8352f"),
+          x + (f - 1) * 0.07,
+          y + 0.37 + (f % 2) * 0.04,
+          z + (f - 1) * 0.04,
+          { cast: false },
+        );
+      }
+    }
+  }
 }
 
 function continuousBalcony(b: Batch, trim: ReturnType<typeof stoneMat>, x0: number, x1: number, y: number): void {
