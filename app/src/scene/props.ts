@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { AGENTS } from "../data/agents";
 import { box, canvas2d, canvasTexture, cyl, group, mat, rnd, sphere, wrapText } from "./util";
 import { scene } from "./world";
+import { upgradeWithModel } from "./models";
 import type { ScreenHandle } from "./screens";
 
 // ---------- cadeiras e secretárias ----------
@@ -16,6 +17,7 @@ export function chair(x: number, z: number, yaw: number, color = "#2f3a4d"): voi
   box(g, 0.04, 0.22, 0.04, 0, 0.57, -0.2, dark);
   box(g, 0.04, 0.04, 0.3, 0.25, 0.62, 0, dark);
   box(g, 0.04, 0.04, 0.3, -0.25, 0.62, 0, dark);
+  upgradeWithModel(g, "modern_arm_chair_01", { height: 0.95, yaw: Math.PI });
 }
 
 export function desk(x: number, z: number, w: number, hue: number, screen: ScreenHandle | null): void {
@@ -63,6 +65,7 @@ export function plant(x: number, z: number, s = 1, tall = false): void {
     sphere(g, 0.2 * s, 0.1, 0.7 * s, 0.05, leaf2);
     sphere(g, 0.17 * s, -0.12, 0.62 * s, -0.05, leaf2);
   }
+  upgradeWithModel(g, tall ? "potted_plant_01" : "potted_plant_02", { height: tall ? 1.55 : 0.8 * s });
 }
 
 export function shelf(x: number, z: number, rotY: number, w = 1.4): void {
@@ -78,6 +81,7 @@ export function shelf(x: number, z: number, rotY: number, w = 1.4): void {
       cursor += bw + 0.01;
     }
   }
+  upgradeWithModel(g, "wooden_bookshelf_worn", { height: 2, yaw: Math.PI });
 }
 
 export function cabinet(x: number, z: number): void {
@@ -125,6 +129,7 @@ export function sofa(x: number, z: number, w: number, color: string): void {
   box(g, w, 0.55, 0.22, 0, 0.6, -0.4, m2);
   box(g, 0.25, 0.5, 0.95, -w / 2 + 0.12, 0.5, 0, m2);
   box(g, 0.25, 0.5, 0.95, w / 2 - 0.12, 0.5, 0, m2);
+  upgradeWithModel(g, "sofa_02", { width: w, yaw: Math.PI });
 }
 
 export function table(x: number, z: number, w: number, d: number, h = 0.75, color = "#c9a47a"): void {
