@@ -42,6 +42,9 @@ export interface LocalMode {
   openEditor(profileId?: number): void;
 }
 
+/** Agentes com pesquisa web no modo escritório (o servidor dá-lhes WebSearch/WebFetch, vigiados pelo web-guard). */
+const WEB_AGENTS = new Set(["rhea", "mira", "vera", "scout"]);
+
 const lines = (v: string): string[] =>
   v
     .split(/\r?\n/)
@@ -152,9 +155,23 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
       </div>`;
     if (!state.profiles.length)
       h += `<div class="mode-note">Cria um perfil (pasta do projeto, Obsidian, terminal, MCP) para este agente trabalhar como o Claude Code no teu terminal.</div>`;
-    if (!local)
-      h += `<div class="mode-note">Escritório: trabalha na pasta própria do agente, só com ficheiros${agentId === "ceo" ? "" : " e as ferramentas do papel"}, sem terminal nem MCP.</div>`;
-    else {
+    if (!local) {
+      // O acesso real do modo escritório (o que os guards do servidor deixam fazer), não uma descrição genérica.
+      const access = [
+        "A pasta própria do agente: ler e escrever",
+        "As pastas dos colegas: só ler",
+        ...(state.vaultDir
+          ? [`O vault do Obsidian (${state.vaultDir}): ler, criar e editar notas`]
+          : ["Sem vault do Obsidian configurado"]),
+        ...(WEB_AGENTS.has(agentId) ? ["Pesquisa e leitura de páginas web (sem endereços locais nem credenciais)"] : []),
+        "Sem comandos de terminal nem integrações MCP",
+      ];
+      h += `<div class="access">${access.map((l) => `<div>${escapeHtml(l)}</div>`).join("")}<div class="mode-note">${
+        agentId === "ceo"
+          ? "O Atlas planeia sem ferramentas e reparte o trabalho; quem executa tem o acesso acima (ou o do perfil da ordem)."
+          : "Para trabalhar no teu projeto, com terminal ou MCP, escolhe um perfil (Claude Code local)."
+      }</div></div>`;
+    } else {
       h += `<div class="access">${describeProfile(profile)
         .map((l) => `<div>${escapeHtml(l)}</div>`)
         .join(

@@ -16,6 +16,9 @@ import { createHub } from "./hub.ts";
 import { createRequestHandler } from "./http.ts";
 import { log } from "./log.ts";
 import { createOrchestrator } from "./orchestrator.ts";
+import { parsePlaceText } from "./intent.ts";
+import { createOrderEngine } from "./orders.ts";
+import { createSceneBridge } from "./scene-bridge.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
 import type { AccessProfile, AgentMode } from "../../shared/protocol.ts";
@@ -106,9 +109,32 @@ const hub = createHub({
       approvals.request(agentId, "Rascunho pronto para rever", result.reply);
   },
 });
-const orchestrator = createOrchestrator(hub, broadcast);
+const MY_OFFICE_SETTING = "myOffice";
+const scene = createSceneBridge(broadcast, () => clients.size);
+const orders = createOrderEngine({
+  hub,
+  emit: broadcast,
+  scene,
+  vaultDir: () => config.vaultDir,
+  myOffice: () => store.getSetting(MY_OFFICE_SETTING),
+  setMyOffice: (place) => setMyOffice(place),
+});
+/** Escolhe o gabinete do utilizador (uma sala ou a secretária de alguém) e avisa todas as interfaces. */
+function setMyOffice(place: string): boolean {
+  const ref = parsePlaceText(place, REAL_AGENTS, null);
+  if (ref?.kind !== "place") return false;
+  store.setSetting(MY_OFFICE_SETTING, ref.id);
+  broadcast({ type: "office", myOffice: ref.id });
+  // Uma ordem à espera de saber o gabinete continua já (escolhido no menu em vez de responder no chat).
+  orders.officeChosen(ref.id);
+  return true;
+}
+const orchestrator = createOrchestrator(hub, broadcast, orders, {
+  get: () => store.getSetting("lastOrderResults") ?? "",
+  set: (text) => store.setSetting("lastOrderResults", text),
+});
 const canvas = createCanvasSync(hub, broadcast);
-const chat = createChatService(hub, store, broadcast);
+const chat = createChatService(hub, store, broadcast, { engine: orders, vaultDir: () => config.vaultDir });
 const dossier = createDossierService({
   hub,
   store,
@@ -220,6 +246,7 @@ wss.on("connection", (ws) => {
   send(ws, { type: "snapshot", ...store.snapshot() });
   send(ws, profilesMsg());
   send(ws, modesMsg());
+  send(ws, { type: "office", myOffice: store.getSetting(MY_OFFICE_SETTING) });
   // Perguntas de permissão por responder (a página foi recarregada a meio de uma tarefa local).
   for (const request of hub.pendingPermissions()) send(ws, { type: "permission", request });
   // Quem já está a trabalhar (a página foi recarregada a meio): a interface não pode achar que está livre.
@@ -244,7 +271,15 @@ wss.on("connection", (ws) => {
         if (msg.profileId !== undefined && !profile) return send(ws, { type: "error", agentId: "ceo", message: "Esse perfil não existe." });
         store.addChat("ceo", true, msg.text);
         broadcast({ type: "user-message", agentId: "ceo", text: msg.text, files: [] });
+        // Resposta a uma pergunta do Atlas (que nota, que gabinete): a ordem em curso continua.
+        if (orders.answer("ceo", msg.text)) return;
         return background(orchestrator.order(msg.text, profile), "ordem ao CEO");
+      }
+      case "arrived":
+        return scene.arrived(msg.id, msg.ok, msg.reason);
+      case "set-office": {
+        if (!setMyOffice(msg.place)) return send(ws, { type: "error", message: "Esse sítio não existe no escritório." });
+        return;
       }
       case "profile-save":
         return saveProfile(msg.profile);

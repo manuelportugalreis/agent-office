@@ -21,6 +21,10 @@
       <span class="sp"></span>
       <span class="mock" id="conn" title="Servidor de agentes">servidor: offline</span>
       <span class="mock" id="quota" style="display: none" title="Uso do plano (5h / 7 dias)"></span>
+      <label class="office-pick" title="O teu gabinete: para onde vai quem mandas ao «meu gabinete»"
+        >📍
+        <select id="officeSel" aria-label="O meu gabinete"></select
+      ></label>
       <button id="dossierBtn" title="Dossier de candidatura">📁 Dossier</button>
       <button id="walkBtn" title="Andar pelo escritório (tecla G)" aria-pressed="false">🚶 Andar</button>
       <button id="editBtn" title="Mudar a mobília de sítio (tecla M)" aria-pressed="false">🛋 Mobília</button>
@@ -86,6 +90,7 @@
           <button id="editReset" type="button">Repor tudo</button>
           <button id="editDone" type="button" class="primary">Concluir</button>
         </div>
+        <div id="orders" aria-live="polite" aria-label="Ordens em curso" hidden></div>
         <div id="hint">Arrastar: mover · Roda: zoom · Botão direito ou Q/E: rodar · Clica numa pessoa</div>
         <form id="cmd">
           <input id="cmdIn" placeholder="Dá uma ordem ao CEO…  ex: encontra 10 vagas de Business Analyst" autocomplete="off" /><button

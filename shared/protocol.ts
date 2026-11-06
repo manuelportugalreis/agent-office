@@ -193,6 +193,17 @@ export interface ToolStep {
   readonly ok?: boolean;
 }
 
+/** Estado de um passo de uma ordem. `waiting`: à espera de uma resposta tua; `partial`: feito com ressalvas. */
+export type StepState = "pending" | "running" | "waiting" | "done" | "partial" | "blocked" | "skipped";
+
+export interface StepView {
+  readonly id: string;
+  readonly label: string;
+  readonly state: StepState;
+  /** Evidência ou motivo (ex.: "chegou, confirmado pela cena", "o Obsidian confirmou", "recusado: fora do vault"). */
+  readonly detail?: string;
+}
+
 export type ServerMsg =
   | { readonly type: "dossier"; readonly dossier: Dossier | null }
   | {
@@ -264,6 +275,20 @@ export type ServerMsg =
       readonly profileId: number;
       readonly command: string;
     }
+  /** Uma ordem mandou alguém andar: a interface leva a personagem até `place` e responde com `arrived` quando lá chega. */
+  | { readonly type: "move"; readonly id: number; readonly agentId: string; readonly place: string }
+  /** Passos de uma ordem em curso (ou terminada), para a interface mostrar o que já foi feito e o que bloqueou. */
+  | {
+      readonly type: "order-steps";
+      readonly id: number;
+      /** Conversa onde a ordem foi dada (o agente, ou "ceo" para a barra do Atlas). */
+      readonly owner: string;
+      readonly title: string;
+      readonly steps: readonly StepView[];
+      readonly finished: boolean;
+    }
+  /** Definições do escritório (o gabinete do utilizador; null = ainda não escolhido). */
+  | { readonly type: "office"; readonly myOffice: string | null }
   /** Rasto de uma tarefa local terminada: o que mudou e o que correu. */
   | { readonly type: "trace"; readonly agentId: string; readonly steps: readonly ToolStep[] }
   /** `op`: que operação do chat falhou (só o envio recusado faz a interface tirar a mensagem otimista). */
@@ -284,6 +309,10 @@ export type ClientMsg =
   | { readonly type: "permission-decide"; readonly id: number; readonly allow: boolean }
   | { readonly type: "open-terminal"; readonly agentId: string }
   | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
+  /** A personagem chegou (ok) ou não conseguiu ir (ok=false) ao sítio pedido num `move`. */
+  | { readonly type: "arrived"; readonly id: number; readonly ok: boolean; readonly reason?: string }
+  /** Escolher o gabinete do utilizador (um sítio do escritório). */
+  | { readonly type: "set-office"; readonly place: string }
   | { readonly type: "sync" }
   | { readonly type: "dossier-start"; readonly request: string; readonly materials?: string }
   | { readonly type: "dossier-answer"; readonly id: number; readonly answer: string; readonly companyOnly?: boolean }
@@ -298,6 +327,8 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const SERVER_PORT = 8787;
 
 const AGENT_ID = /^[a-z0-9-]{1,32}$/;
+/** Id de um sítio do escritório ("gestao", "desk:mira"); o servidor confirma que existe. */
+const PLACE_ID = /^(desk:)?[a-z0-9-]{1,32}$/;
 /** Nome de ficheiro já sanitizado pelo servidor (só letras, números, espaço, ponto, hífen, sublinhado). */
 export const SAFE_FILE_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,119}$/u;
 
@@ -366,6 +397,14 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return agentId ? { type: "open-terminal", agentId } : null;
     case "sync":
       return { type: "sync" };
+    case "arrived": {
+      const reason = typeof m.reason === "string" ? m.reason.slice(0, 200) : undefined;
+      return Number.isInteger(m.id) && typeof m.ok === "boolean"
+        ? { type: "arrived", id: m.id as number, ok: m.ok, ...(reason ? { reason } : {}) }
+        : null;
+    }
+    case "set-office":
+      return typeof m.place === "string" && PLACE_ID.test(m.place) ? { type: "set-office", place: m.place } : null;
     case "dossier-start": {
       const request = cleanText(m.request);
       const materials = m.materials === undefined || m.materials === "" ? undefined : cleanText(m.materials);

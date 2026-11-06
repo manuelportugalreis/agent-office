@@ -1270,3 +1270,112 @@ header h1 {
   font-weight: 600;
   margin-left: 6px;
 }
+
+/* ---- ordens em curso (passos com estado e evidência) */
+#orders {
+  position: absolute;
+  right: 12px;
+  bottom: 70px;
+  width: min(380px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 6;
+  max-height: 60%;
+  overflow-y: auto;
+}
+#orders[hidden] {
+  display: none;
+}
+.order-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  padding: 8px 10px;
+  box-shadow: 0 6px 18px rgba(20, 20, 19, 0.12);
+  font-size: 12px;
+}
+.order-card.attn {
+  border-left-color: var(--err);
+}
+.order-card.done:not(.attn) {
+  border-left-color: #2f8f5b;
+}
+.order-card header {
+  all: unset;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.order-card .oc-who {
+  font-weight: 600;
+}
+.order-card .oc-title {
+  color: var(--muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.order-card button {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+.order-card ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.order-card li {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+.order-card li small {
+  display: block;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.os-mark {
+  width: 16px;
+  text-align: center;
+  font-weight: 700;
+  flex: none;
+}
+.os-done .os-mark {
+  color: #2f8f5b;
+}
+.os-partial .os-mark,
+.os-waiting .os-mark {
+  color: #b7791f;
+}
+.os-blocked .os-mark {
+  color: var(--err);
+}
+.os-skipped,
+.os-pending {
+  opacity: 0.7;
+}
+.os-running .os-mark {
+  color: var(--accent);
+}
+.office-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.office-pick select {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 5px 6px;
+  max-width: 170px;
+}

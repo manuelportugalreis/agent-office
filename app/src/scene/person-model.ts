@@ -20,6 +20,7 @@ export const STATE_INFO: Record<DisplayState, { icon: string; label: string; col
   gym: { icon: "🏋", label: "No ginásio", color: "#f97316" },
   server: { icon: "🖥", label: "Na sala de servidores", color: "#06b6d4" },
   clean: { icon: "🧹", label: "A limpar", color: "#84cc16" },
+  go: { icon: "📍", label: "Onde lhe pediste", color: "#0d9488" },
 };
 
 export interface Rig {

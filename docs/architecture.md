@@ -42,6 +42,18 @@ Entry point: `server/src/index.ts`. It starts one HTTP server that also hosts th
 
 `order` asks Atlas (Opus) for a JSON plan. `parsePlan` rejects unknown agents, more than three tasks, duplicates, and dependency cycles. Tasks without dependencies start in parallel; a task with `after: ["mira"]` waits and receives Mira's result, marked as data. If a dependency fails, the dependent task does not run.
 
+A plan entry can also carry `go` (walk somewhere first, e.g. "o meu gabinete") and `note` (the Obsidian note the task reads or edits); `open_note` opens a note in the user's Obsidian and is kept only when the order actually asks to open or show it.
+
+### Orders that do things (`intent.ts`, `orders.ts`)
+
+Simple orders in everyday Portuguese skip the plan: `parseOrder` recognises a movement ("Mira, vai ao meu gabinete", "manda a Lena à copa"), opening a note ("Abre a nota Planeamento no Obsidian") and the work that follows ("…e, quando chegar, lê a nota"). Anything it is not sure about goes, untouched, to the agent or to Atlas's plan. Places come from `shared/places.ts`; "o meu gabinete" is a setting the user picks (header select, or the engine asks).
+
+The order engine runs the steps with their dependencies and reports each one (`order-steps`) with evidence:
+
+- **move**: the server sends `move`, the scene walks the character there and answers `arrived` from its own state; the character stays until told otherwise. No open app, a superseded order or a timeout block the step with the reason.
+- **open_note**: `vault.ts` resolves titles, aliases, `[[links]]` and paths; several matches → one question in the chat. It launches `obsidian://open?vault=<id>&file=…` (vault id from Obsidian's `obsidian.json`) and confirms through the vault's `.obsidian/workspace.json`.
+- **task**: a Claude Code run with the resolved note path appended; afterwards the note on disk is compared with the copy taken before (frontmatter intact, old lines kept) and refused tools are shown. A requested edit that left the file unchanged is reported, not hidden.
+
 ### Guards
 
 | Hook               | Applies to                    | Rule                                                                                          |

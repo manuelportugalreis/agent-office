@@ -34,6 +34,9 @@ import { createJanitor, JANITOR_DEF, janitorUpdate, requestCleaning } from "./si
 import { shortcutAllowed } from "./ui/keys";
 import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
 import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, freeWalk, PLAYER_DEF } from "./sim/player";
+import { moveStatus, startMove, type PendingMove } from "./sim/orders";
+import { createOrdersUi } from "./ui/orders";
+import { ofPlace, placeName, ROOM_PLACES } from "../../shared/places";
 
 interface LogEvent {
   readonly agent: Agent;
@@ -159,7 +162,21 @@ function setEditMode(on: boolean): void {
   byId("hint").hidden = on;
 }
 if (new URLSearchParams(location.search).has("debug"))
-  Object.assign(window, { __office: { editor, stage, editables, janitor, requestCleaning, tramPosition } });
+  Object.assign(window, {
+    __office: {
+      editor,
+      stage,
+      editables,
+      janitor,
+      requestCleaning,
+      tramPosition,
+      /** Onde está cada pessoa (para testes de ponta a ponta das ordens de movimento). */
+      where: (id: string) => {
+        const a = byAgentId.get(id);
+        return a ? { x: a.x, z: a.z, loc: a.loc.key, kind: a.kind, walking: a.route.length > 0, state: a.state } : null;
+      },
+    },
+  });
 byId("editBtn").onclick = () => setEditMode(!editor.active());
 byId("editRotate").onclick = () => editor.rotate();
 byId("editReset").onclick = () => editor.reset();
@@ -466,6 +483,9 @@ function onServerMsg(m: ServerMsg): void {
   if (m.type === "approval-resolved") return approvals.remove(m.id, m.superseded === true);
   if (m.type === "user-message") return chatStore.addUserIfNew(m.agentId, m.text, m.files);
   if (m.type === "delegate") return queueVisit(agents, locs, m.from, m.to, performance.now());
+  if (m.type === "move") return beginMove(m.id, m.agentId, m.place);
+  if (m.type === "order-steps") return ordersUi.update(m);
+  if (m.type === "office") return showOffice(m.myOffice);
   if (m.type === "error" && !m.agentId) return toast(m.message);
   const a = m.agentId ? byAgentId.get(m.agentId) : undefined;
   if (!a) return;
@@ -486,7 +506,8 @@ function onServerMsg(m: ServerMsg): void {
     if (m.task) a.task = m.task;
     if (WORKING.has(m.status)) {
       cancelAmbient(a);
-      if (a.kind !== "desk") sendTo(a, locs[`desk-${a.def.id}`], "desk");
+      // Quem foi a um sítio a teu pedido trabalha lá (só volta à secretária quando lhe pedires).
+      if (a.kind !== "desk" && a.kind !== "go") sendTo(a, locs[`desk-${a.def.id}`], "desk");
     }
     panel.refresh();
   } else if (m.type === "log") {
@@ -517,6 +538,73 @@ function onServerMsg(m: ServerMsg): void {
     }
   }
 }
+
+// ---- ordens de movimento: o servidor pede, a cena leva a pessoa até lá e confirma a chegada
+const pendingMoves: PendingMove[] = [];
+const agentName = (id: string): string => byAgentId.get(id)?.def.name ?? id;
+
+function beginMove(id: number, agentId: string, place: string): void {
+  const a = byAgentId.get(agentId);
+  if (!a) return void client.send({ type: "arrived", id, ok: false, reason: "essa pessoa não existe na cena" });
+  const started = startMove(a, place, locs, id);
+  if ("error" in started) return void client.send({ type: "arrived", id, ok: false, reason: started.error });
+  // Uma ordem nova para a mesma pessoa substitui a anterior.
+  for (let i = pendingMoves.length - 1; i >= 0; i--)
+    if (pendingMoves[i].agent === a) {
+      // A ordem anterior fica respondida (senão o servidor esperava por ela até desistir).
+      client.send({ type: "arrived", id: pendingMoves[i].id, ok: false, reason: "substituída por outra ordem de movimento" });
+      pendingMoves.splice(i, 1);
+    }
+  pendingMoves.push(started);
+  a.task = `A caminho ${ofPlace(placeName(place, agentName))}.`;
+  panel.refresh();
+}
+
+function checkMoves(): void {
+  for (let i = pendingMoves.length - 1; i >= 0; i--) {
+    const m = pendingMoves[i];
+    const status = moveStatus(m);
+    if (status === "walking") continue;
+    pendingMoves.splice(i, 1);
+    client.send(
+      status === "arrived"
+        ? { type: "arrived", id: m.id, ok: true }
+        : { type: "arrived", id: m.id, ok: false, reason: "foi desviada para outro sítio antes de chegar" },
+    );
+  }
+}
+setInterval(checkMoves, 250);
+
+const ordersUi = createOrdersUi(
+  byId("orders"),
+  (id) => (id === "ceo" ? "Atlas" : agentName(id)),
+  (owner) => {
+    const a = byAgentId.get(owner);
+    if (a) panel.open(a, "chat");
+  },
+);
+
+// ---- o meu gabinete: para onde vai quem mandas ao «meu gabinete»
+const officeSel = byId<HTMLSelectElement>("officeSel");
+officeSel.innerHTML =
+  `<option value="">O meu gabinete…</option>` +
+  ROOM_PLACES.filter((p) => p.id !== "tray")
+    .map((p) => `<option value="${p.id}">${p.name.replace(/^(a|o) /, "")}</option>`)
+    .join("");
+function showOffice(place: string | null): void {
+  if (place && ![...officeSel.options].some((o) => o.value === place)) {
+    const opt = document.createElement("option");
+    opt.value = place;
+    opt.textContent = placeName(place, agentName);
+    officeSel.append(opt);
+  }
+  officeSel.value = place ?? "";
+}
+officeSel.onchange = () => {
+  if (!officeSel.value) return;
+  if (client.send({ type: "set-office", place: officeSel.value })) toast(`O teu gabinete: ${placeName(officeSel.value, agentName)}`);
+  else toast("Servidor offline: não consegui guardar o gabinete.");
+};
 
 /** O dossier mudou (ou foi restaurado ao ligar): atualiza o cartão, o rótulo e a pasta na cena. */
 function applyDossier(d: Dossier | null): void {

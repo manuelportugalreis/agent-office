@@ -2,7 +2,8 @@ import type { AgentDef, AgentState, Deadline } from "../data/agents";
 import { routeBetween, type Loc, type Pt } from "./locations";
 
 /** Onde o agente está ou para onde vai: à secretária, no descanso, em reunião, a conversar ou a entregar um papel. */
-export type Kind = "desk" | "rest" | "meet" | "chat" | "visit" | "wc" | "play" | "gym" | "server" | "clean";
+/** `go`: foi a um sítio porque lhe pediste, e fica lá até lhe pedires outra coisa (a vida de ambiente não o tira de lá). */
+export type Kind = "desk" | "rest" | "meet" | "chat" | "visit" | "wc" | "play" | "gym" | "server" | "clean" | "go";
 export type DisplayState = AgentState | Exclude<Kind, "desk">;
 export type LogLine = readonly [time: string, text: string];
 
@@ -96,7 +97,8 @@ export function createAgent(def: AgentDef, home: Loc): Agent {
   };
 }
 
-export const stateOf = (a: Agent): DisplayState => (a.kind === "desk" ? a.state : a.kind);
+/** No sítio para onde o mandaste, o que conta é o que está a fazer (a pensar, a trabalhar); parado, mostra que foi lá. */
+export const stateOf = (a: Agent): DisplayState => (a.kind === "desk" || (a.kind === "go" && a.state !== "idle") ? a.state : a.kind);
 
 export function teleport(a: Agent, loc: Loc, kind: Kind): void {
   a.loc.owner = null;

@@ -1,8 +1,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ServerMsg } from "../../shared/protocol.ts";
-import { findAgent } from "./agents.ts";
+import { AGENT_NAMES, findAgent } from "./agents.ts";
 import type { Hub } from "./hub.ts";
+import { parseOrder } from "./intent.ts";
+import { sequence, summarize, type ExecStep, type OrderEngine } from "./orders.ts";
+import { findNoteMention } from "./vault.ts";
 import type { Store } from "./store.ts";
 import { inboxDir } from "./workspace.ts";
 
@@ -35,8 +38,54 @@ export interface ChatService {
   newChat(agentId: string): void;
 }
 
-/** Conversas com os agentes: guarda o histórico, trata anexos e implementa editar, regenerar e nova conversa. */
-export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) => void): ChatService {
+/** Mensagens que o motor de ordens trata (andar, abrir notas, notas a resolver, respostas a perguntas). */
+export interface ChatOrders {
+  readonly engine: OrderEngine;
+  readonly vaultDir: () => string;
+}
+
+/** Conversas com os agentes: guarda o histórico, trata anexos e ordens, e implementa editar, regenerar e nova conversa. */
+export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) => void, orders?: ChatOrders): ChatService {
+  /**
+   * Uma mensagem de chat que é uma ordem: responde a uma pergunta pendente, ou tem passos que o servidor executa
+   * (andar, abrir uma nota), ou refere uma nota do vault (resolvida antes, com pergunta se houver várias).
+   * Devolve true se a tratou.
+   */
+  function asOrder(agentId: string, text: string): boolean {
+    if (!orders) return false;
+    const record = (): void => {
+      store.addChat(agentId, true, text);
+      emit({ type: "user-message", agentId, text, files: [] });
+    };
+    if (orders.engine.answer(agentId, text)) {
+      record();
+      return true;
+    }
+    const steps = orderSteps(agentId, text);
+    if (!steps) return false;
+    if (hub.isRunning(agentId)) return (error(agentId, "O agente ainda está a trabalhar.", "send"), true);
+    record();
+    runOrder(agentId, text, steps);
+    return true;
+  }
+
+  /** Passos de uma mensagem que é uma ordem (ações do escritório, ou uma nota do vault a resolver), ou null. */
+  function orderSteps(agentId: string, text: string): ExecStep[] | null {
+    if (!orders) return null;
+    const parsed = parseOrder(text, AGENT_NAMES, agentId);
+    if (parsed) return sequence(parsed.steps);
+    const vault = orders.vaultDir();
+    return vault && findNoteMention(vault, text) !== null ? sequence([{ kind: "task", agent: agentId, task: text }]) : null;
+  }
+
+  function runOrder(agentId: string, text: string, steps: ExecStep[]): void {
+    void orders?.engine.run(agentId, text, steps).then((outcomes) => {
+      // A resposta do agente já aparece no chat; com ações (andar, abrir) junta-se o que aconteceu e a evidência.
+      if (outcomes.some((o) => o.step.kind !== "task" || o.view.state !== "done"))
+        emit({ type: "reply", agentId, text: summarize(outcomes) });
+    });
+  }
+
   const error = (agentId: string, message: string, op?: "send" | "redo" | "newchat"): void =>
     emit({ type: "error", agentId, message, ...(op ? { op } : {}) });
 
@@ -55,6 +104,7 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
 
   return {
     send(agentId, text, files, from) {
+      if (!files?.length && !from && findAgent(agentId) && asOrder(agentId, text)) return;
       if (!validate(agentId, files, "send")) return;
       store.addChat(agentId, true, text, files);
       emit({ type: "user-message", agentId, text, files: files ?? [] });
@@ -71,11 +121,16 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
       const history = store.transcript(agentId);
       store.addChat(agentId, true, text, files);
       conversation(agentId);
+      // Editar ou regenerar uma ordem ("abre a nota X", "vai à copa") volta a executá-la, não só a perguntar ao agente.
+      const steps = files?.length ? null : orderSteps(agentId, text);
+      if (steps) return runOrder(agentId, text, steps);
       void hub.run(agentId, withHistory(history, withAttachments(agentId, text, files)), { fresh: true, label: text });
     },
     newChat(agentId) {
       if (!findAgent(agentId)) return error(agentId, "Este agente ainda não é real.");
       if (hub.isRunning(agentId)) return error(agentId, "O agente ainda está a trabalhar.");
+      // Perguntas da conversa antiga não podem ser respondidas na nova ("2" a escolher uma nota que já não se vê).
+      orders?.engine.cancel(agentId);
       store.newConversation(agentId);
       // `cleared`: a conversa foi mesmo limpa (é a confirmação que faz o Joaquim sair do sítio).
       emit({ type: "conversation", agentId, chat: store.chat(agentId), cleared: true });

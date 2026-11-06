@@ -205,7 +205,9 @@ export function createHub({
       reply: r.replies.join("\n\n"),
       costUsd,
       error,
-      ...(r.profile ? { steps, sessionId: r.sessionId } : {}),
+      // O rasto vale também no modo escritório: é a evidência do que o agente fez (não o que ele diz).
+      ...(r.profile || steps.length ? { steps } : {}),
+      ...(r.profile ? { sessionId: r.sessionId } : {}),
     };
     r.resolve(result);
     if (!r.skipComplete) onComplete?.(agentId, result);

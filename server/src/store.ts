@@ -62,6 +62,9 @@ export interface Store {
   deleteProfile(id: number): void;
   modes(): Record<string, AgentMode>;
   setMode(agentId: string, mode: AgentMode): void;
+  /** Definições simples (ex.: o gabinete do utilizador). */
+  getSetting(key: string): string | null;
+  setSetting(key: string, value: string): void;
   close(): void;
 }
 
@@ -75,6 +78,7 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS conversations (agent_id TEXT PRIMARY KEY, conv INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, json TEXT NOT NULL);
   CREATE TABLE IF NOT EXISTS modes (agent_id TEXT PRIMARY KEY, json TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `;
 
 type Row = Record<string, unknown>;
@@ -288,6 +292,13 @@ export function openStore(path: string): Store {
         agentId,
         JSON.stringify(mode),
       );
+    },
+    getSetting(key) {
+      const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as Row | undefined;
+      return row ? String(row.value) : null;
+    },
+    setSetting(key, value) {
+      db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
     },
     close: () => db.close(),
   };

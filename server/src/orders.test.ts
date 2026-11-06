@@ -1,0 +1,273 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import type { ServerMsg } from "../../shared/protocol.ts";
+import type { Hub, RunResult } from "./hub.ts";
+import { checkNoteEdit, createOrderEngine, pickOption, sequence, summarize } from "./orders.ts";
+import { parsePlan, planSteps } from "./orchestrator.ts";
+import type { SceneBridge } from "./scene-bridge.ts";
+import { findNoteMention, resolveNote, vaultFor } from "./vault.ts";
+
+function vault(): string {
+  const dir = mkdtempSync(join(tmpdir(), "office-vault-"));
+  mkdirSync(join(dir, "Projetos"));
+  mkdirSync(join(dir, "Trabalho"));
+  mkdirSync(join(dir, "Pessoal"));
+  writeFileSync(join(dir, "Projetos", "Planeamento.md"), "---\naliases: [Plano do escritório]\n---\n# Planeamento\n- a\n");
+  writeFileSync(join(dir, "Trabalho", "Reunião.md"), "# Reunião\ntrabalho\n");
+  writeFileSync(join(dir, "Pessoal", "Reunião.md"), "# Reunião\npessoal\n");
+  return dir;
+}
+
+interface FakeHub extends Hub {
+  calls: { agent: string; text: string }[];
+}
+
+/** Hub falso: cada tarefa chama `work` (que pode mexer em ficheiros) e devolve o resultado. */
+function fakeHub(work: (agent: string, text: string) => Partial<RunResult> = () => ({})): FakeHub {
+  const calls: { agent: string; text: string }[] = [];
+  return {
+    calls,
+    run: async (agent, text) => {
+      calls.push({ agent, text });
+      return { ok: true, reply: "feito", ...work(agent, text) };
+    },
+    decidePermission: () => undefined,
+    pendingPermissions: () => [],
+    localSession: () => undefined,
+    isRunning: () => false,
+    hasCapacity: () => true,
+    active: () => [],
+    stop: () => undefined,
+    realAgents: () => [],
+    shutdown: () => undefined,
+  };
+}
+
+function setup(opts: { office?: string | null; arrive?: boolean; hub?: FakeHub } = {}) {
+  const out: ServerMsg[] = [];
+  const moves: { agent: string; place: string }[] = [];
+  let office = opts.office ?? null;
+  const scene: SceneBridge = {
+    move: async (agent, place) => {
+      moves.push({ agent, place });
+      return opts.arrive === false ? { ok: false, error: "o escritório não está aberto" } : { ok: true, at: Date.now() };
+    },
+    arrived: () => undefined,
+  };
+  const dir = vault();
+  const opened: string[] = [];
+  const hub = opts.hub ?? fakeHub();
+  const engine = createOrderEngine({
+    hub,
+    emit: (m) => out.push(m),
+    scene,
+    vaultDir: () => dir,
+    myOffice: () => office,
+    setMyOffice: (p) => {
+      office = p;
+    },
+    open: async (abs) => {
+      opened.push(abs);
+      return { launched: true, confirmed: true };
+    },
+  });
+  return { out, moves, engine, dir, opened, hub };
+}
+
+const tick = (): Promise<void> => new Promise((r) => setImmediate(r));
+
+describe("motor de ordens", () => {
+  it("anda até ao gabinete escolhido e só depois começa a tarefa", async () => {
+    const reads = fakeHub(() => ({ steps: [{ tool: "Read", summary: "C:/v/Projetos/Planeamento.md", ok: true }] }));
+    const { engine, moves, hub } = setup({ office: "gestao", hub: reads });
+    const outcomes = await engine.run(
+      "mira",
+      "x",
+      sequence([
+        { kind: "move", agent: "mira", to: { kind: "mine" } },
+        { kind: "task", agent: "mira", task: "lê a nota Planeamento e propõe três passos" },
+      ]),
+    );
+    expect(moves).toEqual([{ agent: "mira", place: "gestao" }]);
+    expect(outcomes.map((o) => o.view.state)).toEqual(["done", "done"]);
+    expect(outcomes[0].view.detail).toContain("confirmado pela cena");
+    // A nota foi resolvida pelo servidor e o caminho vai na tarefa.
+    expect(hub.calls[0].text).toContain("Projetos/Planeamento.md");
+  });
+
+  it("sem gabinete escolhido pergunta qual é, guarda a resposta e continua", async () => {
+    const { engine, moves, out } = setup();
+    const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "mine" } }]));
+    await tick();
+    expect(engine.hasQuestion("mira")).toBe(true);
+    expect(out.some((m) => m.type === "reply" && m.text.includes("qual é o teu gabinete"))).toBe(true);
+    expect(engine.answer("mira", "é a sala de reuniões")).toBe(true);
+    const outcomes = await p;
+    expect(moves).toEqual([{ agent: "mira", place: "gestao" }]);
+    expect(outcomes[0].view.state).toBe("done");
+  });
+
+  it("sítio que não existe: pergunta, e uma resposta que não serve bloqueia com motivo", async () => {
+    const { engine, moves } = setup();
+    const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "unknown", text: "cozinha" } }]));
+    await tick();
+    // Uma resposta curta que não se percebe pede para repetir; "esquece" cancela.
+    expect(engine.answer("mira", "a coznha")).toBe(true);
+    expect(engine.hasQuestion("mira")).toBe(true);
+    expect(engine.answer("mira", "esquece")).toBe(true);
+    const [o] = await p;
+    expect(moves).toEqual([]);
+    expect(o.view.state).toBe("blocked");
+    expect(o.view.detail).toContain("«cozinha» não existe");
+  });
+
+  it("sem a app aberta, o movimento fica bloqueado e a tarefa seguinte não começa", async () => {
+    const { engine, hub } = setup({ office: "gestao", arrive: false });
+    const outcomes = await engine.run(
+      "mira",
+      "x",
+      sequence([
+        { kind: "move", agent: "mira", to: { kind: "mine" } },
+        { kind: "task", agent: "mira", task: "faz" },
+      ]),
+    );
+    expect(outcomes.map((o) => o.view.state)).toEqual(["blocked", "skipped"]);
+    expect(hub.calls).toEqual([]);
+    expect(summarize(outcomes)).toContain("✗");
+  });
+
+  it("abrir uma nota ambígua pergunta qual e abre a escolhida", async () => {
+    const { engine, opened, dir } = setup();
+    const p = engine.run("ceo", "x", sequence([{ kind: "open_note", note: "Reunião" }]));
+    await tick();
+    expect(engine.answer("ceo", "a do trabalho")).toBe(true);
+    const [o] = await p;
+    expect(opened).toEqual([join(dir, "Trabalho", "Reunião.md")]);
+    expect(o.view.state).toBe("done");
+    expect(o.view.detail).toContain("o Obsidian confirmou");
+  });
+
+  it("nota que não existe: bloqueia com o motivo", async () => {
+    const { engine, opened } = setup();
+    const [o] = await engine.run("ceo", "x", sequence([{ kind: "open_note", note: "Inexistente" }]));
+    expect(opened).toEqual([]);
+    expect(o.view.state).toBe("blocked");
+    expect(o.view.detail).toContain("não encontrei a nota");
+  });
+
+  it("confere a edição da nota em disco: frontmatter e conteúdo anterior", async () => {
+    let target = "";
+    const hub = fakeHub((_agent, text) => {
+      target = /caminho completo: (.+?)\)/.exec(text)?.[1] ?? "";
+      writeFileSync(target, `${readFileSync(target, "utf8")}\n## Próximos passos\n1. x\n`);
+      return { steps: [{ tool: "Edit", summary: target, file: target, ok: true }] };
+    });
+    const { engine } = setup({ hub });
+    const [o] = await engine.run("lena", "x", sequence([{ kind: "task", agent: "lena", task: "acrescenta os passos à nota Planeamento" }]));
+    expect(target).toMatch(/Planeamento\.md$/);
+    expect(o.view.state).toBe("done");
+    expect(o.view.detail).toContain("frontmatter intacto");
+    expect(o.view.detail).toContain("conteúdo anterior mantido");
+  });
+
+  it("escolher o gabinete no menu do topo responde à pergunta e a ordem continua", async () => {
+    const { engine, moves } = setup();
+    const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "mine" } }]));
+    await tick();
+    engine.officeChosen("rest");
+    const [o] = await p;
+    expect(moves).toEqual([{ agent: "mira", place: "rest" }]);
+    expect(o.view.state).toBe("done");
+  });
+
+  it("nova conversa cancela as perguntas da antiga", async () => {
+    const { engine, opened } = setup();
+    const p = engine.run("ceo", "x", sequence([{ kind: "open_note", note: "Reunião" }]));
+    await tick();
+    engine.cancel("ceo");
+    const [o] = await p;
+    expect(engine.hasQuestion("ceo")).toBe(false);
+    expect(engine.answer("ceo", "2")).toBe(false);
+    expect(opened).toEqual([]);
+    expect(o.view.state).toBe("blocked");
+  });
+
+  it("ler outra nota não conta como ler a pedida", async () => {
+    const hub = fakeHub(() => ({ steps: [{ tool: "Read", summary: "C:/vault/Projetos/Ideias.md", ok: true }] }));
+    const { engine } = setup({ hub });
+    const [o] = await engine.run("mira", "x", sequence([{ kind: "task", agent: "mira", task: "lê a nota Planeamento" }]));
+    expect(o.view.state).toBe("partial");
+    expect(o.view.detail).toContain("não há registo de ter lido Projetos/Planeamento.md");
+  });
+
+  it("quem anda primeiro recebe na mesma o resultado do colega de que depende", async () => {
+    const hub = fakeHub((agent) => ({ reply: agent === "mira" ? "achados da Mira" : "ok" }));
+    const { engine } = setup({ hub, office: "gestao" });
+    await engine.run(
+      "ceo",
+      "x",
+      planSteps(
+        parsePlan(
+          '{"summary":"s","tasks":[{"agent":"mira","task":"pesquisa"},{"agent":"lena","go":"o meu gabinete","task":"escreve","after":["mira"]}]}',
+          ["mira", "lena"],
+        )!,
+      ),
+      {
+        handoff: (task, deps) => `${task} | ${deps.map((d) => d.reply).join(",")}`,
+      },
+    );
+    expect(hub.calls.find((c) => c.agent === "lena")?.text).toContain("achados da Mira");
+  });
+
+  it("ações recusadas aparecem como ressalva (nunca como sucesso limpo)", async () => {
+    const hub = fakeHub(() => ({ steps: [{ tool: "Write", summary: "C:/fora/x.md", file: "C:/fora/x.md", ok: false }] }));
+    const { engine } = setup({ hub });
+    const [o] = await engine.run("lena", "x", sequence([{ kind: "task", agent: "lena", task: "escreve em C:/fora/x.md" }]));
+    expect(o.view.state).toBe("partial");
+    expect(o.view.detail).toContain("recusado");
+  });
+});
+
+describe("notas", () => {
+  it("resolve título, alias, link e caminho; ambíguo devolve opções", () => {
+    const dir = vault();
+    expect(resolveNote(dir, "Planeamento")).toMatchObject({ kind: "one", note: { path: "Projetos/Planeamento.md" } });
+    expect(resolveNote(dir, "plano do escritório")).toMatchObject({ kind: "one" });
+    expect(resolveNote(dir, "[[Projetos/Planeamento|plano]]")).toMatchObject({ kind: "one" });
+    expect(resolveNote(dir, "Trabalho/Reunião.md")).toMatchObject({ kind: "one", note: { path: "Trabalho/Reunião.md" } });
+    expect(resolveNote(dir, "Reunião")).toMatchObject({ kind: "many" });
+    expect(resolveNote(dir, "nada disto")).toMatchObject({ kind: "none" });
+  });
+
+  it("encontra a nota referida num pedido em texto livre", () => {
+    const dir = vault();
+    expect(findNoteMention(dir, "ler Planeamento e propor três próximos passos")).toMatchObject({ kind: "one" });
+    expect(findNoteMention(dir, "acrescenta esses passos à nota Planeamento")).toMatchObject({ kind: "one" });
+    expect(findNoteMention(dir, "procura vagas de analista")).toBeNull();
+  });
+
+  it("escolha numa lista: número, ordinal ou pasta", () => {
+    const options = [
+      { path: "Trabalho/Reunião.md", title: "Reunião", aliases: [] },
+      { path: "Pessoal/Reunião.md", title: "Reunião", aliases: [] },
+    ];
+    expect(pickOption("2", options)?.path).toBe("Pessoal/Reunião.md");
+    expect(pickOption("a primeira", options)?.path).toBe("Trabalho/Reunião.md");
+    expect(pickOption("a pessoal", options)?.path).toBe("Pessoal/Reunião.md");
+    expect(pickOption("tanto faz", options)).toBeUndefined();
+  });
+
+  it("checkNoteEdit apanha frontmatter alterado e linhas perdidas", () => {
+    expect(checkNoteEdit("---\na: 1\n---\nx\n", "---\na: 2\n---\nx\ny\n").ok).toBe(false);
+    expect(checkNoteEdit("x\ny\n", "x\nz\n").detail).toContain("desapareceram");
+    expect(checkNoteEdit("x\n", "x\ny\n")).toMatchObject({ ok: true });
+  });
+
+  it("vaultFor só aceita notas dentro de um vault registado no Obsidian", () => {
+    const dir = vault();
+    expect(vaultFor(join(dir, "Projetos", "Planeamento.md"), [dir])).toBeTruthy();
+    expect(vaultFor(join(dir, "Projetos", "Planeamento.md"), [join(dir, "Pessoal")])).toBeNull();
+  });
+});

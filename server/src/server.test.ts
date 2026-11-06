@@ -4,7 +4,7 @@ import { REAL_AGENTS } from "./agents.ts";
 import { createApprovals } from "./approvals.ts";
 import { parseLine } from "./events.ts";
 import { createHub, type HubLimits } from "./hub.ts";
-import { createOrchestrator, parsePlan, reportPrompt } from "./orchestrator.ts";
+import { createOrchestrator, noPlanReply, parsePlan, planSteps, reportPrompt } from "./orchestrator.ts";
 import { buildArgs, type RunHandlers, type RunRequest, type Runner } from "./runner.ts";
 import { openStore } from "./store.ts";
 
@@ -271,6 +271,35 @@ describe("parsePlan", () => {
     expect(parsePlan("sem json", allowed)).toBeNull();
     expect(parsePlan("{quebrado", allowed)).toBeNull();
   });
+  it("planos com movimento (go), nota (note) e abrir nota (open_note) viram passos encadeados", () => {
+    const plan = parsePlan(
+      '{"summary":"s","tasks":[{"agent":"mira","go":"o meu gabinete","task":"lê Planeamento e propõe 3 passos","note":"Planeamento"}]}',
+      allowed,
+    );
+    expect(plan?.tasks[0]).toMatchObject({ agent: "mira", go: "o meu gabinete", note: "Planeamento" });
+    expect(planSteps(plan!)).toEqual([
+      { id: "mira:go", kind: "move", agent: "mira", to: "o meu gabinete", after: [] },
+      { id: "mira", kind: "task", agent: "mira", task: "lê Planeamento e propõe 3 passos", note: "Planeamento", after: ["mira:go"] },
+    ]);
+    // Só andar (sem tarefa) e só abrir uma nota também são planos válidos.
+    const walk = parsePlan(
+      '{"summary":"s","tasks":[{"agent":"mira","go":"copa","task":""},{"agent":"lena","task":"x","after":["mira"]}]}',
+      allowed,
+    );
+    expect(planSteps(walk!).at(-1)).toMatchObject({ id: "lena", after: ["mira:go"] });
+    expect(planSteps(parsePlan('{"summary":"s","open_note":"Planeamento","tasks":[]}', allowed)!)).toEqual([
+      { id: "open", kind: "open_note", note: "Planeamento", after: [] },
+    ]);
+    expect(parsePlan('{"summary":"s","tasks":[{"agent":"mira","task":""}]}', allowed)).toBeNull();
+  });
+  it("noPlanReply nunca mostra JSON cru ao utilizador", () => {
+    expect(noPlanReply('{"summary":"Cada um volta ao gabinete.","tasks":[]}')).toBe("Cada um volta ao gabinete.");
+    expect(noPlanReply('```json\n{"summary":"ok","tasks":[]}\n```')).toBe("ok");
+    expect(noPlanReply('{"tasks":[{"agent":"x"}]}')).not.toContain("{");
+    expect(noPlanReply('{"summary":"x","tasks":[{"agent":"dean","task":"a"}]}')).toMatch(/plano válido/);
+    expect(noPlanReply("{quebrado")).not.toContain("{");
+    expect(noPlanReply("Isso não é trabalho para a equipa.")).toBe("Isso não é trabalho para a equipa.");
+  });
   it("rejeita tarefas enormes", () => {
     expect(parsePlan(`{"summary":"x","tasks":[{"agent":"mira","task":"${"a".repeat(1661)}"}]}`, allowed)).not.toBeNull();
     expect(parsePlan(`{"summary":"x","tasks":[{"agent":"mira","task":"${"a".repeat(4001)}"}]}`, allowed)).toBeNull();
@@ -287,8 +316,7 @@ describe("orchestrator", () => {
       text: '{"summary":"Plano","tasks":[{"agent":"mira","task":"pesquisa X"},{"agent":"scout","task":"vagas Y"}]}',
     });
     f.h("ceo").onEvent({ kind: "done", ok: true });
-    await Promise.resolve();
-    await Promise.resolve();
+    await new Promise((r) => setImmediate(r));
     expect(f.requests.map((r) => r.agent.id)).toEqual(["ceo", "mira", "scout"]);
     expect(f.requests[1].text).toBe("pesquisa X");
     expect(out.filter((m) => m.type === "delegate")).toEqual([
