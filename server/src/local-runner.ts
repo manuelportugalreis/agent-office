@@ -7,7 +7,6 @@ import { createInterface } from "node:readline";
 import type { AccessProfile } from "../../shared/protocol.ts";
 import { config } from "./config.ts";
 import { parseLine } from "./events.ts";
-import { localNotes } from "./instructions.ts";
 import { describeProfile, mcpCatalog, profileRoots } from "./profiles.ts";
 import type { PermissionAsk, RunHandle, RunHandlers, RunRequest } from "./runner.ts";
 
@@ -67,8 +66,9 @@ export function localRules(p: AccessProfile, vaultDir: string = config.vaultDir)
 }
 
 /** Ferramentas retiradas pelo perfil (terminal) e pelo modo só de leitura (escrita). */
+// Só de leitura também tira o terminal: com um comando dava para escrever ficheiros na mesma.
 const disallowed = (p: AccessProfile, readOnly = false): string[] => [
-  ...(p.bash ? [] : ["Bash", "PowerShell"]),
+  ...(p.bash && !readOnly ? [] : ["Bash", "PowerShell"]),
   ...(readOnly ? ["Write", "Edit", "MultiEdit", "NotebookEdit"] : []),
 ];
 
@@ -143,7 +143,7 @@ export function buildLocalArgs(
     "--model",
     req.agent.model,
     "--append-system-prompt",
-    [req.agent.localPrompt, localRules(p, vaultDir), localNotes(req.agent.id)].filter(Boolean).join("\n\n"),
+    `${req.agent.localPrompt} ${localRules(p, vaultDir)}`,
     req.resume ? "--resume" : "--session-id",
     req.sessionId,
   ];

@@ -378,7 +378,8 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
       async function runTask(s: ExecStep, before: readonly StepOutcome[], caveat = ""): Promise<StepOutcome> {
         const agent = s.agent ?? "";
         if (!findAgent(agent)) return done(s, { state: "blocked", detail: "agente desconhecido" });
-        const vault = deps.vaultDir();
+        // Sem acesso ao vault na ordem (perfil sem Obsidian), o servidor também não procura nem lê notas por ela.
+        const vault = opts.profile && opts.profile.vault === "none" ? "" : deps.vaultDir();
         let text = s.task ?? "";
         if (caveat) text += `\n\nAviso do servidor: ${caveat}. Confirma tu o que precisas desse passo antes de contares com ele.`;
         let note: { note: NoteRef; absolute: string } | null = null;
@@ -416,7 +417,8 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         // Regenerar: a primeira tarefa do dono da conversa começa sessão nova, com o histórico reconstruído.
         const fresh = opts.fresh && !freshUsed && agent === owner;
         if (fresh) freshUsed = true;
-        const result = await waitAndRun(hub, agent, fresh ? withHistory(opts.fresh?.history ?? "", prompt) : prompt, {
+        const stillWanted = (): boolean => (generations.get(owner) ?? 0) === generation;
+        const result = await waitAndRun(hub, agent, fresh ? withHistory(opts.fresh?.history ?? "", prompt) : prompt, stillWanted, {
           label: s.task ?? text,
           ...(fresh ? { fresh: true } : {}),
           ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
@@ -503,9 +505,19 @@ function labelOf(s: ExecStep): string {
 }
 
 /** Corre a tarefa quando o agente estiver livre (ex.: acabou de responder no chat) e houver vaga. */
-async function waitAndRun(hub: Hub, agent: string, text: string, opts: Parameters<Hub["run"]>[2]): Promise<RunResult> {
-  for (let waited = 0; (hub.isRunning(agent) || !hub.hasCapacity()) && waited < 10 * 60_000; waited += 500)
+async function waitAndRun(
+  hub: Hub,
+  agent: string,
+  text: string,
+  stillWanted: () => boolean,
+  opts: Parameters<Hub["run"]>[2],
+): Promise<RunResult> {
+  for (let waited = 0; (hub.isRunning(agent) || !hub.hasCapacity()) && waited < 10 * 60_000; waited += 500) {
+    if (!stillWanted()) break;
     await new Promise((r) => setTimeout(r, 500));
+  }
+  // A conversa foi recomeçada enquanto esperava a vez: a tarefa já não corre.
+  if (!stillWanted()) return { ok: false, reply: "", error: "a conversa foi recomeçada antes de esta tarefa começar" };
   return hub.run(agent, text, opts);
 }
 

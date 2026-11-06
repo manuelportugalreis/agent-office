@@ -91,3 +91,16 @@ Subagente: nenhum crítico; 2 altos/médios a corrigir antes de juntar. Codex: n
 - O resumo do Atlas não recebia as ressalvas das tarefas → recebe o estado verificado de todos os passos.
 - Ordens diretas que alteram ficheiros não tinham revisão da Nina → passam pela mesma revisão independente.
 - "Mostra-me a nota X" abria o Obsidian → só com "no Obsidian"; prefixos "que"/"para" já não cortam a tarefa.
+
+## Terceira ronda (sobre `fbe3027`: gabinetes e Instruções)
+
+Subagente: nenhum crítico/alto; 3 médios, 3 baixos. Codex: 1 alto, 4 médios. Corrigidos:
+
+- **Alto (Codex):** revisão só de leitura no modo local mantinha o terminal → só de leitura tira também Bash/PowerShell.
+- As tuas instruções estavam no `CLAUDE.md` que o próprio agente escreve (um texto lido na web podia passar por instrução tua) → passam para `_company/instrucoes/<agente>.md`, que os agentes só leem; vão em cada pedido (também nas conversas retomadas e no modo local). O `CLAUDE.md` fica como memória do agente, mostrada só para ler.
+- Regras da equipa cortadas por instruções longas → orçamento separado, regras da equipa primeiro.
+- Guardar reescrevia sempre as regras da equipa → só vão se mudaram; ficheiro temporário único.
+- Tarefa à espera de vaga corria depois de recomeçar a conversa → já não corre.
+- Perfil sem vault: o servidor ainda procurava/lia notas pela tarefa → deixa de o fazer.
+- Revisão final da Nina dispensada mesmo quando ela reviu antes de quem escreveu → só se dispensa se reviu, com sucesso, depois de todos os que alteraram ficheiros.
+- Gabinete guardado com o id antigo "gestao" → verificado: a base de dados real não tem nenhum guardado.

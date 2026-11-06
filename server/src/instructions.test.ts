@@ -1,37 +1,46 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Pasta temporária: nunca as pastas reais dos agentes.
 process.env.AGENT_OFFICE_WORKSPACES = mkdtempSync(join(tmpdir(), "office-ws-"));
 const { findAgent, officeMap } = await import("./agents.ts");
-const { InstructionsError, localNotes, MAX_INSTRUCTIONS, notesFile, readInstructions, saveInstructions, sharedFile } =
+const { InstructionsError, MAX_INSTRUCTIONS, memoryFile, notesFile, readInstructions, saveInstructions, sharedFile, userInstructions } =
   await import("./instructions.ts");
+const { WORKSPACES_DIR, workspaceDir } = await import("./workspace.ts");
 
 describe("instruções dos agentes", () => {
-  it("mostra o papel, o playbook e o gabinete, e o CLAUDE.md semeado", () => {
-    const lena = findAgent("lena")!;
-    const i = readInstructions(lena);
+  it("mostra o papel, o playbook, o gabinete e a memória do agente", () => {
+    const i = readInstructions(findAgent("lena")!);
     expect(i.role).toContain("És a Lena");
     expect(i.playbook).toContain("Concluído quando");
     expect(i.office).toContain("O teu gabinete é o gabinete de Candidaturas e Outreach");
-    expect(i.notes).toContain("# Lena");
-    expect(existsSync(i.file)).toBe(true);
+    expect(i.memory).toContain("# Lena");
+    expect(i.memoryFile).toBe(memoryFile("lena"));
   });
 
-  it("guarda as tuas instruções e as regras da equipa no disco", () => {
-    const saved = saveInstructions("lena", "Escreve sempre em tom formal.", "Nunca envies nada.");
+  it("as tuas instruções ficam fora da pasta do agente (ele não as pode escrever)", () => {
+    // O agente só escreve na pasta dele (fs-guard); as tuas instruções estão em _company, só de leitura para ele.
+    expect(notesFile("lena").startsWith(workspaceDir("lena"))).toBe(false);
+    expect(dirname(dirname(notesFile("lena")))).toBe(join(WORKSPACES_DIR, "_company"));
+  });
+
+  it("guarda as tuas instruções e, só se vierem, as regras da equipa; sem ficheiros temporários deixados", () => {
+    saveInstructions("lena", "Escreve sempre em tom formal.", "Nunca envies nada.");
     expect(readFileSync(notesFile("lena"), "utf8")).toBe("Escreve sempre em tom formal.");
     expect(readFileSync(sharedFile(), "utf8")).toBe("Nunca envies nada.");
-    expect(saved.notes).toBe("Escreve sempre em tom formal.");
-    expect(existsSync(`${notesFile("lena")}.tmp`)).toBe(false);
+    saveInstructions("lena", "Outra regra.");
+    expect(readFileSync(sharedFile(), "utf8")).toBe("Nunca envies nada.");
+    expect(readdirSync(dirname(notesFile("lena"))).some((f) => f.endsWith(".tmp"))).toBe(false);
+    expect(existsSync(memoryFile("lena"))).toBe(true);
   });
 
-  it("as sessões locais recebem as tuas instruções", () => {
-    saveInstructions("mira", "Cita sempre a fonte com data.");
-    expect(localNotes("mira")).toContain("Cita sempre a fonte com data.");
-    expect(localNotes("mira")).toContain("Regras do utilizador para toda a equipa");
+  it("vão em cada pedido: as regras da equipa nunca são cortadas por instruções longas", () => {
+    saveInstructions("mira", "x".repeat(MAX_INSTRUCTIONS), "Regra da equipa: cita sempre a fonte.");
+    const text = userInstructions("mira");
+    expect(text).toContain("Regra da equipa: cita sempre a fonte.");
+    expect(text).toContain("cortado");
   });
 
   it("recusa agentes que não existem e textos grandes demais", () => {

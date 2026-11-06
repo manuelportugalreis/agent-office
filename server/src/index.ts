@@ -18,7 +18,7 @@ import { log } from "./log.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { parsePlaceText } from "./intent.ts";
 import { createOrderEngine } from "./orders.ts";
-import { InstructionsError, readInstructions, saveInstructions } from "./instructions.ts";
+import { InstructionsError, readInstructions, saveInstructions, userInstructions } from "./instructions.ts";
 import { createSceneBridge } from "./scene-bridge.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
@@ -102,9 +102,11 @@ const hub = createHub({
   emit: broadcast,
   sessions: store,
   profileFor: profileOf,
+  // Vai junto de cada pedido (também nas conversas retomadas, que não releem o prompt de sistema):
+  // as tuas instruções para o agente, as regras da equipa e, para as disciplinas, as entregas do Canvas.
   context: (agentId) => {
     const course = findAgent(agentId)?.course;
-    return course ? canvasContext(store.canvas()?.items, course) : "";
+    return [userInstructions(agentId), course ? canvasContext(store.canvas()?.items, course) : ""].filter(Boolean).join("\n\n");
   },
   onComplete: (agentId, result) => {
     if (result.ok && result.reply && findAgent(agentId)?.needsApproval)

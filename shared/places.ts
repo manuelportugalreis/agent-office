@@ -73,7 +73,7 @@ export const ROOM_PLACES: readonly Place[] = [
     aliases: ["gabinete do atlas", "gabinete do ceo", "gabinete do chefe", "direcao"],
   },
   {
-    // O id antigo mantém-se ("o meu gabinete" escolhido antes continua a valer): agora é só a sala de reuniões.
+    // Id antigo da sala de Gestão inteira; desde a divisão é só a sala de reuniões (o gabinete do Atlas é "ceo-office").
     id: "gestao",
     name: "a sala de reuniões",
     aliases: [

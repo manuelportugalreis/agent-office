@@ -8,6 +8,7 @@ import { checkNoteEdit, createOrderEngine, pickOption, sequence, summarize, task
 import { parsePlan, planSteps } from "./orchestrator.ts";
 import { findAgent } from "./agents.ts";
 import { buildArgs } from "./runner.ts";
+import { buildLocalArgs } from "./local-runner.ts";
 import type { SceneBridge } from "./scene-bridge.ts";
 import { findNoteMention, openInObsidian, resolveNote, vaultFor } from "./vault.ts";
 
@@ -333,6 +334,42 @@ describe("evidência de tarefas", () => {
     expect(taskEvidence("Revê a alteração feita à nota", read, note, prior).state).toBe("done");
     expect(taskEvidence("acrescenta os passos à nota", read, note, prior).state).toBe("partial");
     expect(taskEvidence("acrescenta os passos à nota", read, note, prior, true).state).toBe("done");
+  });
+});
+
+describe("revisora só de leitura (modo local)", () => {
+  it("com um perfil com terminal, a corrida só de leitura fica sem Bash nem PowerShell", () => {
+    const profile = {
+      id: 1,
+      name: "p",
+      folder: tmpdir(),
+      readDirs: [],
+      writeDirs: [],
+      vault: "none" as const,
+      vaultFolders: [],
+      bash: true,
+      mcp: [],
+      autoEdits: false,
+    };
+    const nina = findAgent("nina")!;
+    const ro = buildLocalArgs({ agent: nina, text: "x", sessionId: "s", resume: false, profile, readOnly: true }, "");
+    expect(ro.args[ro.args.indexOf("--disallowedTools") + 1]).toContain("Bash");
+    const rw = buildLocalArgs({ agent: nina, text: "x", sessionId: "s", resume: false, profile }, "");
+    expect(rw.args.includes("--disallowedTools") ? rw.args[rw.args.indexOf("--disallowedTools") + 1] : "").not.toContain("Bash");
+  });
+
+  it("uma tarefa à espera de vaga não corre se a conversa for recomeçada", async () => {
+    const hub = fakeHub();
+    let busy = true;
+    hub.hasCapacity = () => !busy;
+    const { engine } = setup({ hub });
+    const p = engine.run("lena", "x", sequence([{ kind: "task", agent: "lena", task: "edita a nota" }]));
+    await tick();
+    engine.cancel("lena");
+    busy = false;
+    const [o] = await p;
+    expect(hub.calls).toEqual([]);
+    expect(o.view.state).toBe("blocked");
   });
 });
 

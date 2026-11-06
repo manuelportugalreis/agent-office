@@ -400,8 +400,12 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
       }
       // Se houve ficheiros ou notas alterados e a Nina não reviu depois disso, revê agora o resultado real
       // (também no modo escritório: notas do Obsidian editadas pela equipa).
-      const ninaAfter = plan.tasks.some((t) => t.agent === "nina" && t.after.length > 0);
-      const review = ninaAfter ? null : await independentReview(text, outcomes, profile);
+      // Só se dispensa a revisão final se a Nina já reviu, com sucesso, depois de todos os que alteraram ficheiros.
+      const ninaPlan = plan.tasks.find((t) => t.agent === "nina");
+      const writers = [...new Set(outcomes.filter((o) => o.agent !== "nina" && changedFiles(o.result.steps).length).map((o) => o.agent))];
+      const ninaReviewed =
+        !!ninaPlan && writers.every((w) => ninaPlan.after.includes(w)) && outcomes.some((o) => o.agent === "nina" && o.result.ok);
+      const review = ninaReviewed ? null : await independentReview(text, outcomes, profile);
       if (review) {
         outcomes.push(review);
         results.push(review.result);

@@ -297,8 +297,11 @@ export type ServerMsg =
       readonly office: string;
       readonly notes: string;
       readonly shared: string;
+      /** A memória do agente (o CLAUDE.md da pasta dele): escrita por ele, mostrada só para ler. */
+      readonly memory: string;
       readonly file: string;
       readonly sharedFile: string;
+      readonly memoryFile: string;
       readonly saved?: boolean;
     }
   /** Definições do escritório (o gabinete do utilizador; null = ainda não escolhido). */
