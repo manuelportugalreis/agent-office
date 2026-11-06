@@ -18,10 +18,15 @@ Everything runs **on your machine**, through the `claude` command-line tool and 
 
 - **A living office.** Isometric 3D scene (Three.js) with a day/night cycle. Characters with faces, hair and badges sit at their desks, wash their hands, play table tennis, chat in the corridor, hold meetings, hand a paper to a colleague when the CEO delegates, and wave when they need your approval. Only idle people wander; anyone with a real task stays at the desk.
 - **A cover letter you can trust.** Open a job-application dossier (📁 Dossier). Mira finds the original listing (or uses your link) and delivers a validated research brief: role, company, listing URL, date checked, mandatory vs desirable requirements, every fact tied to its source, and an explicit list of what could not be confirmed. If the vacancy is ambiguous or missing she asks you instead of guessing. Lena writes from that brief plus your shared profile and any facts you add, and keeps her questions out of the letter. Nina, an independent reviewer, checks the letter against the same research and evidence (an unsupported claim such as "led" where the profile says "contributed" blocks it, style tips don't), sends it back to Lena once with exact corrections, and only then does it reach your review tray. The folder travels across the office to each desk; click it, or the board in the Management room, to see where the facts came from, what Nina checked and which questions need your answer. Approve it or send it back to Lena with a note. The board in the Management room shows at a glance who has it and whether you need to act ("À tua espera"). Nothing is ever sent. It survives reloads and restarts.
+- **Orders in everyday Portuguese that actually happen.** "Mira, vai ao meu gabinete", "vai toda a gente para a sala de jogos", "os chefes à sala de reuniões", "cada um para o seu gabinete", "Abre a nota Planeamento no Obsidian", "Atlas, manda a Mira ao meu gabinete e, quando chegar, pede-lhe para ler Planeamento e propor três próximos passos". The server walks people there and waits for the scene to confirm arrival, opens the note in your desktop Obsidian and confirms it from Obsidian's own workspace, and runs the follow-up work only after the previous step. Each order shows its steps with evidence (✓ done, ~ with caveats, ✗ blocked and why). Notes are found by title, alias, `[[link]]` or path; if two match, it asks which one. Edits are checked on disk (frontmatter intact, previous content kept).
+- **Offices and roles.** Projects (Rhea, Mira), Job Search (Vera, Scout), Applications & Outreach (Nina, Lena, Theo), Master's (Dean, Ada, Turing), the CEO's own office and the chiefs' meeting room. Every agent knows where they sit and who they work with. Choose which room is "your office" with 📍.
+- **Instructions you control.** Each agent's **Instruções** tab shows their role, personality, playbook (method and definition of done) and office, and lets you write your own instructions for that agent and rules for the whole team. Only you can edit them; agents read them on every task.
+- **Notifications (🔔).** Everything that needs you in one place: questions from agents, permission requests (allow or deny right there), drafts to approve, blocked steps, the dossier waiting for you, and ideas from the team.
+- **Initiative.** Agents propose ideas on their own (every 30 min with the app open and the team idle, or at the end of any answer). Click **Avançar** and Atlas organises the team to do it; nothing happens without your yes.
 - **Walk around.** Press `W` (or the 🚶 button) to get your own avatar: arrow keys along the corridor, click the floor or a person to walk to their desk (their chat opens when you arrive), `F` toggles the follow camera.
 - **Chat that feels like Claude.** Streaming answers, Markdown, edit and regenerate the last message, stop, file attachments (`.md`, PDF, images, `.docx`), a new conversation at any time, `Ctrl+K` to jump to anyone and `@name` to hand a conversation to another agent.
 - **Real agents, not mock-ups.** Each one is a separate Claude Code process with its own system prompt, tools, folder and memory (`CLAUDE.md`).
-- **A CEO that delegates.** One order becomes a validated plan of up to three tasks, with dependencies: the writer waits for the researcher and receives her result. When the team finishes, the CEO summarises what was actually done.
+- **A CEO that delegates.** One order becomes a validated plan of up to three tasks (plus moves for the whole team), with dependencies: whoever has to walk somewhere starts only after arriving, and the writer waits for the researcher and receives her result. When the team finishes, the CEO summarises what was actually done.
 - **Human in the loop.** Drafts land in an approval queue. Nothing is ever sent without you. With `vaultDir` set and the folder `01 Candidaturas/00 Aprovações` present, approving a draft also saves it there as a note (`enviado: não`); the server never creates folders in your vault.
 - **Persistent.** Chats, logs, approvals and sessions survive restarts (SQLite).
 - **Read-only Canvas sync (optional).** One agent reads your LMS dashboard through your own Chrome, only when you click, and only on the one domain you configure.
@@ -127,27 +132,31 @@ Edit `server/workspaces/_company/perfil.md` (created on first run) to tell every
 | `Ctrl+K`                      | Search and jump to any agent                                     |
 | `@lena write the email`       | Hand the conversation to Lena, with the last answer as context   |
 | Type in the bar at the bottom | Give an order to the CEO: he plans, delegates and the team works |
+| "toda a gente para a copa"    | Move the whole team (or "os chefes", "o gabinete de Projetos")   |
+| 🔔 Notifications              | Answer questions, allow/deny, see blocks, accept or drop ideas   |
+| **Instruções** tab            | Read an agent's role and write your own instructions for them    |
+| 📍 O meu gabinete             | Choose which room is your office                                 |
 | Approvals button              | Review, copy, approve or reject drafts                           |
 | **+ New conversation**        | Start a fresh chat. The agent keeps its memory file              |
 | Drag the panel edge           | Make the chat wider                                              |
 
 ## The team
 
-| Agent  | Role                             | Web | Files | Model  |
-| ------ | -------------------------------- | :-: | :---: | ------ |
-| Atlas  | CEO: plans and delegates         |     |       | Opus   |
-| Rhea   | Head of research                 |  ✓  |   ✓   | Sonnet |
-| Mira   | Company and job analyst          |  ✓  |   ✓   | Sonnet |
-| Vera   | Head of job search               |  ✓  |   ✓   | Sonnet |
-| Scout  | Collects and scores jobs         |  ✓  |   ✓   | Sonnet |
-| Nina   | Head of applications, reviewer   |     |   ✓   | Sonnet |
-| Lena   | Writes cover letters and emails  |     |   ✓   | Sonnet |
-| Theo   | Prepares form answers            |     |   ✓   | Sonnet |
-| Dean   | Reads the Canvas dashboard       |     |       | Sonnet |
-| Ada    | Organises deliverables, course 1 |     |   ✓   | Sonnet |
-| Turing | Organises deliverables, course 2 |     |   ✓   | Sonnet |
+| Agent  | Role                               | Web | Files | Model  |
+| ------ | ---------------------------------- | :-: | :---: | ------ |
+| Atlas  | CEO: plans and delegates           |     |       | Opus   |
+| Rhea   | Head of projects                   |  ✓  |   ✓   | Sonnet |
+| Mira   | Analyst: verifies evidence         |  ✓  |   ✓   | Sonnet |
+| Vera   | Head of job search                 |  ✓  |   ✓   | Sonnet |
+| Scout  | Collects and scores jobs           |  ✓  |   ✓   | Sonnet |
+| Nina   | Head of applications, reviewer     |     |   ✓   | Sonnet |
+| Lena   | Creates and updates work, outreach |     |   ✓   | Sonnet |
+| Theo   | Prepares form answers              |     |   ✓   | Sonnet |
+| Dean   | Reads the Canvas dashboard         |     |       | Sonnet |
+| Ada    | Organises deliverables, course 1   |     |   ✓   | Sonnet |
+| Turing | Organises deliverables, course 2   |     |   ✓   | Sonnet |
 
-Nobody has a shell. Nobody can send email. See [docs/architecture.md](docs/architecture.md#adding-or-changing-an-agent) to change the team.
+In the default office mode nobody has a shell. In [local mode](docs/claude-code-local.md) each agent gets only the access you grant in its profile, shown in the app. Nobody can send email. See [docs/architecture.md](docs/architecture.md#adding-or-changing-an-agent) to change the team.
 
 ## Docker
 

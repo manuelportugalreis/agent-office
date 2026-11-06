@@ -18,10 +18,15 @@ Tudo corre **no teu computador**, através da ferramenta `claude` e do teu próp
 
 - **Um escritório vivo.** Cena 3D isométrica (Three.js) com ciclo dia/noite. As personagens (com rosto, cabelo e crachá) sentam-se, lavam as mãos, jogam ténis de mesa, conversam no corredor, fazem reuniões, entregam um papel a um colega quando o CEO delega e acenam quando precisam da tua aprovação. Só quem está livre passeia; quem tem uma tarefa real fica na secretária.
 - **Uma carta em que podes confiar.** Abre um dossier de candidatura (📁 Dossier). A Mira encontra o anúncio original (ou usa o teu link) e entrega um resumo de pesquisa validado: cargo, empresa, URL do anúncio, data em que o viu, requisitos obrigatórios e desejáveis, cada facto ligado à sua fonte e a lista do que não conseguiu confirmar. Se a vaga é ambígua ou não existe, pergunta-te em vez de adivinhar. A Lena escreve a partir desse resumo, do teu perfil partilhado e dos factos que acrescentares, e deixa as perguntas dela fora da carta. A Nina, revisora independente, verifica a carta contra a mesma pesquisa e a mesma evidência (uma afirmação sem sustento, como «liderei» onde o perfil diz «contribuí», bloqueia; sugestões de estilo não), devolve-a uma vez à Lena com correções exatas e só depois ela chega à tua bandeja. A pasta viaja pelo escritório; clica nela, ou no quadro da sala de Gestão, para ver de onde vêm os factos, o que a Nina verificou e que perguntas precisam da tua resposta. Aprova ou devolve à Lena com uma nota. O quadro da sala de Gestão mostra de relance quem a tem e se precisas de agir («À tua espera»). Nada é enviado. Sobrevive a recarregar a página e a reiniciar o servidor.
+- **Ordens do dia a dia que acontecem mesmo.** «Mira, vai ao meu gabinete», «vai toda a gente para a sala de jogos», «os chefes à sala de reuniões», «cada um para o seu gabinete», «Abre a nota Planeamento no Obsidian», «Atlas, manda a Mira ao meu gabinete e, quando chegar, pede-lhe para ler Planeamento e propor três próximos passos». O servidor leva as pessoas até lá e espera que a cena confirme a chegada, abre a nota no teu Obsidian e confirma-o pelo próprio Obsidian, e só faz o trabalho seguinte depois do passo anterior. Cada ordem mostra os passos com evidência (✓ feito, ~ com ressalvas, ✗ bloqueado e porquê). As notas encontram-se pelo título, alias, `[[link]]` ou caminho; se houver duas, pergunta qual. As edições são conferidas no disco (frontmatter intacto, conteúdo anterior mantido).
+- **Gabinetes e papéis.** Projetos (Rhea, Mira), Job Search (Vera, Scout), Candidaturas e Outreach (Nina, Lena, Theo), Mestrado (Dean, Ada, Turing), o gabinete do Atlas e a sala de reuniões dos chefes. Cada agente sabe onde trabalha e com quem. Escolhe qual é «o teu gabinete» em 📍.
+- **Instruções que controlas.** O separador **Instruções** de cada agente mostra o papel, a forma de ser, o playbook (método e definição de concluído) e o gabinete, e deixa-te escrever instruções tuas para esse agente e regras para toda a equipa. Só tu as editas; os agentes leem-nas em cada tarefa.
+- **Notificações (🔔).** Tudo o que precisa de ti num só sítio: perguntas dos agentes, pedidos de autorização (permites ou recusas ali mesmo), rascunhos para aprovar, passos bloqueados, o dossier à tua espera e as ideias da equipa.
+- **Iniciativa.** Os agentes propõem ideias por conta própria (a cada 30 min com a app aberta e a equipa livre, ou no fim de qualquer resposta). Carregas em **Avançar** e o Atlas organiza a equipa para a fazer; nada acontece sem o teu sim.
 - **Anda pelo escritório.** Carrega em `W` (ou no botão 🚶) para teres o teu avatar: setas ao longo do corredor, clica no chão ou numa pessoa para ires à secretária dela (a conversa abre quando chegas) e `F` liga ou desliga a câmara que te segue.
 - **Chat como o do Claude.** Respostas em streaming, Markdown, editar e regenerar a última mensagem, parar, anexos (`.md`, PDF, imagens, `.docx`), conversa nova quando quiseres, `Ctrl+K` para ir ter com qualquer um e `@nome` para passar a conversa a outro agente.
 - **Agentes a sério.** Cada um é um processo do Claude Code com prompt, ferramentas, pasta e memória (`CLAUDE.md`) próprios.
-- **Um CEO que delega.** Uma ordem vira um plano validado de até três tarefas, com dependências: quem escreve espera pela investigadora e recebe o resultado dela. No fim, o CEO resume o que a equipa fez de facto.
+- **Um CEO que delega.** Uma ordem vira um plano validado de até três tarefas (mais deslocações da equipa toda), com dependências: quem tem de ir a algum lado só começa quando chega, e quem escreve espera pela investigadora e recebe o resultado dela. No fim, o CEO resume o que a equipa fez de facto.
 - **Tu decides.** Os rascunhos vão para uma fila de aprovações. Nada é enviado sem ti. Com `vaultDir` definido e a pasta `01 Candidaturas/00 Aprovações` presente, aprovar um rascunho guarda-o também aí como nota (`enviado: não`); o servidor nunca cria pastas no teu vault.
 - **Persistente.** Conversas, registos, aprovações e sessões sobrevivem a reinícios (SQLite).
 - **Sincronização do Canvas, só de leitura (opcional).** Um agente lê o painel da tua plataforma de ensino pelo teu Chrome, só quando carregas, e só no único domínio que configurares.
@@ -96,17 +101,21 @@ Edita `server/workspaces/_company/perfil.md` (criado à primeira execução) par
 
 ## Usar
 
-| Faz isto                    | Para isto                                                     |
-| --------------------------- | ------------------------------------------------------------- |
-| Clicar numa pessoa          | Abrir o chat dela (e os separadores Resumo e Log)             |
-| `Ctrl+K`                    | Procurar e ir ter com qualquer agente                         |
-| `@lena escreve o email`     | Passar a conversa à Lena, com a última resposta como contexto |
-| Escrever na barra de baixo  | Dar uma ordem ao CEO: ele planeia, delega e a equipa trabalha |
-| Botão Aprovações            | Rever, copiar, aprovar ou rejeitar rascunhos                  |
-| **+ Nova conversa**         | Começar um chat novo. O agente mantém o ficheiro de memória   |
-| Arrastar a margem do painel | Alargar o chat                                                |
+| Faz isto                    | Para isto                                                      |
+| --------------------------- | -------------------------------------------------------------- |
+| Clicar numa pessoa          | Abrir o chat dela (e os separadores Resumo e Log)              |
+| `Ctrl+K`                    | Procurar e ir ter com qualquer agente                          |
+| `@lena escreve o email`     | Passar a conversa à Lena, com a última resposta como contexto  |
+| Escrever na barra de baixo  | Dar uma ordem ao CEO: ele planeia, delega e a equipa trabalha  |
+| «toda a gente para a copa»  | Mover a equipa toda (ou «os chefes», «o gabinete de Projetos») |
+| 🔔 Notificações             | Responder, permitir/recusar, ver bloqueios, avançar com ideias |
+| Separador **Instruções**    | Ver o papel de um agente e escrever instruções tuas para ele   |
+| 📍 O meu gabinete           | Escolher qual é o teu gabinete                                 |
+| Botão Aprovações            | Rever, copiar, aprovar ou rejeitar rascunhos                   |
+| **+ Nova conversa**         | Começar um chat novo. O agente mantém o ficheiro de memória    |
+| Arrastar a margem do painel | Alargar o chat                                                 |
 
-Ninguém tem terminal. Ninguém pode enviar email. Para mudar a equipa vê [docs/architecture.md](docs/architecture.md#adding-or-changing-an-agent).
+No modo escritório (o normal) ninguém tem terminal. No [modo local](docs/claude-code-local.md) cada agente só tem o acesso que lhe dás no perfil, e a app mostra-o. Ninguém pode enviar email. Para mudar a equipa vê [docs/architecture.md](docs/architecture.md#adding-or-changing-an-agent).
 
 ## Docker
 
