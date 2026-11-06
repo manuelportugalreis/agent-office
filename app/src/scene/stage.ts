@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { shortcutAllowed } from "../ui/keys";
 import { scene } from "./world";
 import { applyLighting, initLights, setShadowQuality, type TimeMode } from "./lighting";
-import { createPost, loadQuality, saveQuality, type Quality } from "./post";
+import { createPost, loadQuality, saveQuality, softwareRenderer, type Quality } from "./post";
 
 export type { TimeMode } from "./lighting";
 
@@ -58,8 +58,8 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.9;
-  // O eléctrico é recortado nas bordas da maqueta.
-  renderer.localClippingEnabled = true;
+  // Verificar erros de shader obriga a esperar por cada programa; só em desenvolvimento.
+  renderer.debug.checkShaderErrors = import.meta.env.DEV;
   container.prepend(renderer.domElement);
   const dom = renderer.domElement;
 
@@ -69,9 +69,11 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   let zoom = DEFAULT_ZOOM;
   let halfH = 12;
   let timeMode: TimeMode = "auto";
-  let quality: Quality = loadQuality();
-  initLights(quality);
+  const software = softwareRenderer(renderer);
+  let quality: Quality = loadQuality(software ? "normal" : "alta");
+  initLights(quality, software);
   const post = createPost(renderer, scene, cam, quality);
+
   let night = 0;
   let follow: (() => { x: number; z: number }) | null = null;
   let onFollowBreak: (() => void) | undefined;

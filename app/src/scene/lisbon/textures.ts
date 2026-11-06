@@ -15,20 +15,42 @@ function repeatTex(c: HTMLCanvasElement): THREE.CanvasTexture {
 }
 
 /** Desenha `draw` nas 9 posições à volta para a textura não ter emendas. */
-function wrapped(size: number, draw: (ox: number, oy: number) => void): void {
-  for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) draw(ox, oy);
+function wrapped(size: number, cx: number, cy: number, reach: number, draw: (ox: number, oy: number) => void): void {
+  // Só as cópias que tocam no canvas (a maioria das formas não atravessa nenhuma borda).
+  for (const ox of [-size, 0, size]) {
+    if (cx + ox + reach < 0 || cx + ox - reach > size) continue;
+    for (const oy of [-size, 0, size]) {
+      if (cy + oy + reach < 0 || cy + oy - reach > size) continue;
+      draw(ox, oy);
+    }
+  }
 }
 
+/**
+ * Grão fino: um ladrilho de ruído (pixéis brancos e pretos semitransparentes) pintado por cima como padrão. Criado com
+ * `createImageData` e um gerador congruencial, sem ler o canvas de volta da GPU (o `getImageData` custava ~0,5 s).
+ */
 function grain(g: Ctx, size: number, amount: number, seed: number): void {
-  const img = g.getImageData(0, 0, size, size);
+  const T = 256;
+  const tile = document.createElement("canvas");
+  tile.width = tile.height = T;
+  const tg = tile.getContext("2d");
+  if (!tg) return;
+  const img = tg.createImageData(T, T);
   const d = img.data;
+  let state = (seed * 2654435761) >>> 0 || 1;
   for (let i = 0; i < d.length; i += 4) {
-    const n = (rnd(i * 0.37 + seed) - 0.5) * amount;
-    d[i] += n;
-    d[i + 1] += n;
-    d[i + 2] += n;
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    const n = (state / 4294967296 - 0.5) * amount * 2;
+    const v = n > 0 ? 255 : 0;
+    d[i] = d[i + 1] = d[i + 2] = v;
+    d[i + 3] = Math.min(255, Math.abs(n));
   }
-  g.putImageData(img, 0, 0);
+  tg.putImageData(img, 0, 0);
+  const pattern = g.createPattern(tile, "repeat");
+  if (!pattern) return;
+  g.fillStyle = pattern;
+  g.fillRect(0, 0, size, size);
 }
 
 let plaster: THREE.CanvasTexture | null = null;
@@ -45,7 +67,7 @@ export function plasterTexture(): THREE.CanvasTexture {
     const y = rnd(i + 301) * S;
     const r = 18 + rnd(i + 701) * 110;
     const dark = rnd(i + 907) > 0.45;
-    wrapped(S, (ox, oy) => {
+    wrapped(S, x, y, r, (ox, oy) => {
       const grad = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
       grad.addColorStop(0, dark ? "rgba(96,84,70,0.035)" : "rgba(255,255,255,0.06)");
       grad.addColorStop(1, "rgba(0,0,0,0)");
@@ -91,7 +113,7 @@ export function roofTileTexture(): THREE.CanvasTexture {
       const x = k * tw + (r % 2) * (tw / 2);
       const y = r * th;
       const tone = tones[Math.floor(rnd(r * 31 + k * 7) * tones.length)];
-      wrapped(S, (ox, oy) => {
+      wrapped(S, x + tw / 2, y + th / 2, tw + th, (ox, oy) => {
         const grad = g.createLinearGradient(x + ox, 0, x + ox + tw, 0);
         grad.addColorStop(0, "rgba(40,18,10,0.55)");
         grad.addColorStop(0.35, "rgba(255,230,200,0.12)");
@@ -329,7 +351,7 @@ export function gardenTexture(): THREE.CanvasTexture {
     const x = rnd(i + 5) * S;
     const y = rnd(i + 55) * S;
     const r = 8 + rnd(i + 99) * 30;
-    wrapped(S, (ox, oy) => {
+    wrapped(S, x, y, r, (ox, oy) => {
       g.fillStyle = rnd(i * 3) > 0.6 ? "rgba(120,96,64,0.35)" : "rgba(150,170,90,0.3)";
       g.beginPath();
       g.arc(x + ox, y + oy, r, 0, Math.PI * 2);

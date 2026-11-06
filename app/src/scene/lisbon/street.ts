@@ -48,33 +48,22 @@ function surfacesAndCurbs(b: Batch): void {
   // Chão dos quarteirões (logradouros) por baixo e à volta dos prédios.
   slab(b, GARDEN(), WORLD.x0, EAST.walk0, WORLD.z0, SOUTH.walk0, 0.08, 0.58, 6);
   slab(b, GARDEN(), EAST.walk1, WORLD.x1, WORLD.z0, SOUTH.walk0, 0.08, 0.58, 6);
-  // Base da maqueta: terra e pedra cortadas.
-  b.box(
-    plasterMat("#5f5143"),
-    WORLD.x1 - WORLD.x0,
-    2.6,
-    WORLD.z1 - WORLD.z0,
-    (WORLD.x0 + WORLD.x1) / 2,
-    BASE_Y - 0.5 - 1.3,
-    (WORLD.z0 + WORLD.z1) / 2,
-    {
-      tile: 4,
-      cast: false,
-    },
-  );
-  b.box(
-    stoneMat("#8f857a"),
-    WORLD.x1 - WORLD.x0 + 0.06,
-    0.12,
-    WORLD.z1 - WORLD.z0 + 0.06,
-    (WORLD.x0 + WORLD.x1) / 2,
-    BASE_Y - 0.56,
-    (WORLD.z0 + WORLD.z1) / 2,
-    {
-      tile: 4,
-      cast: false,
-    },
-  );
+  // Base da maqueta: terra e pedra cortadas (só as quatro paredes: o topo fica sempre tapado pelo chão).
+  const earth = plasterMat("#5f5143");
+  const W = WORLD.x1 - WORLD.x0;
+  const D = WORLD.z1 - WORLD.z0;
+  const cx = (WORLD.x0 + WORLD.x1) / 2;
+  const cz = (WORLD.z0 + WORLD.z1) / 2;
+  const by = BASE_Y - 0.5 - 1.3;
+  for (const [x, z, w, d] of [
+    [cx, WORLD.z0 + 0.1, W, 0.2],
+    [cx, WORLD.z1 - 0.1, W, 0.2],
+    [WORLD.x0 + 0.1, cz, 0.2, D],
+    [WORLD.x1 - 0.1, cz, 0.2, D],
+  ] as const) {
+    b.box(earth, w, 2.6, d, x, by, z, { tile: 4, cast: false });
+    b.box(stoneMat("#8f857a"), w + 0.06, 0.12, d + 0.06, x, BASE_Y - 0.56, z, { tile: 4, cast: false });
+  }
 
   // Lancis de granito.
   const curb = stoneMat(GRANITE);

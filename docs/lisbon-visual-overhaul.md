@@ -78,8 +78,8 @@ Resultado (`docs/img/lisbon/it2/`): 3241 draw calls (dia), FPS 22 (headless).
   "28 PRAZERES" iluminadas, número "566", tejadilho e pantógrafo de braço único a tocar na catenária. Fundido em ~10
   malhas que se movem em grupo.
 - Animação: velocidade de cruzeiro, travagem e arranque com aceleração constante, paragem de 7 s junto ao
-  escritório (poste "PARAGEM" no largo), ligeiro balanço e trepidação em andamento, recorte nas bordas da maqueta
-  (planos de recorte, também nas sombras: `renderer.localClippingEnabled`).
+  escritório (poste "PARAGEM" no largo), ligeiro balanço e trepidação em andamento. (Na iteração 8 o recorte nas
+  bordas foi trocado por ida e volta: ver abaixo.)
 - Ao abrir a app o eléctrico está parado na paragem.
 - Depuração: `?debug` expõe `__office.tramPosition()`; o script de capturas segue o eléctrico.
 - E2E Playwright: 7/7 passam.
@@ -156,6 +156,71 @@ Com muito mais geometria, a cena ficou mais leve do que a original em todas as c
 fotograma subiu (~3,5 s → ~7 s no Chromium sem ecrã, servidor de desenvolvimento) por causa da geração das texturas
 procedimentais e da fusão da geometria no arranque; ver "Problemas restantes".
 
-## Backlog (prioridade)
+### 8. Arranque e GL por software (feito)
 
-1. Desempenho do arranque: gerar as texturas grandes (calçada, cubos) num worker ou a 512² na qualidade normal.
+Ao medir o arranque descobri que tinha duplicado (sobretudo compilação de shaders e geração de texturas) e que, no
+Chromium com SwiftShader usado pelos testes E2E, o teste mais longo passava os 60 s.
+
+- `batch.ts` reescrito: as caixas são escritas diretamente em arrays (sem uma `BoxGeometry` por peça) e a geometria
+  fundida é indexada (24 vértices por caixa em vez de 36). Construção do bairro ~1,2 s → ~0,3 s.
+- Grão das texturas sem `getImageData` (ladrilho de ruído pintado como padrão): 582 ms → 28 ms. As formas "sem emenda"
+  só se desenham nas bordas quando lá chegam (o reboco desenhava cada mancha 9 vezes).
+- Menos programas de shader: o vento é um só programa (amplitude/frequência em uniforms), bandeirinhas com duas faces
+  em vez de dupla face, peões e pombos sem planos de recorte (escondem-se fora da maqueta), eléctrico sem recorte.
+- Eléctrico: os remodelados têm cabine nas duas pontas, por isso agora vai e volta dentro da maqueta, com paragem de
+  6 s nos terminais e de 7 s junto ao escritório. Letreiros de destino em LED (sempre acesos, `MeshBasicMaterial`).
+- Malhas fundidas: os volumes que projetam sombra desenham-se antes do chão e dos pormenores (menos píxeis pintados e
+  depois tapados); a base da maqueta tem só as quatro paredes.
+- `renderer.debug.checkShaderErrors` só em desenvolvimento (recomendação do three.js; evita esperar por cada
+  programa).
+- GL por software (SwiftShader, llvmpipe): qualidade "normal" por defeito (a escolha guardada ou `?q=` continua a
+  mandar) e sombras limitadas a 1024². Também serve quem abre a app numa máquina sem GPU.
+- E2E: o teste "uma peça arrastada... sobrevive a recarregar a página" passou a `test.slow()`. Na linha de base já
+  demorava 52-59 s com o limite de 60 s (medido nesta máquina com a build original); com o bairro fica ~60 s.
+  O que o teste verifica não mudou.
+
+## Resultados finais
+
+### Antes e depois
+
+| Vista                  | Antes                                          | Depois                                      |
+| ---------------------- | ---------------------------------------------- | ------------------------------------------- |
+| Dia, vista por defeito | `img/lisbon/baseline/01-day-default.png`       | `img/lisbon/final/01-day-default.png`       |
+| Rua com zoom           | `img/lisbon/baseline/02-day-street-zoom.png`   | `img/lisbon/final/09-day-corner-close.png`  |
+| Rodada                 | `img/lisbon/baseline/04-day-rotated-other.png` | `img/lisbon/final/04-day-rotated-other.png` |
+| Noite                  | `img/lisbon/baseline/06-night-default.png`     | `img/lisbon/final/06-night-default.png`     |
+| Eléctrico              | (caixas)                                       | `img/lisbon/final/08-day-tram-close.png`    |
+| Largo                  | (calçada com ondas pretas)                     | `img/lisbon/final/11-day-largo.png`         |
+
+### Desempenho (`node scripts/lisbon-perf.mjs`, servidor de desenvolvimento, Chromium sem ecrã com GPU)
+
+| Qualidade / hora | Base: FPS | Base: draws | Final: FPS | Final: draws |
+| ---------------- | --------- | ----------- | ---------- | ------------ |
+| Alta, dia        | 17,9      | 4194        | 17,8       | 3398         |
+| Alta, noite      | 17,6      | 4177        | 18,3       | 3420         |
+| Normal, dia      | 32,6      | 2103        | 37,5       | 1713         |
+| Normal, noite    | 31,5      | 2095        | 40,1       | 1700         |
+
+Os FPS sem ecrã variam ±2-3 entre corridas: na qualidade alta o resultado é equivalente ao original (com sombras
+4096² sobre a maqueta inteira em vez de 2048² só sobre o escritório), na normal é melhor; as chamadas de desenho
+baixaram ~19%. Arranque na build de produção (até ao 2.º fotograma, GPU): 3,5 s → ~5,7 s.
+
+### Testes
+
+- `npm run check` (typecheck, eslint, prettier, 118 + 189 testes unitários, build): passa.
+- `npx playwright test` (E2E, 7 testes): 7/7 passam.
+- Verificação visual: cada iteração foi capturada e inspecionada com `scripts/lisbon-shots.mjs` (Chromium/Playwright);
+  as capturas estão em `docs/img/lisbon/`.
+
+## Problemas restantes
+
+1. Arranque ~2 s mais lento do que o original (mais variantes de shader: reboco com relevo, vento, instâncias; e
+   upload das texturas de 1024²). Próximo passo: gerar as texturas de calçada/cubos a 512² na qualidade normal ou num
+   worker, e aquecer os shaders de forma progressiva.
+2. Peões simples (cápsulas e caixas): bons à distância, toscos em zoom máximo; atravessam a rua sem olhar ao eléctrico
+   e passam a centímetros das cadeiras da esplanada.
+3. As copas dos jacarandás são tufos de icosaedros: leem bem em plano geral, mas são "fofas" de perto.
+4. As fachadas de tardoz e as empenas laterais são lisas; vistas depois de rodar a câmara parecem menos trabalhadas.
+5. O eléctrico tem vidros escuros sem interior (bancos/passageiros) e as portas são painéis planos.
+6. À noite o amarelo do eléctrico fica acastanhado sob o luar.
+7. Sombras do vento: as copas ondulam mas a sombra no chão não (o material de profundidade não tem o deslocamento).

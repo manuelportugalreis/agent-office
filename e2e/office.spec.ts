@@ -71,6 +71,9 @@ test.describe("modo mobília", () => {
   });
 
   test("uma peça arrastada fica no sítio novo e sobrevive a recarregar a página", async ({ page }) => {
+    // Sem GPU (SwiftShader) cada imagem da cena demora vários segundos e este teste arrasta e recarrega a página:
+    // já andava nos 52-59 s com o limite de 60 s, e o bairro de Lisboa tornou-o ~15% mais pesado.
+    test.slow();
     await page.locator("#editBtn").click({ force: true });
     await dragPiece(page, PIECE, FREE);
     await expect(page.locator("#editInfo")).toContainText("Impressora");

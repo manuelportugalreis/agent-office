@@ -6,8 +6,8 @@ import { signTexture } from "./textures";
 
 /**
  * O eléctrico "remodelado" da carreira 28: carroçaria amarela de cantos arredondados, faixa creme, janelas com pilares,
- * portas do lado do passeio, pantógrafo encostado à catenária e letreiros "28 PRAZERES". Atravessa a maqueta (é
- * recortado nas bordas), abranda e para uns segundos junto ao escritório, e balança ligeiramente em andamento.
+ * portas do lado do passeio, pantógrafo encostado à catenária e letreiros "28 PRAZERES". Vai e volta ao longo da rua
+ * (cabine nas duas pontas), para uns segundos junto ao escritório e nos terminais, e balança ligeiramente em andamento.
  */
 
 const L = 8.2;
@@ -19,14 +19,13 @@ const CRUISE = 3.2;
 const ACCEL = 0.9;
 const STOP_X = 7.5;
 const DWELL = 7;
-const START_X = WORLD.x0 - L;
-const END_X = WORLD.x1 + L;
-
-/** Recorte nas bordas da maqueta: o eléctrico entra e sai pelo "corte" do terreno. */
-const CLIP = [new THREE.Plane(new THREE.Vector3(1, 0, 0), -WORLD.x0), new THREE.Plane(new THREE.Vector3(-1, 0, 0), WORLD.x1)];
+/** Terminais nas pontas da maqueta: o remodelado tem cabine nas duas pontas e faz o caminho de volta. */
+const WEST_END = WORLD.x0 + L / 2 + 1.5;
+const EAST_END = WORLD.x1 - L / 2 - 1.5;
+const END_DWELL = 6;
 
 function tramMat(color: number, opts: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.45, ...opts, clippingPlanes: CLIP, clipShadows: true });
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.45, ...opts });
 }
 
 /** Planta de cantos arredondados extrudida para cima (de y = 0 a h). */
@@ -58,15 +57,10 @@ function plan(len: number, wid: number, r: number, h: number, bevel = 0): THREE.
   return g;
 }
 
-function destination(text: string): THREE.MeshStandardMaterial {
+/** Letreiro de LED (sempre aceso, de dia e de noite): material sem luz, que partilha o shader das poças de luz. */
+function destination(text: string): THREE.MeshBasicMaterial {
   const short = text.length < 4;
-  const m = tramMat(0xffffff, {
-    map: signTexture(text, "#151515", "#ffb43a", short ? 160 : 512, short ? 112 : 96),
-    emissive: 0xffa040,
-    roughness: 0.4,
-  });
-  m.emissiveMap = m.map;
-  return glowAtNight(m, 1.4);
+  return new THREE.MeshBasicMaterial({ map: signTexture(text, "#151515", "#ffb43a", short ? 160 : 512, short ? 112 : 96) });
 }
 
 function body(b: Batch): void {
@@ -163,7 +157,7 @@ export interface Tram {
 
 export function buildTram(parent: THREE.Object3D): Tram {
   const g = new THREE.Group();
-  g.position.set(START_X, BASE_Y, TRAM_Z);
+  g.position.set(STOP_X, BASE_Y, TRAM_Z);
   parent.add(g);
   const b = new Batch();
   body(b);
@@ -171,36 +165,36 @@ export function buildTram(parent: THREE.Object3D): Tram {
   b.build(g);
   stopPost(parent);
 
-  // Ao abrir a app o eléctrico está parado na paragem, em frente ao escritório.
+  // Ao abrir a app o eléctrico está parado na paragem, em frente ao escritório, a caminho de nascente.
   let x = STOP_X;
   let v = 0;
+  let dir = 1;
   let wait = DWELL + 8;
-  let served = true;
+  let target = EAST_END;
   let t = 0;
+  const nextStop = (): number => {
+    const ahead = [STOP_X, dir > 0 ? EAST_END : WEST_END].filter((s) => (s - x) * dir > 0.01);
+    return ahead.sort((a, b) => (a - b) * dir)[0] ?? (dir > 0 ? EAST_END : WEST_END);
+  };
   return {
     position: () => ({ x, z: TRAM_Z }),
     update(dt) {
       t += dt;
       if (wait > 0) {
         wait -= dt;
-        if (wait <= 0 && x >= END_X) {
-          x = START_X;
-          served = false;
-          v = CRUISE;
+        if (wait <= 0) {
+          if (x === EAST_END || x === WEST_END) dir = -dir;
+          target = nextStop();
         }
       } else {
-        const toStop = STOP_X - x;
-        const braking = !served && toStop > 0 && toStop < (v * v) / (2 * ACCEL) + 0.05;
-        if (braking) v = Math.max(0.25, v - ACCEL * dt);
-        else v = Math.min(CRUISE, v + ACCEL * dt);
-        x += v * dt;
-        if (!served && x >= STOP_X) {
-          x = STOP_X;
+        const dist = (target - x) * dir;
+        const braking = dist < (v * v) / (2 * ACCEL) + 0.05;
+        v = braking ? Math.max(0.25, v - ACCEL * dt) : Math.min(CRUISE, v + ACCEL * dt);
+        x += dir * v * dt;
+        if ((target - x) * dir <= 0) {
+          x = target;
           v = 0;
-          served = true;
-          wait = DWELL;
-        } else if (x >= END_X) {
-          wait = 5;
+          wait = target === STOP_X ? DWELL : END_DWELL;
         }
       }
       const moving = wait > 0 ? 0 : v / CRUISE;

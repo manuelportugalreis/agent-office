@@ -176,7 +176,7 @@ export const clothes: THREE.MeshStandardMaterial[] = [];
 
 export const clothMat = (color: string): THREE.MeshStandardMaterial =>
   cached(`cloth${color}`, () => {
-    const m = new THREE.MeshStandardMaterial({ color, roughness: 1, side: THREE.DoubleSide });
+    const m = new THREE.MeshStandardMaterial({ color, roughness: 1 });
     clothes.push(m);
     return m;
   });

@@ -11,13 +11,22 @@ export type Quality = "normal" | "alta";
 
 const STORAGE_KEY = "agent-office-quality";
 
-export function loadQuality(): Quality {
+/** A escolha guardada (ou `?q=`); sem escolha, `fallback` (a "alta", ou a "normal" se o WebGL for por software). */
+export function loadQuality(fallback: Quality = "alta"): Quality {
   try {
     const v = new URLSearchParams(location.search).get("q") ?? localStorage.getItem(STORAGE_KEY);
-    return v === "normal" ? "normal" : "alta";
+    return v === "normal" || v === "alta" ? v : fallback;
   } catch {
-    return "alta";
+    return fallback;
   }
+}
+
+/** O WebGL corre no processador (SwiftShader, llvmpipe...)? Aí a qualidade alta torna a app lenta. */
+export function softwareRenderer(renderer: THREE.WebGLRenderer): boolean {
+  const gl = renderer.getContext();
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const name = String(info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
 }
 
 export function saveQuality(q: Quality): void {

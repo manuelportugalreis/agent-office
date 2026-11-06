@@ -13,21 +13,29 @@ import { clothes } from "./materials";
 const WALK_Y = 0.16;
 const time = { value: 0 };
 
-/** Ondulação pelo vento no vertex shader (as malhas fundidas têm as posições em coordenadas do mundo). */
-function windy(m: THREE.Material, kind: string, amp: number, freq: number, fromY: number | null): void {
+const WIND_VERTEX = `#include <begin_vertex>
+  float sway = clamp((position.y - uWindFrom) / 2.5, 0.0, 1.0);
+  float ph = position.x * 0.37 + position.z * 0.23;
+  transformed.x += sin(uWind * uWindFreq + ph) * uWindAmp * sway;
+  transformed.z += cos(uWind * uWindFreq * 0.83 + ph * 1.3) * uWindAmp * 0.8 * sway;`;
+
+const WIND_UNIFORMS =
+  "#include <common>\nuniform float uWind;\nuniform float uWindAmp;\nuniform float uWindFreq;\nuniform float uWindFrom;";
+
+/**
+ * Ondulação pelo vento no vertex shader (as malhas fundidas têm as posições em coordenadas do mundo). O código é igual
+ * para todos os materiais (amplitude, frequência e altura de início são uniforms), por isso compila um só programa.
+ * `fromY` null: tudo ondula por igual.
+ */
+function windy(m: THREE.Material, amp: number, freq: number, fromY: number | null): void {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uWind = time;
-    const sway = fromY === null ? "1.0" : `clamp((position.y - (${fromY.toFixed(2)})) / 2.5, 0.0, 1.0)`;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform float uWind;").replace(
-      "#include <begin_vertex>",
-      `#include <begin_vertex>
-      float sway = ${sway};
-      float ph = position.x * 0.37 + position.z * 0.23;
-      transformed.x += sin(uWind * ${freq.toFixed(2)} + ph) * ${amp.toFixed(3)} * sway;
-      transformed.z += cos(uWind * ${(freq * 0.83).toFixed(2)} + ph * 1.3) * ${(amp * 0.8).toFixed(3)} * sway;`,
-    );
+    shader.uniforms.uWindAmp = { value: amp };
+    shader.uniforms.uWindFreq = { value: freq };
+    shader.uniforms.uWindFrom = { value: fromY ?? -1e4 };
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", WIND_UNIFORMS).replace("#include <begin_vertex>", WIND_VERTEX);
   };
-  m.customProgramCacheKey = () => `wind-${kind}`;
+  m.customProgramCacheKey = () => "lisbon-wind";
 }
 
 // ---------- peões ----------
@@ -54,15 +62,8 @@ const TOPS = ["#f2efe8", "#2f3d52", "#b8463b", "#6e8b6a", "#d9b25a", "#3d3a38", 
 const BOTTOMS = ["#2c3340", "#3d3a38", "#6b5b4a", "#d8d2c4", "#20232a", "#4a5a6e"];
 const HAIR = ["#2a211b", "#5a3d26", "#14110f", "#a07850", "#c9c3b8"];
 
-const CLIP = [
-  new THREE.Plane(new THREE.Vector3(1, 0, 0), -WORLD.x0),
-  new THREE.Plane(new THREE.Vector3(-1, 0, 0), WORLD.x1),
-  new THREE.Plane(new THREE.Vector3(0, 0, 1), -WORLD.z0),
-  new THREE.Plane(new THREE.Vector3(0, 0, -1), WORLD.z1),
-];
-
 function part(geo: THREE.BufferGeometry, count: number, parent: THREE.Object3D): THREE.InstancedMesh {
-  const m = new THREE.MeshStandardMaterial({ roughness: 0.85, clippingPlanes: CLIP, clipShadows: true });
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.85 });
   const mesh = new THREE.InstancedMesh(geo, m, count);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -188,6 +189,10 @@ function buildCrowd(parent: THREE.Object3D): Crowd {
         }
         const y = BASE_Y + (onRoad(wk.x, wk.z) ? 0 : WALK_Y) + (wk.seated ? -0.36 : Math.abs(Math.sin(wk.phase)) * 0.03);
         base.makeRotationY(wk.heading).setPosition(wk.x, y, wk.z);
+        // Fora da maqueta (o percurso continua um pouco para lá do corte), a figura não se desenha.
+        const margin = 0.3;
+        if (wk.x < WORLD.x0 + margin || wk.x > WORLD.x1 - margin || wk.z < WORLD.z0 + margin || wk.z > WORLD.z1 - margin)
+          base.makeScale(0, 0, 0);
         const swing = wk.seated ? 0 : Math.sin(wk.phase) * 0.45;
         place(torso, i, 0, 1.17, 0);
         const nod = wk.seated ? Math.sin(wk.phase * 0.7) * 0.03 : 0;
@@ -216,9 +221,14 @@ function buildPigeons(parent: THREE.Object3D): Crowd {
   const N = 9;
   const bodyGeo = new THREE.SphereGeometry(0.11, 10, 8).scale(1, 0.8, 1.6);
   const headGeo = new THREE.SphereGeometry(0.055, 8, 6);
-  const mat = (c: number): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 });
-  const body = new THREE.InstancedMesh(bodyGeo, mat(0x8a8d94), N);
-  const head = new THREE.InstancedMesh(headGeo, mat(0x5d6470), N);
+  // Cor por instância (como os peões): partilham o mesmo programa de shader.
+  const body = new THREE.InstancedMesh(bodyGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), N);
+  const head = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ roughness: 0.9 }), N);
+  const tone = new THREE.Color();
+  for (let i = 0; i < N; i++) {
+    body.setColorAt(i, tone.set(i % 4 === 0 ? 0x9a8f86 : 0x8a8d94));
+    head.setColorAt(i, tone.set(0x5d6470));
+  }
   for (const m of [body, head]) {
     m.castShadow = true;
     m.frustumCulled = false;
@@ -264,10 +274,10 @@ export interface Life {
 }
 
 export function buildLife(parent: THREE.Object3D): Life {
-  for (const m of canopyMaterials) windy(m, "canopy", 0.07, 1.25, BASE_Y + 2.6);
-  for (const m of FLAG_COLORS) windy(m, "flag", 0.045, 3.1, null);
-  for (const m of BALLOONS) windy(m, "balloon", 0.05, 1.7, null);
-  for (const m of clothes) windy(m, "cloth", 0.035, 2.4, null);
+  for (const m of canopyMaterials) windy(m, 0.07, 1.25, BASE_Y + 2.6);
+  for (const m of FLAG_COLORS) windy(m, 0.045, 3.1, null);
+  for (const m of BALLOONS) windy(m, 0.05, 1.7, null);
+  for (const m of clothes) windy(m, 0.035, 2.4, null);
   const crowd = buildCrowd(parent);
   const pigeons = buildPigeons(parent);
   return {

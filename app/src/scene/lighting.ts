@@ -42,7 +42,11 @@ const tmpColor = new THREE.Color();
 const background = new THREE.Color();
 const tmpDir = new THREE.Vector3();
 
-export function initLights(q: Quality): void {
+/** Sem GPU (WebGL por software) as sombras ficam em 1024², seja qual for a qualidade. */
+let softwareCap = Infinity;
+
+export function initLights(q: Quality, software = false): void {
+  softwareCap = software ? 1024 : Infinity;
   sun.castShadow = true;
   setShadowQuality(q);
   const cam = sun.shadow.camera;
@@ -58,7 +62,7 @@ export function initLights(q: Quality): void {
 
 /** Resolução do mapa de sombras conforme a qualidade (o mapa é recriado no fotograma seguinte). */
 export function setShadowQuality(q: Quality): void {
-  const size = SHADOW_MAP[q];
+  const size = Math.min(SHADOW_MAP[q], softwareCap);
   if (sun.shadow.mapSize.x === size) return;
   sun.shadow.mapSize.set(size, size);
   sun.shadow.map?.dispose();

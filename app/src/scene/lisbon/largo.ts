@@ -128,7 +128,7 @@ function bench(b: Batch, x: number, z: number, ry: number): void {
 }
 
 export const FLAG_COLORS = ["#d8423a", "#f0c330", "#2f8f57", "#2f6fd1", "#f4f1ea", "#e8823a"].map((c) => {
-  const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide });
+  const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 });
   return m;
 });
 
@@ -137,11 +137,15 @@ export const BALLOONS = ["#d8423a", "#f0c330", "#2f6fd1", "#e8823a"].map((c) =>
   glowAtNight(new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0, roughness: 0.9 }), 0.55),
 );
 
+/** Bandeirinha triangular com as duas faces (evita um material de dupla face, que obriga a mais um shader). */
 function flagGeometry(): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute([-0.13, 0, 0, 0.13, 0, 0, 0, -0.3, 0], 3));
-  g.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1], 3));
-  g.setAttribute("uv", new THREE.Float32BufferAttribute([0, 1, 1, 1, 0.5, 0], 2));
+  g.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute([-0.13, 0, 0, 0, -0.3, 0, 0.13, 0, 0, -0.13, 0, 0, 0.13, 0, 0, 0, -0.3, 0], 3),
+  );
+  g.setAttribute("normal", new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1], 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute([0, 1, 0.5, 0, 1, 1, 0, 1, 1, 1, 0.5, 0], 2));
   return g;
 }
 
