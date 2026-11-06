@@ -42,6 +42,18 @@ describe("parseOrder", () => {
     });
   });
 
+  it("palavras de arranque ('agora', 'então', 'ok') não estragam a ordem; gabinetes novos", () => {
+    expect(parseOrder("agora vai à sala de reuniões", AGENTS, "mira")?.steps).toEqual([
+      { kind: "move", agent: "mira", to: { kind: "place", id: "gestao" } },
+    ]);
+    expect(parseOrder("Mira, então vai ao gabinete do Atlas", AGENTS, "ceo")?.steps).toEqual([
+      { kind: "move", agent: "mira", to: { kind: "place", id: "ceo-office" } },
+    ]);
+    expect(parseOrder("ok, vai ao gabinete do Mestrado", AGENTS, "mira")?.steps).toEqual([
+      { kind: "move", agent: "mira", to: { kind: "place", id: "masters" } },
+    ]);
+  });
+
   it("'Abre a nota Planeamento no Obsidian.' é abrir uma nota (sem agente)", () => {
     expect(parseOrder("Abre a nota Planeamento no Obsidian.", AGENTS, "ceo")).toEqual({
       addressee: null,

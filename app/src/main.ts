@@ -36,6 +36,7 @@ import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
 import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, freeWalk, PLAYER_DEF } from "./sim/player";
 import { moveStatus, startMove, type PendingMove } from "./sim/orders";
 import { createOrdersUi } from "./ui/orders";
+import { createInstructionsUi } from "./ui/instructions";
 import { ofPlace, placeName, ROOM_PLACES } from "../../shared/places";
 
 interface LogEvent {
@@ -97,6 +98,9 @@ const busy = new Set<string>();
 /** Modo "Claude Code local" (criado depois da ligação ao servidor; o painel usa-o quando já existe). */
 let localMode: LocalMode | null = null;
 const panel = createPanel({
+  onTab: (a, t) => {
+    if (t === "instr") instructionsUi.load(a.def.id, online && realAgents.has(a.def.id));
+  },
   extra: (a) => localMode?.sectionHtml(a.def.id, { real: realAgents.has(a.def.id), busy: busy.has(a.def.id) }) ?? "",
   bindExtra: (a) => localMode?.bind(a.def.id),
   onOpen: (a) => chat.show(chatAgentOf(a)),
@@ -486,6 +490,7 @@ function onServerMsg(m: ServerMsg): void {
   if (m.type === "move") return beginMove(m.id, m.agentId, m.place);
   if (m.type === "order-steps") return ordersUi.update(m);
   if (m.type === "office") return showOffice(m.myOffice);
+  if (m.type === "instructions") return instructionsUi.handle(m);
   if (m.type === "error" && !m.agentId) return toast(m.message);
   const a = m.agentId ? byAgentId.get(m.agentId) : undefined;
   if (!a) return;
@@ -583,6 +588,9 @@ const ordersUi = createOrdersUi(
     if (a) panel.open(a, "chat");
   },
 );
+
+// ---- instruções de cada agente (separador do painel)
+const instructionsUi = createInstructionsUi((m) => client.send(m), agentName);
 
 // ---- o meu gabinete: para onde vai quem mandas ao «meu gabinete»
 const officeSel = byId<HTMLSelectElement>("officeSel");
@@ -791,7 +799,7 @@ installResizer(byId("main"), byId("resizer"));
 function openFromHash(): void {
   const [agentId, tab] = location.hash.slice(1).split("/");
   const agent = byAgentId.get(agentId ?? "");
-  if (agent) panel.open(agent, (["sum", "log", "chat"] as const).find((t): t is Tab => t === tab) ?? "sum");
+  if (agent) panel.open(agent, (["sum", "log", "chat", "instr"] as const).find((t): t is Tab => t === tab) ?? "sum");
 }
 openFromHash();
 addEventListener("hashchange", openFromHash);

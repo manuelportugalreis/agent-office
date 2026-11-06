@@ -23,6 +23,8 @@ const FACE_SOUTH = 0;
 const FACE_EAST = Math.PI / 2;
 const FACE_WEST = -Math.PI / 2;
 const CHAT_Z = 5.45;
+/** Corredor entre a divisória do gabinete do Atlas (x = 9) e a mesa de reuniões (começa em x = 9.6). */
+const MEETING_AISLE_X = 9.3;
 /** Onde se fica em pé em frente aos bastidores dos servidores. */
 const SERVER_XS = [10.5, 11.4] as const;
 const SERVER_Z = 1.75;
@@ -151,12 +153,13 @@ export function buildLocations(defs: readonly AgentDef[]): LocMap {
       1,
     ),
   );
+  // Os lugares do lado sul da mesa entram pelo lado da sala de reuniões (a divisória do gabinete do Atlas está em x = 9).
   add(
     make(
       "meet2",
       [
-        { x: 8.95, z: LANE },
-        { x: 8.95, z: 10.55 },
+        { x: MEETING_AISLE_X, z: LANE },
+        { x: MEETING_AISLE_X, z: 10.55 },
         { x: 10.2, z: 10.55 },
       ],
       FACE_NORTH,
@@ -167,8 +170,8 @@ export function buildLocations(defs: readonly AgentDef[]): LocMap {
     make(
       "meet3",
       [
-        { x: 8.95, z: LANE },
-        { x: 8.95, z: 10.55 },
+        { x: MEETING_AISLE_X, z: LANE },
+        { x: MEETING_AISLE_X, z: 10.55 },
         { x: 11, z: 10.55 },
       ],
       FACE_NORTH,

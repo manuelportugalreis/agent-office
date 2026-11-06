@@ -1379,3 +1379,30 @@ header h1 {
   padding: 5px 6px;
   max-width: 170px;
 }
+
+/* ---- separador Instruções */
+.instr-ro {
+  white-space: pre-wrap;
+  font-size: 12px;
+  background: var(--chip);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.instr-edit {
+  width: 100%;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  resize: vertical;
+}
+.instr-edit:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AccessProfile, PermissionRequest, ServerMsg, ToolStep } from "../../shared/protocol.ts";
 import { findAgent, REAL_AGENTS } from "./agents.ts";
 import type { AgentEvent } from "./events.ts";
@@ -98,8 +98,22 @@ export function stripFakeToolCalls(text: string): string {
 const DEFAULT_LIMITS: HubLimits = { timeoutMs: 600_000, maxConcurrent: 3 };
 const PERMISSION_TIMEOUT_MS = 15 * 60_000;
 const WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
-/** Chave da sessão: no modo local, uma sessão por agente e por perfil (outro acesso, outra conversa). */
-export const sessionKey = (agentId: string, profile: AccessProfile | null): string => (profile ? `${agentId}@p${profile.id}` : agentId);
+/**
+ * Versão do papel de um agente (o prompt de sistema definido em agents.ts). Uma conversa retomada no Claude Code
+ * fica com o papel antigo; quando o papel muda, a chave muda e a conversa seguinte começa uma sessão nova com o novo.
+ * (As tuas instruções no CLAUDE.md não precisam disto: são lidas em cada tarefa.)
+ */
+const roleVersion = (agentId: string): string => {
+  const a = findAgent(agentId);
+  return a ? createHash("sha256").update(`${a.systemPrompt}\n${a.localPrompt}`).digest("hex").slice(0, 8) : "";
+};
+
+/** Chave da sessão: no modo local, uma sessão por agente e por perfil (outro acesso, outra conversa), e por versão do papel. */
+export const sessionKey = (agentId: string, profile: AccessProfile | null): string => {
+  const base = profile ? `${agentId}@p${profile.id}` : agentId;
+  const version = roleVersion(agentId);
+  return version ? `${base}#${version}` : base;
+};
 const ERROR_LIMIT = 200;
 
 interface Running {

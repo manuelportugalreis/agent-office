@@ -10,7 +10,10 @@ describe("colisão a pé no escritório", () => {
 
   it("não se atravessa a divisória entre salas, mas passa-se pela porta", () => {
     expect(isBlocked(6, 2)).toBe(true); // vidro entre Pesquisa e Job Search
-    expect(isBlocked(9, 7)).toBe(false); // porta da sala de Gestão (x 8 a 11)
+    // A porta da Gestão (x 8 a 11) serve os dois lados da divisória em x = 9.
+    expect(isBlocked(8.55, 7)).toBe(false); // entrada do gabinete do Atlas
+    expect(isBlocked(10, 7)).toBe(false); // entrada da sala de reuniões
+    expect(isBlocked(9, 9.5)).toBe(true); // divisória entre o gabinete do Atlas e a sala de reuniões
     expect(isBlocked(13, 7)).toBe(true); // parede entre o corredor e a sala de Descanso
     expect(isBlocked(15.5, 7)).toBe(false); // porta da sala de Descanso (14 a 17)
   });

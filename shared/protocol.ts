@@ -287,6 +287,20 @@ export type ServerMsg =
       readonly steps: readonly StepView[];
       readonly finished: boolean;
     }
+  /** Instruções de um agente: papel, playbook e gabinete (definidos no código) e as tuas instruções (editáveis). */
+  | {
+      readonly type: "instructions";
+      readonly agentId: string;
+      readonly role: string;
+      readonly voice: string;
+      readonly playbook: string;
+      readonly office: string;
+      readonly notes: string;
+      readonly shared: string;
+      readonly file: string;
+      readonly sharedFile: string;
+      readonly saved?: boolean;
+    }
   /** Definições do escritório (o gabinete do utilizador; null = ainda não escolhido). */
   | { readonly type: "office"; readonly myOffice: string | null }
   /** Rasto de uma tarefa local terminada: o que mudou e o que correu. */
@@ -311,6 +325,9 @@ export type ClientMsg =
   | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
   /** A personagem chegou (ok) ou não conseguiu ir (ok=false) ao sítio pedido num `move`. */
   | { readonly type: "arrived"; readonly id: number; readonly ok: boolean; readonly reason?: string }
+  | { readonly type: "instructions-get"; readonly agentId: string }
+  /** Guarda as tuas instruções para o agente (CLAUDE.md dele) e, se vier, as regras da equipa (perfil.md). */
+  | { readonly type: "instructions-save"; readonly agentId: string; readonly notes: string; readonly shared?: string }
   /** Escolher o gabinete do utilizador (um sítio do escritório). */
   | { readonly type: "set-office"; readonly place: string }
   | { readonly type: "sync" }
@@ -321,6 +338,8 @@ export type ClientMsg =
   | { readonly type: "dossier-retry"; readonly id: number };
 
 export const MAX_TEXT_LENGTH = 8000;
+/** Instruções de um agente (o CLAUDE.md dele) ou as regras da equipa. */
+export const MAX_INSTRUCTIONS_LENGTH = 20_000;
 export const MAX_FILES_PER_MESSAGE = 8;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 /** Porta predefinida do servidor (configurável no servidor). */
@@ -402,6 +421,13 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return Number.isInteger(m.id) && typeof m.ok === "boolean"
         ? { type: "arrived", id: m.id as number, ok: m.ok, ...(reason ? { reason } : {}) }
         : null;
+    }
+    case "instructions-get":
+      return agentId ? { type: "instructions-get", agentId } : null;
+    case "instructions-save": {
+      const long = (v: unknown): v is string => typeof v === "string" && v.length <= MAX_INSTRUCTIONS_LENGTH && !v.includes("\0");
+      if (!agentId || !long(m.notes) || (m.shared !== undefined && !long(m.shared))) return null;
+      return { type: "instructions-save", agentId, notes: m.notes, ...(m.shared !== undefined ? { shared: m.shared as string } : {}) };
     }
     case "set-office":
       return typeof m.place === "string" && PLACE_ID.test(m.place) ? { type: "set-office", place: m.place } : null;

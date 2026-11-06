@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { ROOMS, ROOM_D, ROOM_W, type RoomDef } from "../data/rooms";
+import { GESTAO_SPLIT_X, ROOMS, ROOM_D, ROOM_W, type RoomDef } from "../data/rooms";
 import { box, floorTexture, group, mat } from "./util";
 import { lamps, scene } from "./world";
 
@@ -140,6 +140,8 @@ export function buildBuilding(): void {
     partition(r.x0, 7, r.gap[0], 7);
     partition(r.gap[1], 7, r.x0 + ROOM_W, 7);
   }
+  // Gestão dividida: gabinete do Atlas (poente) e sala de reuniões dos chefes (nascente); a porta do corredor serve as duas.
+  partition(GESTAO_SPLIT_X, 7, GESTAO_SPLIT_X, 12);
   for (const r of ROOMS) {
     const lamp = new THREE.PointLight(0xffe2b0, 0.3, 9, 1.6);
     lamp.position.set(r.x0 + 3, 2.6, r.z0 + 2.5);

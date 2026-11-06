@@ -1,5 +1,5 @@
 import { AGENTS } from "../data/agents";
-import { ROOM_D, ROOM_W, ROOMS } from "../data/rooms";
+import { GESTAO_SPLIT_X, ROOM_D, ROOM_W, ROOMS } from "../data/rooms";
 
 /** Onde se pode andar a pé no escritório: paredes, divisórias de vidro e mobília grande. Tudo em metros no plano (x, z). */
 
@@ -32,6 +32,8 @@ function buildSolids(): Rect[] {
   }
   // Casa de banho: parede para o corredor com a porta entre x = 20 e 22.
   out.push(wallZ(5, 18, 20), wallZ(5, 22, 24));
+  // Divisória entre o gabinete do Atlas e a sala de reuniões.
+  out.push(wallX(GESTAO_SPLIT_X, ROOM_D + 2, 2 * ROOM_D + 2));
   // Secretárias.
   for (const a of AGENTS) {
     const d = a.desk ?? ([a.x, 1.4, 1.4] as const);

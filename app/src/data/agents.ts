@@ -50,14 +50,15 @@ export const AGENTS: readonly AgentDef[] = [
     z: 10.55,
     desk: [7.4, 9.6, 1.8],
     bottom: true,
-    exitX: 8.95,
+    // Entra pelo lado do gabinete dele (a divisória com a sala de reuniões está em x = 9).
+    exitX: 8.5,
     boss: "Tu",
     screen: "dash",
   },
   {
     id: "rhea",
     name: "Rhea",
-    role: "Chefe de Pesquisa",
+    role: "Chefe de Projetos",
     emoji: "🧪",
     hue: 210,
     hair: "#1f2937",
@@ -73,7 +74,7 @@ export const AGENTS: readonly AgentDef[] = [
   {
     id: "mira",
     name: "Mira",
-    role: "Analista de empresas e vagas",
+    role: "Analista · verifica evidência",
     emoji: "🔎",
     hue: 210,
     hair: "#7c4a1d",
@@ -117,7 +118,7 @@ export const AGENTS: readonly AgentDef[] = [
   {
     id: "nina",
     name: "Nina",
-    role: "Chefe de Job Application",
+    role: "Chefe de Candidaturas e Outreach",
     emoji: "🗂️",
     hue: 25,
     hair: "#111827",

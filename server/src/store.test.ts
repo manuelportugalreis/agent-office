@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { REAL_AGENTS, TEAM } from "./agents.ts";
 import { canvasContext } from "./canvas.ts";
-import { createHub } from "./hub.ts";
+import { createHub, sessionKey } from "./hub.ts";
 import { planPrompt } from "./orchestrator.ts";
 import { openStore } from "./store.ts";
 import type { Runner } from "./runner.ts";
@@ -93,7 +93,7 @@ describe("store", () => {
 describe("hub com sessões persistentes e contexto", () => {
   it("reaproveita a sessão guardada depois de um reinício", () => {
     const s = openStore(":memory:");
-    s.setSession("scout", { id: "guardada", started: true });
+    s.setSession(sessionKey("scout", null), { id: "guardada", started: true });
     const requests: Parameters<Runner>[0][] = [];
     const hub = createHub({
       emit: () => undefined,

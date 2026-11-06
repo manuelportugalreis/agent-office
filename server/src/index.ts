@@ -18,6 +18,7 @@ import { log } from "./log.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { parsePlaceText } from "./intent.ts";
 import { createOrderEngine } from "./orders.ts";
+import { InstructionsError, readInstructions, saveInstructions } from "./instructions.ts";
 import { createSceneBridge } from "./scene-bridge.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
@@ -26,7 +27,8 @@ import { describeProfile, mcpNames, ProfileError, validateProfile } from "./prof
 import { terminalScript } from "./local-runner.ts";
 import { claudeVersion, openTerminal, resumeCommand } from "./terminal.ts";
 
-const MAX_PAYLOAD_BYTES = 64 * 1024;
+/** Chega para as instruções de um agente e as regras da equipa (2 × 20 000 caracteres, com acentos). */
+const MAX_PAYLOAD_BYTES = 160 * 1024;
 /** Uma ligação não pode mandar mais de 40 mensagens em 10 segundos. */
 const RATE_MAX = 40;
 const RATE_WINDOW_MS = 10_000;
@@ -277,6 +279,24 @@ wss.on("connection", (ws) => {
       }
       case "arrived":
         return scene.arrived(msg.id, msg.ok, msg.reason);
+      case "instructions-get": {
+        const agent = findAgent(msg.agentId);
+        if (!agent) return send(ws, { type: "error", agentId: msg.agentId, message: "Este agente ainda não é real." });
+        return send(ws, { type: "instructions", ...readInstructions(agent) });
+      }
+      case "instructions-save":
+        try {
+          const saved = saveInstructions(msg.agentId, msg.notes, msg.shared);
+          broadcast({ type: "log", agentId: msg.agentId, text: "Instruções atualizadas por ti (valem a partir da próxima tarefa)." });
+          return send(ws, { type: "instructions", ...saved, saved: true });
+        } catch (err) {
+          log.warn("não consegui guardar as instruções", err);
+          return send(ws, {
+            type: "error",
+            agentId: msg.agentId,
+            message: err instanceof InstructionsError ? err.message : "Não consegui guardar as instruções.",
+          });
+        }
       case "set-office": {
         if (!setMyOffice(msg.place)) return send(ws, { type: "error", message: "Esse sítio não existe no escritório." });
         return;

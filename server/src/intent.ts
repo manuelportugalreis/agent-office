@@ -352,6 +352,8 @@ export function parseOrder(text: string, agents: readonly AgentName[], self: str
     addressee = sent.id;
     ts = ts.slice(sent.used);
   }
+  // "Agora vai…", "Então, abre…", "Ok, vai…": palavras de arranque que não mudam a ordem.
+  while (["agora", "entao", "ok", "pronto", "bem", "olha", "ja", "e"].includes(ts[0]?.f ?? "")) ts = ts.slice(1);
   const steps: Step[] = [];
   /**
    * Uma ação (andar, abrir) tem de acabar ali: fim da frase, vírgula, ou uma palavra de sequência ("e depois").

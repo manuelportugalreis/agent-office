@@ -38,6 +38,16 @@ describe("ordens de movimento na cena", () => {
     expect(candidateLocs("desk:mira", "mira")).toEqual(["desk-mira"]);
   });
 
+  it("a divisória da Gestão separa o gabinete do Atlas da sala de reuniões: ninguém a atravessa", () => {
+    const { locs } = setup();
+    const crosses = (pts: readonly { x: number; z: number }[]): boolean =>
+      pts.some((p, i) => i > 0 && p.z > 7 && pts[i - 1].z > 7 && (p.x - 9) * (pts[i - 1].x - 9) < 0);
+    for (const key of ["meet0", "meet1", "meet2", "meet3", "desk-ceo", "visit-ceo"]) expect(crosses(locs[key].pts), key).toBe(false);
+    expect(candidateLocs("ceo-office", "mira")).toEqual(["visit-ceo"]);
+    expect(candidateLocs("gestao", "mira")).toEqual(["meet0", "meet1", "meet2", "meet3"]);
+    expect(candidateLocs("ceo-office", "ceo")).toEqual(["desk-ceo"]);
+  });
+
   it("sítio sem lugares no mapa devolve um motivo (não fica à espera para sempre)", () => {
     const { locs, mira } = setup();
     expect(startMove(mira, "telhado", locs, 2)).toMatchObject({ error: expect.stringContaining("não há lugar") });

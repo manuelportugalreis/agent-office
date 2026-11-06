@@ -2,7 +2,7 @@ import { STATE_INFO } from "../scene/person";
 import { stateOf, type Agent } from "../sim/agent";
 import { byId, escapeHtml, isDark } from "./dom";
 
-export type Tab = "sum" | "log" | "chat";
+export type Tab = "sum" | "log" | "chat" | "instr";
 const LOG_LIMIT = 30;
 
 export interface Panel {
@@ -30,6 +30,8 @@ export interface PanelDeps {
   sync(): void;
   /** Leva o avatar do utilizador até à secretária do agente. */
   goTo(a: Agent): void;
+  /** Abriu-se um separador (o das instruções pede-as ao servidor). */
+  onTab?(a: Agent, tab: Tab): void;
   /** Secção extra do resumo (modo de trabalho: escritório ou Claude Code local) e a ligação dos botões dela. */
   extra?(a: Agent): string;
   bindExtra?(a: Agent): void;
@@ -88,12 +90,15 @@ export function createPanel(deps: PanelDeps): Panel {
   const sum = byId("tSum");
   const log = byId("tLog");
   const chatBox = byId("chatbox");
+  const instr = byId("tInstr");
 
   const showTab = (t: Tab): void => {
     current = t;
     document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === t));
     sum.style.display = t === "sum" ? "block" : "none";
     log.style.display = t === "log" ? "block" : "none";
+    instr.style.display = t === "instr" ? "block" : "none";
+    if (sel) deps.onTab?.(sel, t);
     chatBox.style.display = t === "chat" ? "flex" : "none";
     document.querySelector("main")?.classList.toggle("chat-wide", t === "chat");
   };

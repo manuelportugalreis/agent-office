@@ -31,26 +31,59 @@ export const MY_OFFICE_ALIASES: readonly string[] = [
 
 /** Salas e zonas (os lugares exatos de cada uma estão na cena). */
 export const ROOM_PLACES: readonly Place[] = [
-  // Nomes que também são palavras de trabalho ("a pesquisa", "as candidaturas", "os estudos") só contam com "sala".
-  { id: "pesquisa", name: "a sala de Pesquisa", aliases: ["sala de pesquisa", "sala da pesquisa"] },
-  { id: "search", name: "a sala de Job Search", aliases: ["sala de job search", "sala do job search", "sala das vagas"] },
+  // Nomes que também são palavras de trabalho ("os projetos", "as candidaturas", "o mestrado") só contam com "gabinete" ou "sala".
+  {
+    id: "pesquisa",
+    name: "o gabinete de Projetos",
+    aliases: ["gabinete de projetos", "gabinete dos projetos", "sala de projetos", "sala dos projetos", "sala de pesquisa"],
+  },
+  {
+    id: "search",
+    name: "o gabinete de Job Search",
+    aliases: ["gabinete de job search", "gabinete do job search", "sala de job search", "sala do job search", "sala das vagas"],
+  },
   {
     id: "apply",
-    name: "a sala de Job Application",
-    aliases: ["sala de job application", "sala do job application", "sala das candidaturas"],
-  },
-  { id: "masters", name: "a sala do Masters", aliases: ["sala do masters", "sala de masters", "sala de estudos", "sala do mestrado"] },
-  {
-    id: "gestao",
-    name: "a sala de Gestão",
+    name: "o gabinete de Candidaturas e Outreach",
     aliases: [
-      "sala de gestao",
-      "sala da gestao",
+      "gabinete de candidaturas e outreach",
+      "gabinete de candidaturas",
+      "gabinete das candidaturas",
+      "gabinete de outreach",
+      "gabinete de job application",
+      "sala de job application",
+      "sala das candidaturas",
+    ],
+  },
+  {
+    id: "masters",
+    name: "o gabinete do Mestrado",
+    aliases: [
+      "gabinete do mestrado",
+      "gabinete de mestrado",
+      "sala do mestrado",
+      "sala do masters",
+      "sala de estudos",
+      "gabinete de estudos",
+    ],
+  },
+  {
+    id: "ceo-office",
+    name: "o gabinete do Atlas",
+    aliases: ["gabinete do atlas", "gabinete do ceo", "gabinete do chefe", "direcao"],
+  },
+  {
+    // O id antigo mantém-se ("o meu gabinete" escolhido antes continua a valer): agora é só a sala de reuniões.
+    id: "gestao",
+    name: "a sala de reuniões",
+    aliases: [
       "sala de reunioes",
       "sala das reunioes",
+      "sala de reunioes dos chefes",
+      "sala dos chefes",
       "mesa de reunioes",
-      "gabinete do atlas",
-      "direcao",
+      "sala de gestao",
+      "sala da gestao",
     ],
   },
   {
@@ -67,7 +100,7 @@ export const ROOM_PLACES: readonly Place[] = [
 
 /** Em que sala trabalha cada agente ("vai à sala da Lena"; quem já trabalha nessa sala vai para a própria secretária). */
 export const AGENT_ROOM: Readonly<Record<string, string>> = {
-  ceo: "gestao",
+  ceo: "ceo-office",
   rhea: "pesquisa",
   mira: "pesquisa",
   vera: "search",
