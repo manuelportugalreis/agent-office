@@ -77,3 +77,17 @@ Argumentos que o servidor passa ao `claude` (gerados por `buildLocalArgs` e `bui
 > **Checked and fine:** path traversal (`walk`, `findNoteMention`, `openInObsidian` with realpath + `vaultFor`); URI launch (`encodeURIComponent`, no shell, vault id from obsidian.json); `parseClientMsg` validation of `arrived`/`set-office`; dependency propagation.
 
 O relatório do Codex está completo na secção acima (os 9 achados, tal como numerados por ele).
+
+## Segunda ronda (sobre o commit final, `2736f2d`)
+
+Subagente: nenhum crítico; 2 altos/médios a corrigir antes de juntar. Codex: nenhum grave; 5 médios. Todos corrigidos:
+
+- "para a copa" respondia como cancelar → a resposta é lida antes de procurar "esquece/cancela".
+- Uma ordem nova ("vai à copa") era tomada como resposta a "qual é o teu gabinete?" → ordens novas não respondem; só palavras de ligação antes do sítio.
+- Nova conversa: pergunta seguinte aparecia e o resumo da ordem antiga também; passos por começar ainda corriam → fila esvaziada antes, passos por começar ficam "não começou", resumo suprimido.
+- Regenerar uma ordem retomava a sessão antiga → sessão nova com o histórico; mensagens que só mencionam uma nota seguem o caminho normal.
+- "no"/"na" + título desviavam mensagens normais → só "nota", "ler", "abre", "edita", "atualiza".
+- Ler `Pessoal/Planeamento.md` contava como ler `Trabalho/Planeamento.md` → compara o caminho relativo inteiro.
+- O resumo do Atlas não recebia as ressalvas das tarefas → recebe o estado verificado de todos os passos.
+- Ordens diretas que alteram ficheiros não tinham revisão da Nina → passam pela mesma revisão independente.
+- "Mostra-me a nota X" abria o Obsidian → só com "no Obsidian"; prefixos "que"/"para" já não cortam a tarefa.

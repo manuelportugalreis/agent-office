@@ -196,6 +196,14 @@ describe("motor de ordens", () => {
     expect(o.view.state).toBe("blocked");
   });
 
+  it("ler uma nota com o mesmo nome noutra pasta não conta", async () => {
+    const hub = fakeHub(() => ({ steps: [{ tool: "Read", summary: "C:/v/Pessoal/Planeamento.md", ok: true }] }));
+    const { engine, dir } = setup({ hub });
+    writeFileSync(join(dir, "Pessoal", "Planeamento.md"), "# outro\n");
+    const [o] = await engine.run("mira", "x", sequence([{ kind: "task", agent: "mira", task: "lê a nota Projetos/Planeamento" }]));
+    expect(o.view.state).toBe("partial");
+  });
+
   it("ler outra nota não conta como ler a pedida", async () => {
     const hub = fakeHub(() => ({ steps: [{ tool: "Read", summary: "C:/vault/Projetos/Ideias.md", ok: true }] }));
     const { engine } = setup({ hub });
@@ -255,6 +263,55 @@ describe("motor de ordens", () => {
     const [o] = await engine.run("lena", "x", sequence([{ kind: "task", agent: "lena", task: "faz" }]));
     expect(o.view.state).toBe("blocked");
     expect(o.view.detail).toContain("disco ilegível");
+  });
+
+  it("'para a copa' responde a 'para onde vou?' (não cancela)", async () => {
+    const { engine, moves } = setup();
+    const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "unknown", text: "cozinha" } }]));
+    await tick();
+    expect(engine.answer("mira", "para a copa")).toBe(true);
+    await p;
+    expect(moves).toEqual([{ agent: "mira", place: "rest" }]);
+  });
+
+  it("uma ordem nova não é tomada como resposta a 'qual é o teu gabinete?'", async () => {
+    const { engine } = setup();
+    const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "mine" } }]));
+    await tick();
+    expect(engine.answer("mira", "vai à copa")).toBe(false);
+    expect(engine.hasQuestion("mira")).toBe(true);
+    engine.cancel("mira");
+    await p;
+  });
+
+  it("cancelar não faz a pergunta seguinte e os passos por começar já não correm", async () => {
+    const { engine, out, hub } = setup({ office: "gestao" });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow: SceneBridge = { move: async () => (await gate, { ok: true, at: 1 }), arrived: () => undefined };
+    const e2 = createOrderEngine({
+      hub,
+      emit: (m) => out.push(m),
+      scene: slow,
+      vaultDir: () => "",
+      myOffice: () => "gestao",
+      setMyOffice: () => undefined,
+    });
+    const p = e2.run(
+      "lena",
+      "x",
+      sequence([
+        { kind: "move", agent: "lena", to: { kind: "mine" } },
+        { kind: "task", agent: "lena", task: "edita a nota" },
+      ]),
+    );
+    await tick();
+    e2.cancel("lena");
+    release();
+    const outcomes = await p;
+    expect(outcomes[1].view.state).toBe("skipped");
+    expect(hub.calls).toEqual([]);
+    void engine;
   });
 
   it("ações recusadas aparecem como ressalva (nunca como sucesso limpo)", async () => {

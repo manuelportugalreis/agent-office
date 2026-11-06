@@ -103,17 +103,7 @@ const SEQUENCE = [
 ];
 const OPEN_VERBS = ["abre me", "abra me", "abre", "abra", "abrir", "mostra me", "mostre me"];
 /** Pedidos a um colega dentro de uma ordem ("pede-lhe para ler..."): o resto é a tarefa. */
-const ASK_PREFIX = [
-  "pede lhe para",
-  "pede lhe que",
-  "diz lhe para",
-  "diz lhe que",
-  "pedir lhe para",
-  "pede para",
-  "pede que",
-  "que",
-  "para",
-];
+const ASK_PREFIX = ["pede lhe para", "pede lhe que", "diz lhe para", "diz lhe que", "pedir lhe para", "pede para", "pede que"];
 const SEND_VERBS = ["manda", "mande", "envia", "envie", "leva", "pede", "peca", "diz"];
 
 interface Tok {
@@ -271,6 +261,8 @@ function openAt(ts: readonly Tok[]): { note: string; used: number } | null {
   // Sem a palavra "nota" nem "Obsidian", "abre" pode ser outra coisa (abre o terminal, abre o site): fica para o agente.
   const mentionsObsidian = ts.slice(0, end).some((t) => t.f === "obsidian");
   if (!isNote && !mentionsObsidian && !/\[\[|\.md\b/i.test(rawOf(noteToks))) return null;
+  // "Mostra-me a nota X" pode ser pedir o conteúdo no chat: só abre o Obsidian se o disseres.
+  if (/^mostr/.test(ts[0]?.f ?? "") && !mentionsObsidian) return null;
   return { note: rawOf(noteToks).replace(/^["«“]|["»”]$/g, ""), used: end };
 }
 
@@ -285,8 +277,11 @@ export function parsePlaceText(text: string, agents: readonly AgentName[], self:
   const desk = /^desk:([a-z0-9-]+)$/.exec(raw);
   if (desk && agents.some((a) => a.id === desk[1])) return { kind: "place", id: raw };
   const ts = tokens(raw.replace(/[.!?]+$/, ""));
-  // "é a sala de gestão", "para a copa", "o meu é a de gestão": tira o que vem antes do nome do sítio.
+  // "é a sala de gestão", "para a copa", "o meu é a de gestão": tira o que vem antes do nome do sítio, mas só
+  // palavras de ligação ("vai à copa" é uma ordem, não a resposta a "qual é o teu gabinete?").
+  const FILLER = new Set(["e", "a", "o", "os", "as", "para", "pra", "na", "no", "ao", "em", "fica", "seja", "meu", "minha"]);
   for (let start = 0; start < Math.min(ts.length, 4); start++) {
+    if (start > 0 && !FILLER.has(ts[start - 1].f)) break;
     const prep = phraseAt(ts, start, PREPS);
     for (const at of prep ? [start + prep, start] : [start]) {
       const found = placeAt(ts.slice(at), agents, self);

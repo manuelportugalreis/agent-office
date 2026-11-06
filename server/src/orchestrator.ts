@@ -306,11 +306,44 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
     );
 
   /** Ordens que o servidor executa sozinho (andar, abrir uma nota, e o trabalho que vem a seguir), sem plano do LLM. */
+  /** Se a equipa alterou ficheiros ou notas, a Nina revê o resultado real (só a ler). Devolve a revisão, ou null. */
+  async function independentReview(
+    text: string,
+    outcomes: readonly TaskOutcome[],
+    profile: AccessProfile | null,
+  ): Promise<TaskOutcome | null> {
+    const changed = [...new Set(outcomes.filter((o) => o.agent !== "nina").flatMap((o) => changedFiles(o.result.steps)))];
+    if (!changed.length) return null;
+    const task = ninaReviewTask(text, changed);
+    log(`Delegou a Nina a revisão de ${changed.length} ficheiro(s) alterado(s).`);
+    emit({ type: "delegate", from: "ceo", to: "nina" });
+    const result = await hub.run(
+      "nina",
+      withHandoff(
+        task,
+        outcomes.map((o) => ({ agent: o.agent, reply: o.result.reply, steps: o.result.steps })),
+      ),
+      // Revisão independente: só leitura (a Nina aponta, não corrige o trabalho que está a rever).
+      { profile, readOnly: true },
+    );
+    return { agent: "nina", task, result };
+  }
+
+  const taskOutcomes = (steps: readonly StepOutcome[]): TaskOutcome[] =>
+    steps.flatMap((o) =>
+      o.step.kind === "task" && o.result ? [{ agent: o.step.agent ?? "", task: o.step.task ?? "", result: o.result }] : [],
+    );
+
   async function direct(text: string, parsed: NonNullable<ReturnType<typeof parseOrder>>, profile: AccessProfile | null): Promise<void> {
     log(`Ordem direta: ${parsed.steps.length} passo(s), sem plano.`);
     const outcomes = await orders.run("ceo", text, sequence(parsed.steps), { profile, handoff, delegator: "ceo" });
     remember(outcomes);
-    emit({ type: "reply", agentId: "ceo", text: summarize(outcomes) });
+    // Mesmo sem plano, o que alterou ficheiros passa pela revisão independente da Nina.
+    const review = await independentReview(text, taskOutcomes(outcomes), profile);
+    const reviewLine = review
+      ? `\n${review.result.ok ? "✓" : "✗"} Nina reviu os ficheiros alterados${review.result.ok ? " (o veredicto está no chat dela)" : `: ${review.result.error ?? "falhou"}`}`
+      : "";
+    emit({ type: "reply", agentId: "ceo", text: summarize(outcomes) + reviewLine });
   }
 
   return {
@@ -348,7 +381,6 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
       });
       const stepOutcomes = await orders.run("ceo", text, planSteps(plan), { profile, handoff, delegator: "ceo" });
       remember(stepOutcomes);
-      const actions = stepOutcomes.filter((o) => o.step.kind !== "task");
       const outcomes: TaskOutcome[] = stepOutcomes.flatMap((o) =>
         o.step.kind === "task"
           ? [
@@ -368,23 +400,11 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
       }
       // Se houve ficheiros ou notas alterados e a Nina não reviu depois disso, revê agora o resultado real
       // (também no modo escritório: notas do Obsidian editadas pela equipa).
-      const changed = [...new Set(outcomes.filter((o) => o.agent !== "nina").flatMap((o) => changedFiles(o.result.steps)))];
       const ninaAfter = plan.tasks.some((t) => t.agent === "nina" && t.after.length > 0);
-      if (changed.length && !ninaAfter) {
-        const task = ninaReviewTask(text, changed);
-        log(`Delegou a Nina a revisão de ${changed.length} ficheiro(s) alterado(s).`);
-        emit({ type: "delegate", from: "ceo", to: "nina" });
-        const review = await hub.run(
-          "nina",
-          withHandoff(
-            task,
-            outcomes.map((o) => ({ agent: o.agent, reply: o.result.reply, steps: o.result.steps })),
-          ),
-          // Revisão independente: só leitura (a Nina aponta, não corrige o trabalho que está a rever).
-          { profile, readOnly: true },
-        );
-        outcomes.push({ agent: "nina", task, result: review });
-        results.push(review);
+      const review = ninaAfter ? null : await independentReview(text, outcomes, profile);
+      if (review) {
+        outcomes.push(review);
+        results.push(review.result);
       }
       log(`A equipa terminou: ${results.filter((r) => r.ok).length}/${results.length} tarefas com sucesso.`);
       if (!results.some((r) => r.ok)) {
@@ -401,7 +421,8 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
         await waitUntilFree(hub, "ceo");
         // O resumo usa só a evidência recolhida (texto): corre no modo escritório, sem ferramentas.
         // Sessão isolada: o resumo não herda conversas anteriores (onde o modelo podia ter imitado ferramentas).
-        report = await hub.run("ceo", reportPrompt(text, outcomes, summarize(actions)), {
+        // Todos os passos com o estado verificado pelo servidor (incluindo ressalvas das tarefas), não só as ações.
+        report = await hub.run("ceo", reportPrompt(text, outcomes, summarize(stepOutcomes)), {
           label: "Resumo do trabalho da equipa",
           profile: null,
           toolless: true,

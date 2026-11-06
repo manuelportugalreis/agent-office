@@ -167,7 +167,7 @@ export function findNoteMention(vault: string, text: string, index: readonly Not
   }
   // Palavras a seguir às quais costuma vir o nome da nota ("a nota X", "ler X", "acrescenta à X", "edita X").
   const after =
-    /(?<![\p{L}])(?:nota|notas|ler|lê|le|leia|lês|abre|abrir|abra|atualiza|atualizar|edita|editar|à|na|ao|no)\s+(?:a\s+|o\s+)?(?:nota\s+)?/giu;
+    /(?<![\p{L}])(?:nota|notas|ler|lê|le|leia|lês|abre|abrir|abra|atualiza|atualizar|edita|editar)\s+(?:a\s+|o\s+)?(?:nota\s+)?/giu;
   const names = new Map<string, NoteRef[]>();
   for (const n of index)
     for (const name of [n.title, ...n.aliases, n.path.replace(/\.md$/i, "")]) {

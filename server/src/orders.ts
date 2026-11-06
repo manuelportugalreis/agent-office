@@ -3,7 +3,8 @@ import type { AccessProfile, ServerMsg, StepView, ToolStep } from "../../shared/
 import { fold, ofPlace, placeName, ROOM_PLACES, toPlace } from "../../shared/places.ts";
 import { AGENT_NAMES, findAgent } from "./agents.ts";
 import type { Hub, RunResult } from "./hub.ts";
-import { parsePlaceText, type PlaceRef } from "./intent.ts";
+import { withHistory } from "./chat-context.ts";
+import { parseOrder, parsePlaceText, type PlaceRef } from "./intent.ts";
 import type { SceneBridge } from "./scene-bridge.ts";
 import { findNoteMention, openInObsidian, resolveNote, type NoteMatch, type NoteRef, type OpenResult } from "./vault.ts";
 
@@ -40,6 +41,8 @@ export interface RunOrderOptions {
   readonly handoff?: (task: string, deps: ReadonlyArray<{ agent: string; reply: string; steps?: readonly ToolStep[] }>) => string;
   /** Quem dá as tarefas (o Atlas mostra a entrega do papel na cena). */
   readonly delegator?: string;
+  /** Editar/regenerar: a primeira tarefa começa uma sessão nova com este histórico (o que foi substituído não conta). */
+  readonly fresh?: { readonly history: string };
 }
 
 export interface OrderEngine {
@@ -79,7 +82,7 @@ interface Question {
 /** Respostas curtas ("a segunda", "Gestão") podem ser engano de escrita; mensagens longas são outro assunto. */
 const SHORT_ANSWER_WORDS = 4;
 /** Respostas que cancelam a pergunta. */
-const CANCEL = /^(esquece|cancela|deixa|nao interessa|nada|nenhum|nenhuma|para)\b/;
+const CANCEL = /^(esquece|cancela|deixa|nao interessa|nada|nenhum|nenhuma|para com isso)\b/;
 
 const QUESTION_TIMEOUT_MS = 30 * 60_000;
 const nameOf = (id: string): string => findAgent(id)?.name ?? id;
@@ -139,6 +142,8 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
   const questions = new Map<string, Question[]>();
   /** "Qual é o teu gabinete?" uma só vez por conversa, mesmo com vários passos a precisar da resposta. */
   const officeAsks = new Map<string, Promise<string | null>>();
+  /** Muda quando a conversa é recomeçada: as ordens dessa conversa que ainda tinham passos por fazer param. */
+  const generations = new Map<string, number>();
   // Ids a partir da hora: depois de reiniciar o servidor, um cartão antigo numa página aberta não se confunde com um novo.
   let orderCounter = Date.now();
 
@@ -230,7 +235,13 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
   return {
     hasQuestion: (owner) => questions.has(owner),
     cancel(owner) {
-      for (const q of [...(questions.get(owner) ?? [])]) q.resolve(null);
+      // Passos ainda por começar deixam de correr (ex.: a edição que esperava a chegada à sala).
+      generations.set(owner, (generations.get(owner) ?? 0) + 1);
+      // Esvazia a fila antes de responder: nenhuma pergunta seguinte chega a ser feita na conversa nova.
+      const queue = questions.get(owner) ?? [];
+      questions.delete(owner);
+      officeAsks.delete(owner);
+      for (const q of queue) q.resolve(null);
     },
     officeChosen(place) {
       for (const queue of [...questions.values()]) for (const q of [...queue]) if (q.office) q.resolve(place);
@@ -238,15 +249,18 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
     answer(owner, text) {
       const q = questions.get(owner)?.[0];
       if (!q) return false;
+      // Uma ordem nova ("vai à copa", "Mira, abre a nota X") não é resposta: a pergunta fica e a ordem segue.
+      if (parseOrder(text, AGENTS, owner)) return false;
+      // Primeiro tenta perceber a resposta ("para a copa" é um sítio, não um "para" de cancelar).
+      const value = q.parse(text);
+      if (value !== undefined) {
+        q.resolve(value);
+        return true;
+      }
       // "Esquece", "cancela", "deixa estar": o passo fica por fazer, com esse motivo.
       if (CANCEL.test(fold(text))) {
         q.resolve(null);
         emit({ type: "reply", agentId: owner, text: "Está bem, fica por fazer." });
-        return true;
-      }
-      const value = q.parse(text);
-      if (value !== undefined) {
-        q.resolve(value);
         return true;
       }
       // Uma resposta curta que não se percebeu (engano de escrita): pergunta outra vez, uma vez só.
@@ -262,6 +276,9 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
 
     async run(owner, title, steps, opts = {}) {
       const id = ++orderCounter;
+      // Se a conversa for recomeçada a meio (nova conversa), os passos que ainda não começaram já não correm.
+      const generation = generations.get(owner) ?? 0;
+      let freshUsed = false;
       const views = new Map<string, StepView>(steps.map((s) => [s.id, { id: s.id, label: labelOf(s), state: "pending" }]));
       const publish = (finished = false): void =>
         emit({ type: "order-steps", id, owner, title, steps: steps.map((s) => views.get(s.id) as StepView), finished });
@@ -275,6 +292,8 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
 
       async function exec(s: ExecStep): Promise<StepOutcome> {
         const deps_ = await Promise.all(s.after.flatMap((d) => (byId.has(d) ? [start(byId.get(d) as ExecStep)] : [])));
+        if ((generations.get(owner) ?? 0) !== generation)
+          return done(s, { state: "skipped", detail: "a conversa foi recomeçada antes deste passo" });
         const failed = deps_.find((d) => d.view.state === "blocked" || d.view.state === "skipped");
         if (failed) {
           set(s, { state: "skipped", detail: `não começou porque «${failed.view.label}» não ficou feito` });
@@ -394,8 +413,12 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
               before.map((b) => ({ agent: b.step.agent ?? "", reply: b.result?.reply ?? "", steps: b.result?.steps })),
             )
           : text;
-        const result = await waitAndRun(hub, agent, prompt, {
+        // Regenerar: a primeira tarefa do dono da conversa começa sessão nova, com o histórico reconstruído.
+        const fresh = opts.fresh && !freshUsed && agent === owner;
+        if (fresh) freshUsed = true;
+        const result = await waitAndRun(hub, agent, fresh ? withHistory(opts.fresh?.history ?? "", prompt) : prompt, {
           label: s.task ?? text,
+          ...(fresh ? { fresh: true } : {}),
           ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
           // Quando o Atlas lhe passa uma revisão, a Nina aponta e não corrige (só leitura em qualquer modo).
           ...(agent === "nina" && opts.delegator ? { readOnly: true } : {}),
@@ -440,7 +463,8 @@ export function taskEvidence(
       if (!check.ok) state = "partial";
     } else {
       // Só conta a leitura deste ficheiro (ler outra nota não é ler a pedida).
-      const file = fold(note.note.path.split("/").at(-1) ?? "");
+      const file = fold(note.note.path);
+      // O caminho relativo inteiro (não só o nome): ler Pessoal/Planeamento.md não é ler Trabalho/Planeamento.md.
       const read = steps.some(
         (t) => (t.tool === "Read" || t.tool.includes("read_note")) && t.ok !== false && fold(t.summary).includes(file),
       );
