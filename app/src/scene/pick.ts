@@ -38,6 +38,17 @@ export function nearestFigure(click: ScreenPoint, figures: readonly ScreenFigure
   return best;
 }
 
+/** Um clique a menos disto do eixo de alguém é para essa pessoa, mesmo que outra esteja à frente na malha. */
+export const AXIS_PX = 6;
+
+/**
+ * Quem foi clicado: em cima do eixo de alguém (mesmo meio tapado por quem está à frente) ganha essa pessoa; senão a
+ * malha acertada (`hitId`); senão a mais próxima dentro do raio.
+ */
+export function chooseFigure(hitId: string | null, click: ScreenPoint, figures: readonly ScreenFigure[], radius: number): string | null {
+  return nearestFigure(click, figures, AXIS_PX) ?? hitId ?? nearestFigure(click, figures, radius);
+}
+
 /** Raio de toque: pelo menos 14 px, ou metade da altura da figura no ecrã quando estás mais perto. */
 export function pickRadius(figureHeightPx: number): number {
   return Math.max(14, figureHeightPx * 0.5);

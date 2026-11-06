@@ -14,7 +14,7 @@ import { editables, loadLayout } from "./scene/editable";
 import { createEditor } from "./scene/editor";
 import { createScreen, drawScreen, type ScreenHandle } from "./scene/screens";
 import { createStage, DEFAULT_ZOOM, type TimeMode } from "./scene/stage";
-import { nearestFigure, pickRadius } from "./scene/pick";
+import { chooseFigure, pickRadius } from "./scene/pick";
 import type { ChatActions, ChatAgent } from "./chat/ChatPanel";
 import type { ChatMount } from "./chat/mount";
 import { createChatStore } from "./chat/store";
@@ -197,7 +197,10 @@ function clickInWalkMode(e: PointerEvent, clicked: Agent | null): void {
   if (clicked) return walkTo(clicked);
   const ground = stage.pickGround(e);
   if (!ground) return;
-  if (clickCorridor(player, ground)) return walkStatus.heading(null);
+  if (clickCorridor(player, ground)) {
+    walkTarget = null;
+    return walkStatus.heading(null);
+  }
   const desk = nearestDesk(agents, ground);
   if (desk) walkTo(desk);
 }
@@ -339,8 +342,8 @@ const FIGURE_HEIGHT = 1.6;
 
 function pickAt(e: PointerEvent): Agent | null {
   const id = pickId(e);
-  if (id && id !== DOSSIER_ID) return byAgentId.get(id) ?? null;
-  // Sem acerto exato na malha: a pessoa mais próxima do clique no ecrã (são pequenas e mexem-se).
+  const hit = id && id !== DOSSIER_ID ? id : null;
+  // As pessoas são pequenas, mexem-se e tapam-se umas às outras: conta também a posição no ecrã (ver chooseFigure).
   const r = stage.dom.getBoundingClientRect();
   const click = { x: e.clientX - r.left, y: e.clientY - r.top };
   let tallest = 0;
@@ -351,8 +354,8 @@ function pickAt(e: PointerEvent): Agent | null {
     tallest = Math.max(tallest, Math.abs(foot.y - head.y));
     return { id: agentId, foot, head };
   });
-  const near = nearestFigure(click, figures, pickRadius(tallest));
-  return near ? (byAgentId.get(near) ?? null) : null;
+  const chosen = chooseFigure(hit, click, figures, pickRadius(tallest));
+  return chosen ? (byAgentId.get(chosen) ?? null) : null;
 }
 
 const agentNamed = (name: string): Agent | undefined => agents.find((a) => a.def.name === name);

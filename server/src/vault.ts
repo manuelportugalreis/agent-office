@@ -213,6 +213,16 @@ export function obsidianVaults(dir = obsidianConfigDir()): ObsidianVault[] {
   }
 }
 
+/** O Obsidian marca no obsidian.json os vaults que tem abertos (`open: true`). */
+export function obsidianVaultOpen(id: string, dir = obsidianConfigDir()): boolean {
+  try {
+    const data = JSON.parse(readFileSync(join(dir, "obsidian.json"), "utf8")) as { vaults?: Record<string, { open?: unknown }> };
+    return data.vaults?.[id]?.open === true;
+  } catch {
+    return false;
+  }
+}
+
 const inside = (dir: string, file: string): boolean => {
   const r = relative(dir.toLowerCase(), file.toLowerCase());
   return !!r && !r.startsWith("..") && !isAbsolute(r);
@@ -302,6 +312,8 @@ export interface OpenDeps {
   readonly pollMs?: number;
   /** Se o Obsidian está a correr neste computador. */
   readonly isRunning?: () => boolean;
+  /** Se este vault (pelo id) está aberto numa janela do Obsidian. */
+  readonly vaultOpen?: (id: string) => boolean;
 }
 
 /** O Obsidian está aberto? (Windows: pela lista de processos, sem shell.) */
@@ -365,8 +377,9 @@ export async function openInObsidian(absolute: string, deps: OpenDeps = {}): Pro
     if (stamp(vault) > before && active(vault) === rel) return { launched: true, confirmed: true };
     await new Promise((r) => setTimeout(r, poll));
   }
-  // Se a nota já era a ativa e o Obsidian está aberto, o Obsidian não grava nada (nada mudou), mas a nota está à vista.
-  if (shownBefore && active(vault) === rel && (deps.isRunning ?? obsidianRunning)())
+  // Se a nota já era a ativa, o Obsidian está a correr e é este vault que está aberto, o Obsidian não grava nada
+  // (nada mudou), mas a nota está à vista. Com outro vault aberto, não se conta.
+  if (shownBefore && active(vault) === rel && (deps.isRunning ?? obsidianRunning)() && (deps.vaultOpen ?? obsidianVaultOpen)(entry.v.id))
     return { launched: true, confirmed: true, already: true };
   return { launched: true, confirmed: false };
 }

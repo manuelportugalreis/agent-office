@@ -337,6 +337,7 @@ function taskText(ts: readonly Tok[]): string {
 }
 
 const ARTICLES = ["a", "o", "ao", "à"];
+const NEGATIONS = ["nao", "não", "nunca", "sem"];
 const LINKS = ["para", "que"];
 
 /** "(pede) à Lena para": o agente e quantos tokens ocupa, se `ts[at]` começa um pedido a um colega. */
@@ -362,8 +363,16 @@ function delegationAt(
 function splitDelegations(ts: readonly Tok[], agents: readonly AgentName[], who: string): { agent: string; ts: Tok[] }[] {
   const parts: { agent: string; ts: Tok[] }[] = [{ agent: who, ts: [] }];
   let i = 0;
+  let quoted = false;
   while (i < ts.length) {
-    const d = delegationAt(ts, i, agents, parts.length > 1);
+    // Dentro de aspas é texto (uma mensagem a escrever), e "não pede à Lena…" não é um pedido.
+    const raw = ts[i].raw;
+    const opens = /^[«"“]/.test(raw);
+    const closes = /[»"”][,.;:!?]*$/.test(raw) && !(opens && raw.length === 1);
+    const negated = NEGATIONS.includes(ts[i - 1]?.f ?? "");
+    const d = quoted || opens || negated ? null : delegationAt(ts, i, agents, parts.length > 1);
+    if (opens && !closes) quoted = true;
+    else if (quoted && closes) quoted = false;
     if (d) {
       parts.push({ agent: d.id, ts: [] });
       i += d.used;
@@ -441,11 +450,14 @@ export function parseOrder(text: string, agents: readonly AgentName[], self: str
   return { addressee, steps: withOpenedNote(steps) };
 }
 
+/** A tarefa nomeia a sua própria nota ("resume a nota Orçamento", "[[X]]"): essa ganha à que foi aberta antes. */
+const NAMES_A_NOTE = /\[\[|\bnota\s+(?!(?:e|para|que|com|no|na|do|da|de|ao|à|a|o)\b)[^\s,.;:!?]/i;
+
 /** "Abre a nota X, lê-a… pede à Lena para os acrescentar": as tarefas depois de abrir uma nota referem-se a ela. */
 function withOpenedNote(steps: readonly Step[]): Step[] {
   let opened: string | null = null;
   return steps.map((s) => {
     if (s.kind === "open_note") opened = s.note;
-    return s.kind === "task" && opened && s.note === undefined ? { ...s, note: opened } : s;
+    return s.kind === "task" && opened && s.note === undefined && !NAMES_A_NOTE.test(s.task) ? { ...s, note: opened } : s;
   });
 }

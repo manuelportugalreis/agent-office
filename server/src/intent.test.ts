@@ -117,6 +117,17 @@ describe("parseOrder", () => {
     ]);
   });
 
+  it("negações e texto entre aspas não criam passos de colegas; uma nota nomeada na tarefa ganha à aberta antes", () => {
+    const agentsOf = (text: string): (string | false)[] | undefined =>
+      parseOrder(text, AGENTS, null)
+        ?.steps.filter((s) => s.kind === "task")
+        .map((s) => s.kind === "task" && s.agent);
+    expect(agentsOf("Mira, vai ao meu gabinete e não pede à Lena para escrever")).toEqual(["mira"]);
+    expect(agentsOf("Mira, vai ao meu gabinete e escreve «pede à Lena para rever» no quadro")).toEqual(["mira"]);
+    const steps = parseOrder("Mira, abre a nota Planeamento e resume a nota Orçamento", AGENTS, null)?.steps;
+    expect(steps?.find((s) => s.kind === "task")).toEqual({ kind: "task", agent: "mira", task: "resume a nota Orçamento" });
+  });
+
   it("'pede-lhe' continua a ser da mesma pessoa; um nome sem 'para' não é um pedido", () => {
     const steps = parseOrder("Mira, vai ao meu gabinete e pede-lhe para falar com a Lena sobre o plano", AGENTS, null)?.steps;
     expect(steps?.filter((s) => s.kind === "task").map((s) => s.kind === "task" && s.agent)).toEqual(["mira"]);

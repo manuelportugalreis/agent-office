@@ -44,7 +44,7 @@ export function createFeed(): Feed {
     if (box.style.display === "block" && !e.composedPath().includes(box)) box.style.display = "none";
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || box.style.display !== "block") return;
+    if (e.key !== "Escape" || box.style.display !== "block" || e.defaultPrevented) return;
     box.style.display = "none";
     e.preventDefault(); // Esc fecha só isto (não também o painel do agente).
   });

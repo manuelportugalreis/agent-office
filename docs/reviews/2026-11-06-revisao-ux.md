@@ -63,3 +63,10 @@ edições precisam de autorização.
 - Codex (`codex exec --sandbox read-only`): médios corrigidos: Esc do dossier fechava também o painel; as malhas
   realistas sem id (a causa do clique falhado). Baixo corrigido: "Repetir" apagava o cartão mesmo sem conseguir enviar.
   Sem defeitos no campo `skills` (o browser não alarga o acesso guardado), no BOM e no foco.
+- Codex, segunda ronda (às correções): confirmou o raycast pelos antepassados, o "Repetir", o limite de tempo do
+  exemplo e a escolha de quem está meio tapado. Corrigidos: Esc fechava duas sobreposições de uma vez (agora uma de
+  cada vez); "não pede à Lena para…" e texto entre aspas já não criam passos; uma nota nomeada na tarefa ganha à aberta
+  antes; "já estava aberta" exige também que seja este vault o aberto no Obsidian; o alvo do modo andar limpa-se ao
+  andar pelo corredor.
+- Modo andar com quem está meio tapado (a Ada atrás do Turing): um clique em cima do eixo de alguém escolhe essa pessoa;
+  verificado no build da demo: 5/5 no modo andar, 11/11 na vista normal.

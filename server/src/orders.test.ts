@@ -497,7 +497,16 @@ describe("notas", () => {
       waitMs: 20,
       pollMs: 5,
     };
-    expect(await openInObsidian(abs, { ...opts, isRunning: () => true })).toEqual({ launched: true, confirmed: true, already: true });
+    expect(await openInObsidian(abs, { ...opts, isRunning: () => true, vaultOpen: () => true })).toEqual({
+      launched: true,
+      confirmed: true,
+      already: true,
+    });
+    // O Obsidian aberto, mas noutro vault: não prova que esta nota esteja à vista.
+    expect(await openInObsidian(abs, { ...opts, isRunning: () => true, vaultOpen: () => false })).toEqual({
+      launched: true,
+      confirmed: false,
+    });
     // Outra nota ativa antes: tem de ser o Obsidian a confirmar a mudança.
     expect(await openInObsidian(abs, { ...opts, activeFile: () => "Outra.md", isRunning: () => true })).toEqual({
       launched: true,

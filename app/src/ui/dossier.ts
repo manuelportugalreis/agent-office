@@ -393,7 +393,8 @@ export function createDossierUi(actions: DossierActions, demo?: DossierDemo): Do
 
   window.matchMedia("(max-width: 820px)").addEventListener("change", () => render());
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || !opened) return;
+    // Outra camada (notificações, atividade) já tratou deste Esc: uma de cada vez.
+    if (e.key !== "Escape" || !opened || e.defaultPrevented) return;
     const t = e.target as HTMLElement | null;
     if (t && /^(INPUT|SELECT)$/.test(t.tagName)) return;
     e.preventDefault(); // Esc fecha só o dossier (não também o painel do agente).
