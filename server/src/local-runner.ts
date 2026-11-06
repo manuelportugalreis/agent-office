@@ -161,10 +161,19 @@ export function terminalScript(req: RunRequest & { readonly profile: AccessProfi
     interactive: true,
     files: { policy: `${stem}-policy.json`, mcp: `${stem}-mcp.json` },
   });
+  // O PowerShell 5.1 tira as aspas dos argumentos que passa a programas: o JSON das definições e o prompt (que têm
+  // aspas) vão por ficheiro, e nenhum argumento do script leva aspas duplas.
+  const settingsAt = args.indexOf("--settings");
+  writeFileSync(`${stem}-settings.json`, args[settingsAt + 1], { mode: 0o600 });
+  args[settingsAt + 1] = slash(`${stem}-settings.json`);
+  const promptAt = args.indexOf("--append-system-prompt");
+  writeFileSync(`${stem}-prompt.txt`, args[promptAt + 1], { mode: 0o600 });
+  args.splice(promptAt, 2, "--append-system-prompt-file", slash(`${stem}-prompt.txt`));
   // Plicas de PowerShell: tanto a ASCII como as tipográficas fecham a string, por isso duplicam-se todas.
   const ps = (v: string): string => `'${v.replace(/['\u2018\u2019\u201A\u201B]/g, (q) => q + q)}'`;
   const script = [
     "$ErrorActionPreference = 'Stop'",
+    ...CHILD_MARKERS.map((k) => `Remove-Item Env:${k} -ErrorAction SilentlyContinue`),
     `Set-Location -LiteralPath ${ps(req.profile.folder)}`,
     `$a = @(${args.map(ps).join(", ")})`,
     `& ${ps(claudeExecutable())} @a`,
@@ -286,6 +295,17 @@ export function toPermissionAsk(request: Record<string, unknown>, cwd?: string):
 
 // ---------- processo ----------
 
+/**
+ * Ambiente do `claude`: o teu, sem os marcadores de "sessão filha" que existem quando o próprio servidor foi lançado
+ * de dentro de uma sessão do Claude Code (desligariam o histórico das sessões e o `--resume`).
+ */
+export const CHILD_MARKERS = ["CLAUDE_CODE_CHILD_SESSION", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"];
+export function childEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...base };
+  for (const k of CHILD_MARKERS) delete env[k];
+  return env;
+}
+
 /** Lança uma sessão local. O pedido vai por stdin (mensagem stream-json), nunca como argumento. */
 export function localRun(req: RunRequest & { readonly profile: AccessProfile }, handlers: RunHandlers): RunHandle {
   const { args, files } = buildLocalArgs(req);
@@ -293,6 +313,7 @@ export function localRun(req: RunRequest & { readonly profile: AccessProfile }, 
     for (const f of files) rmSync(f, { force: true, recursive: true });
   };
   const child = spawn(claudeExecutable(), args, {
+    env: childEnv(),
     cwd: req.profile.folder,
     shell: false,
     stdio: ["pipe", "pipe", "pipe"],

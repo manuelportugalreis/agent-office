@@ -432,3 +432,29 @@ describe("revisão só de leitura e respostas sem ferramentas", () => {
     expect(stripFakeToolCalls(fake)).toBe("**Feito e verificado**\n- ok");
   });
 });
+
+describe("continuar no terminal", () => {
+  it("o script não passa JSON nem texto com aspas na linha de comandos (o PowerShell 5.1 estraga-os)", async () => {
+    const { terminalScript } = await import("./local-runner.ts");
+    const file = terminalScript(
+      { agent: findAgent("nina")!, text: "", sessionId: "11111111-2222-3333-4444-555555555555", resume: true, profile: profile() },
+      vault,
+    );
+    const script = readFileSync(file, "utf8");
+    const argsLine = script.split("\r\n").find((l) => l.startsWith("$a = @("))!;
+    expect(argsLine).not.toContain('"');
+    expect(argsLine).toContain("--append-system-prompt-file");
+    expect(argsLine).toContain("-settings.json");
+    expect(argsLine).toContain("'--resume', '11111111-2222-3333-4444-555555555555'");
+    const settings = JSON.parse(readFileSync(file.replace(/\.ps1$/, "-settings.json"), "utf8")) as { hooks: { PreToolUse: unknown[] } };
+    expect(settings.hooks.PreToolUse).toHaveLength(1);
+  });
+});
+
+describe("ambiente do claude", () => {
+  it("tira os marcadores de sessão filha (o servidor pode ter sido lançado de dentro do Claude Code)", async () => {
+    const { childEnv } = await import("./local-runner.ts");
+    const env = childEnv({ PATH: "x", CLAUDE_CODE_CHILD_SESSION: "1", CLAUDECODE: "1", ANTHROPIC_MODEL: "m" });
+    expect(env).toEqual({ PATH: "x", ANTHROPIC_MODEL: "m" });
+  });
+});
