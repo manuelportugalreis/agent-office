@@ -257,6 +257,19 @@ export function obsidianActiveFile(vault: string): string | null {
   return null;
 }
 
+/** Data da última gravação do workspace do Obsidian neste vault (0 se ainda não existe). */
+export function workspaceStamp(vault: string): number {
+  let newest = 0;
+  for (const name of ["workspace.json", "workspace-mobile.json"]) {
+    try {
+      newest = Math.max(newest, statSync(join(vault, ".obsidian", name)).mtimeMs);
+    } catch {
+      /* ainda não existe */
+    }
+  }
+  return newest;
+}
+
 /** Procura, na árvore de painéis do workspace, o ficheiro do painel ativo. */
 function findLeafFile(node: unknown, activeId: string): string | null {
   if (typeof node !== "object" || node === null) return null;
@@ -281,6 +294,8 @@ export interface OpenDeps {
   readonly vaults?: readonly ObsidianVault[];
   readonly launch?: (uri: string) => boolean;
   readonly activeFile?: (vault: string) => string | null;
+  /** Quando o Obsidian gravou o workspace pela última vez (ms; 0 se nunca). */
+  readonly workspaceStamp?: (vault: string) => number;
   readonly waitMs?: number;
   readonly pollMs?: number;
 }
@@ -321,13 +336,17 @@ export async function openInObsidian(absolute: string, deps: OpenDeps = {}): Pro
   const rel = relative(vault, realpathSync.native(absolute)).replaceAll("\\", "/");
   // Pelo id do vault e o caminho relativo da nota (a forma documentada; o `path=` absoluto falha com algumas pastas).
   const uri = `obsidian://open?vault=${encodeURIComponent(entry.v.id)}&file=${encodeURIComponent(rel.replace(/\.md$/i, ""))}`;
+  // Só conta como confirmado se o Obsidian gravar o workspace depois de o lançarmos (um estado antigo que já
+  // mostrava esta nota não prova que abriu agora).
+  const stamp = deps.workspaceStamp ?? workspaceStamp;
+  const before = stamp(vault);
   const launched = (deps.launch ?? launchUri)(uri);
   if (!launched) return { launched: false, confirmed: false, error: "não consegui lançar o Obsidian" };
   const active = deps.activeFile ?? obsidianActiveFile;
   const wait = deps.waitMs ?? 15_000;
   const poll = deps.pollMs ?? 500;
   for (let t = 0; t <= wait; t += poll) {
-    if (active(vault) === rel) return { launched: true, confirmed: true };
+    if (stamp(vault) > before && active(vault) === rel) return { launched: true, confirmed: true };
     await new Promise((r) => setTimeout(r, poll));
   }
   return { launched: true, confirmed: false };

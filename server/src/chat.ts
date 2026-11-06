@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ServerMsg } from "../../shared/protocol.ts";
+import type { AccessProfile, ServerMsg } from "../../shared/protocol.ts";
+import { log } from "./log.ts";
 import { AGENT_NAMES, findAgent } from "./agents.ts";
 import type { Hub } from "./hub.ts";
 import { parseOrder } from "./intent.ts";
@@ -42,6 +43,8 @@ export interface ChatService {
 export interface ChatOrders {
   readonly engine: OrderEngine;
   readonly vaultDir: () => string;
+  /** Perfil atual do agente (modo local) ou null: a ordem fica com este acesso até ao fim, mesmo que o modo mude. */
+  readonly profileOf?: (agentId: string) => AccessProfile | null;
 }
 
 /** Conversas com os agentes: guarda o histórico, trata anexos e ordens, e implementa editar, regenerar e nova conversa. */
@@ -79,11 +82,21 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
   }
 
   function runOrder(agentId: string, text: string, steps: ExecStep[]): void {
-    void orders?.engine.run(agentId, text, steps).then((outcomes) => {
-      // A resposta do agente já aparece no chat; com ações (andar, abrir) junta-se o que aconteceu e a evidência.
-      if (outcomes.some((o) => o.step.kind !== "task" || o.view.state !== "done"))
-        emit({ type: "reply", agentId, text: summarize(outcomes) });
-    });
+    if (!orders) return;
+    // O acesso fica congelado no momento da ordem (uma ordem à espera de chegar ou de uma resposta não muda de perfil).
+    const current = orders.profileOf?.(agentId) ?? null;
+    const profile = current ? (Object.freeze(structuredClone(current)) as AccessProfile) : null;
+    orders.engine
+      .run(agentId, text, steps, { profile })
+      .then((outcomes) => {
+        // A resposta do agente já aparece no chat; com ações (andar, abrir) junta-se o que aconteceu e a evidência.
+        if (outcomes.some((o) => o.step.kind !== "task" || o.view.state !== "done"))
+          emit({ type: "reply", agentId, text: summarize(outcomes) });
+      })
+      .catch((err: unknown) => {
+        log.error("erro numa ordem do chat", err);
+        emit({ type: "reply", agentId, text: "A ordem parou por um erro interno (vê o registo do servidor). Nada mais foi feito." });
+      });
   }
 
   const error = (agentId: string, message: string, op?: "send" | "redo" | "newchat"): void =>

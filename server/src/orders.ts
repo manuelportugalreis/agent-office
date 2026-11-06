@@ -306,7 +306,10 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
       const start = (s: ExecStep): Promise<StepOutcome> => {
         let p = results.get(s.id);
         if (!p) {
-          p = exec(s);
+          // Um erro inesperado (ex.: uma nota ilegível) bloqueia este passo com o motivo, nunca o servidor.
+          p = exec(s).catch((err: unknown) =>
+            done(s, { state: "blocked", detail: `erro interno: ${err instanceof Error ? err.message : String(err)}`.slice(0, 300) }),
+          );
           results.set(s.id, p);
         }
         return p;

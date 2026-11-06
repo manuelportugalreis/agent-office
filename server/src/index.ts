@@ -134,7 +134,7 @@ const orchestrator = createOrchestrator(hub, broadcast, orders, {
   set: (text) => store.setSetting("lastOrderResults", text),
 });
 const canvas = createCanvasSync(hub, broadcast);
-const chat = createChatService(hub, store, broadcast, { engine: orders, vaultDir: () => config.vaultDir });
+const chat = createChatService(hub, store, broadcast, { engine: orders, vaultDir: () => config.vaultDir, profileOf });
 const dossier = createDossierService({
   hub,
   store,

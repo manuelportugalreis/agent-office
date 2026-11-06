@@ -9,7 +9,7 @@ import { parsePlan, planSteps } from "./orchestrator.ts";
 import { findAgent } from "./agents.ts";
 import { buildArgs } from "./runner.ts";
 import type { SceneBridge } from "./scene-bridge.ts";
-import { findNoteMention, resolveNote, vaultFor } from "./vault.ts";
+import { findNoteMention, openInObsidian, resolveNote, vaultFor } from "./vault.ts";
 
 function vault(): string {
   const dir = mkdtempSync(join(tmpdir(), "office-vault-"));
@@ -238,6 +238,25 @@ describe("motor de ordens", () => {
     expect(hub.calls[1].text).toContain("ficou com ressalvas");
   });
 
+  it("a tarefa usa o perfil dado à ordem (congelado), não o que o agente tiver depois", async () => {
+    const seen: unknown[] = [];
+    const hub = fakeHub();
+    const run = hub.run;
+    hub.run = (agent, text, opts) => (seen.push(opts?.profile), run(agent, text, opts));
+    const { engine } = setup({ hub });
+    await engine.run("lena", "x", sequence([{ kind: "task", agent: "lena", task: "faz" }]), { profile: null });
+    expect(seen).toEqual([null]);
+  });
+
+  it("um erro inesperado bloqueia o passo com o motivo (não rebenta)", async () => {
+    const hub = fakeHub();
+    hub.run = () => Promise.reject(new Error("disco ilegível"));
+    const { engine } = setup({ hub });
+    const [o] = await engine.run("lena", "x", sequence([{ kind: "task", agent: "lena", task: "faz" }]));
+    expect(o.view.state).toBe("blocked");
+    expect(o.view.detail).toContain("disco ilegível");
+  });
+
   it("ações recusadas aparecem como ressalva (nunca como sucesso limpo)", async () => {
     const hub = fakeHub(() => ({ steps: [{ tool: "Write", summary: "C:/fora/x.md", file: "C:/fora/x.md", ok: false }] }));
     const { engine } = setup({ hub });
@@ -310,6 +329,25 @@ describe("notas", () => {
     expect(checkNoteEdit("---\na: 1\n---\nx\n", "---\na: 2\n---\nx\ny\n").ok).toBe(false);
     expect(checkNoteEdit("x\ny\n", "x\nz\n").detail).toContain("desapareceram");
     expect(checkNoteEdit("x\n", "x\ny\n")).toMatchObject({ ok: true });
+  });
+
+  it("abrir no Obsidian: um workspace antigo que já mostrava a nota não conta como confirmação", async () => {
+    const dir = vault();
+    const abs = join(dir, "Projetos", "Planeamento.md");
+    const vaults = [{ id: "abc", path: dir }];
+    const uris: string[] = [];
+    const base = {
+      vaults,
+      launch: (u: string) => (uris.push(u), true),
+      activeFile: () => "Projetos/Planeamento.md",
+      waitMs: 20,
+      pollMs: 5,
+    };
+    expect(await openInObsidian(abs, { ...base, workspaceStamp: () => 100 })).toEqual({ launched: true, confirmed: false });
+    let stamp = 100;
+    const fresh = await openInObsidian(abs, { ...base, workspaceStamp: () => (stamp += 50) });
+    expect(fresh).toEqual({ launched: true, confirmed: true });
+    expect(uris[0]).toBe("obsidian://open?vault=abc&file=Projetos%2FPlaneamento");
   });
 
   it("vaultFor só aceita notas dentro de um vault registado no Obsidian", () => {
