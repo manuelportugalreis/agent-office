@@ -145,10 +145,12 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
       // Editar ou regenerar uma ordem ("abre a nota X", "vai à copa") volta a executá-la, não só a perguntar ao agente.
       // Editar/regenerar uma ordem com ações (andar, abrir) volta a executá-la, numa sessão nova com o histórico.
       // Uma mensagem que só menciona uma nota segue o caminho normal (sessão nova com o histórico).
-      const parsed = files?.length || !orders ? null : parseOrder(text, AGENT_NAMES, agentId);
-      if (parsed) {
+      // Ordens de grupo e ordens com ações (andar, abrir) voltam a ser executadas.
+      const group = files?.length || !orders ? null : parseGroupMove(text, AGENT_NAMES);
+      const parsed = group || files?.length || !orders ? null : parseOrder(text, AGENT_NAMES, agentId);
+      if (group || parsed) {
         orders?.engine.cancel(agentId);
-        return runOrder(agentId, text, sequence(parsed.steps), history);
+        return runOrder(agentId, text, group ? groupSteps(group) : sequence(parsed?.steps ?? []), history);
       }
       void hub.run(agentId, withHistory(history, withAttachments(agentId, text, files)), { fresh: true, label: text });
     },

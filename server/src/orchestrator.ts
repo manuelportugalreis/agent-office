@@ -148,14 +148,20 @@ export function planSteps(plan: Plan): ExecStep[] {
   const steps: ExecStep[] = [];
   if (plan.openNote) steps.push({ id: "open", kind: "open_note", note: plan.openNote, after: [] });
   // Deslocações de grupo: todas ao mesmo tempo; quem também tem uma tarefa já tem o seu "go".
+  const groupMove = new Map<string, string>();
   (plan.moves ?? []).forEach((m, i) =>
     m.agents
       .filter((a) => !plan.tasks.some((t) => t.agent === a && t.go))
-      .forEach((agent) => steps.push({ id: `m${i}:${agent}`, kind: "move", agent, to: m.go, after: [] })),
+      .forEach((agent) => {
+        groupMove.set(agent, `m${i}:${agent}`);
+        steps.push({ id: `m${i}:${agent}`, kind: "move", agent, to: m.go, after: [] });
+      }),
   );
   for (const t of plan.tasks) {
     const deps = t.after.map(last);
     if (t.go) steps.push({ id: `${t.agent}:go`, kind: "move", agent: t.agent, to: t.go, after: deps });
+    // Quem anda num movimento de grupo só começa a tarefa quando chegar ("toda a gente à sala e depois a Mira…").
+    const arrive = t.go ? `${t.agent}:go` : groupMove.get(t.agent);
     if (t.task)
       steps.push({
         id: t.agent,
@@ -164,7 +170,7 @@ export function planSteps(plan: Plan): ExecStep[] {
         task: t.task,
         ...(t.note ? { note: t.note } : {}),
         // Depois de chegar, e também depois dos colegas de que depende (para receber o resultado deles).
-        after: t.go ? [`${t.agent}:go`, ...deps] : deps,
+        after: arrive ? [arrive, ...deps] : deps,
       });
   }
   return steps;

@@ -17,6 +17,8 @@ const MAX_PER_DAY = 16;
 const SETTINGS_KEY = "initiative";
 const TURN_KEY = "initiativeTurn";
 const IDEA_MAX = 500;
+const SEEN_KEY = "initiativeSeen";
+const SEEN_MAX = 300;
 
 export interface InitiativeStore {
   getSetting(key: string): string | null;
@@ -103,33 +105,57 @@ export function createInitiative(deps: {
       .replace(/[^\p{L}\p{N}]+/gu, " ")
       .trim()
       .slice(0, 80)}`;
+  /** Ideias já vistas (mesmo dispensadas há muito): não voltam a aparecer. */
+  const seen = (): string[] => {
+    try {
+      return JSON.parse(store.getSetting(SEEN_KEY) ?? "[]") as string[];
+    } catch {
+      return [];
+    }
+  };
   const addIdea = (agentId: string, idea: string, why = "", firstStep = ""): void => {
-    // A mesma ideia (aberta ou já tratada) não volta a aparecer.
-    if (notifications.list().some((n) => n.key === key(idea))) return;
-    notifications.open(key(idea), agentId, "idea", idea, { ...(why ? { why } : {}), ...(firstStep ? { firstStep } : {}) });
+    const k = key(idea);
+    if (seen().includes(k) || notifications.list().some((n) => n.key === k)) return;
+    store.setSetting(SEEN_KEY, JSON.stringify([...seen(), k].slice(-SEEN_MAX)));
+    notifications.open(k, agentId, "idea", idea, { ...(why ? { why } : {}), ...(firstStep ? { firstStep } : {}) });
     deps.log(agentId, `Ideia para ti: ${idea}`);
   };
+  let thinking = false;
 
   async function now(agentId?: string): Promise<boolean> {
     const turn = Number(store.getSetting(TURN_KEY) ?? "0") || 0;
     const who = agentId ?? PROPOSERS[turn % PROPOSERS.length];
-    if (hub.isRunning(who) || !hub.hasCapacity()) return false;
+    // Uma de cada vez, com a equipa com vaga, e dentro do limite do dia (também quando a pedes tu).
+    if (thinking || hub.isRunning(who) || !hub.hasCapacity() || counter().n >= MAX_PER_DAY) return false;
+    thinking = true;
     store.setSetting(TURN_KEY, String(turn + 1));
     const c = counter();
     store.setSetting(`${SETTINGS_KEY}Count`, JSON.stringify({ day: c.day, n: c.n + 1 }));
     lastRun = Date.now();
     // Sessão à parte, só de leitura e sem mostrar no chat: não mistura com as conversas nem mexe em nada.
-    const result = await hub.run(who, ideaPrompt(who), {
-      silent: true,
-      isolated: true,
-      readOnly: true,
-      label: "A pensar numa ideia para a equipa",
-    });
-    const idea = result.ok ? parseIdea(result.reply) : null;
-    if (idea) addIdea(who, idea.idea, idea.why, idea.firstStep);
-    else
-      deps.log(who, result.ok ? "Sem ideia nova que valha a pena desta vez." : `Não consegui pensar numa ideia: ${result.error ?? "erro"}`);
-    return true;
+    try {
+      // Sessão à parte, só de leitura, sem mostrar no chat e no modo escritório (sem terminal nem integrações MCP,
+      // seja qual for o perfil do agente): pensar numa ideia nunca mexe em nada. `skipComplete`: a resposta não é um
+      // rascunho (não pode substituir um rascunho da Lena ou do Theo à espera de aprovação).
+      const result = await hub.run(who, ideaPrompt(who), {
+        silent: true,
+        isolated: true,
+        readOnly: true,
+        profile: null,
+        skipComplete: true,
+        label: "A pensar numa ideia para a equipa",
+      });
+      const idea = result.ok ? parseIdea(result.reply) : null;
+      if (idea) addIdea(who, idea.idea, idea.why, idea.firstStep);
+      else
+        deps.log(
+          who,
+          result.ok ? "Sem ideia nova que valha a pena desta vez." : `Não consegui pensar numa ideia: ${result.error ?? "erro"}`,
+        );
+      return true;
+    } finally {
+      thinking = false;
+    }
   }
 
   return {

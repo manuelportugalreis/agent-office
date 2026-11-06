@@ -49,6 +49,19 @@ describe("notificações", () => {
     expect(again.list().filter((x) => x.open)).toHaveLength(0);
     expect(out.at(-1)).toMatchObject({ type: "notifications" });
   });
+
+  it("dispensar só fecha o que se pode dar como visto; o que fechaste não volta a acender", () => {
+    const n = createNotifications(memoryStore(), () => undefined);
+    n.open("perm-9", "lena", "permission", "Pede autorização");
+    n.open("dossier-1-review-1-", "ceo", "dossier", "O dossier está à tua espera");
+    const perm = n.list().find((x) => x.key === "perm-9")!;
+    const dossier = n.list().find((x) => x.key.startsWith("dossier"))!;
+    expect(n.dismiss(perm.id)).toBeNull();
+    expect(n.list().find((x) => x.key === "perm-9")?.open).toBe(true);
+    expect(n.dismiss(dossier.id)?.kind).toBe("dossier");
+    n.open("dossier-1-review-1-", "ceo", "dossier", "O dossier está à tua espera");
+    expect(n.list().filter((x) => x.key.startsWith("dossier") && x.open)).toHaveLength(0);
+  });
 });
 
 describe("iniciativa", () => {
@@ -74,7 +87,8 @@ describe("iniciativa", () => {
     const ini = createInitiative({ hub, notifications, store, log: () => undefined });
     expect(await ini.now()).toBe(true);
     expect(hub.calls[0].agent).toBe(PROPOSERS[0]);
-    expect(hub.calls[0].opts).toMatchObject({ silent: true, isolated: true, readOnly: true });
+    // Só de leitura, no modo escritório (sem terminal nem MCP) e sem passar pelas aprovações (não é um rascunho).
+    expect(hub.calls[0].opts).toMatchObject({ silent: true, isolated: true, readOnly: true, profile: null, skipComplete: true });
     const idea = notifications.list().find((n) => n.kind === "idea");
     expect(idea).toMatchObject({ agentId: PROPOSERS[0], text: "Organizar as notas de candidaturas por estado", open: true });
     expect(idea?.data?.firstStep).toBe("listar as notas");
@@ -113,5 +127,23 @@ describe("plano com deslocações de grupo", () => {
     expect(steps.every((s) => s.kind === "move" && s.to === "sala de jogos" && s.after.length === 0)).toBe(true);
     expect(planSteps(parsePlan('{"summary":"s","tasks":[],"moves":[{"agents":"chefes","go":"sala de reuniões"}]}', [])!)).toHaveLength(5);
     expect(parsePlan('{"summary":"s","tasks":[],"moves":[{"agents":["hacker"],"go":"x"}]}', [])).toBeNull();
+  });
+
+  it("quem anda no movimento de grupo só começa a tarefa quando chegar", () => {
+    const plan = parsePlan(
+      '{"summary":"s","tasks":[{"agent":"mira","task":"pesquisa X"}],"moves":[{"agents":"todos","go":"sala de reuniões"}]}',
+      ["mira"],
+    );
+    const task = planSteps(plan!).find((s) => s.kind === "task");
+    expect(task?.after).toEqual(["m0:mira"]);
+  });
+
+  it("a ideia aprovada não pede o limite do dia: 'agora' também respeita o máximo diário", async () => {
+    const store = memoryStore();
+    store.setSetting("initiativeCount", JSON.stringify({ day: new Date().toISOString().slice(0, 10), n: 16 }));
+    const hub = fakeHub('{"idea":"x"}');
+    const ini = createInitiative({ hub, notifications: createNotifications(store, () => undefined), store, log: () => undefined });
+    expect(await ini.now()).toBe(false);
+    expect(hub.calls).toHaveLength(0);
   });
 });

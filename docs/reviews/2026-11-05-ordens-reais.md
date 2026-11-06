@@ -113,3 +113,16 @@ Subagente e Codex confirmaram as correções anteriores (incluindo que os agente
 - A revisão final da Nina era dispensada com base no processo ter terminado, mesmo com a revisão dela "com ressalvas" (ex.: leitura recusada) → só se dispensa se o passo dela ficou feito sem ressalvas.
 - "Continuar no terminal" não levava as tuas instruções → vão no prompt do terminal.
 - Baixo, aceite: o agente continua a escrever a sua memória (`CLAUDE.md`), mostrada só para ler; as tuas instruções antigas no `CLAUDE.md` não migram (o separador é novo e a base real não tinha nenhuma).
+
+## Quinta ronda (ordens de grupo, notificações e iniciativa)
+
+Subagente: aprovado (nenhum crítico/alto; 3 médios, 3 baixos). Codex: 2 altos, 2 médios. Todos corrigidos:
+
+- **Alto:** uma ideia da Lena/Theo passava pelas aprovações e substituía um rascunho à espera → as corridas de ideias não passam pelas aprovações.
+- **Alto:** em modo local, uma corrida de ideia podia usar integrações MCP com escrita → as ideias correm sempre no modo escritório, só de leitura (sem terminal nem MCP).
+- Num plano "toda a gente à sala e depois a Mira…", a tarefa não esperava pela chegada → espera.
+- Regenerar uma ordem de grupo não a executava → executa.
+- "Visto" num dossier voltava a acender → o que fechaste não volta com a mesma chave.
+- Dispensar fechava autorizações/perguntas ainda por decidir → só se dispensam bloqueios, dossier e ideias.
+- O texto de uma ideia (escrito por um agente) entrava na ordem ao Atlas como se fosse teu → vai marcado como proposta, numa linha cada parte.
+- "Pedir uma ideia agora" sem limite diário → respeita o máximo do dia e uma de cada vez; ideias dispensadas há muito não voltam; ao arrancar, as notificações acertam-se com o estado real (aprovações, dossier).

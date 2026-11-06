@@ -17,12 +17,15 @@ export interface Notifications {
   resolve(key: string): void;
   /** Fecha todas as que começam por um prefixo (ex.: as perguntas, que não sobrevivem a um reinício). */
   resolvePrefix(prefix: string): void;
+  /** Fecha uma notificação que se pode simplesmente dar como vista (não as que esperam uma decisão noutro sítio). */
   dismiss(id: number): AppNotification | null;
   get(id: number): AppNotification | null;
   list(): readonly AppNotification[];
 }
 
 const SETTING = "notifications";
+/** O que se pode dar como visto (as outras fecham quando a coisa é decidida). */
+const DISMISSABLE: ReadonlySet<NotificationKind> = new Set(["blocked", "dossier", "idea"]);
 /** Fechadas que ainda se mostram (o histórico recente). */
 const KEEP_CLOSED = 30;
 const TEXT_MAX = 600;
@@ -53,6 +56,8 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
   return {
     open(key, agentId, kind, text, data) {
       const clipped = text.length > TEXT_MAX ? `${text.slice(0, TEXT_MAX)}…` : text;
+      // Uma que já fechaste (ou que foi resolvida) não volta a acender com a mesma chave.
+      if (items.some((n) => n.key === key && !n.open)) return;
       const existing = items.find((n) => n.key === key && n.open);
       if (existing) items = items.map((n) => (n === existing ? { ...n, text: clipped, ...(data ? { data } : {}) } : n));
       else items = [...items, { id: ++counter, key, agentId, kind, text: clipped, ts: Date.now(), open: true, ...(data ? { data } : {}) }];
@@ -61,7 +66,8 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
     resolve: (key) => close((n) => n.key === key),
     resolvePrefix: (prefix) => close((n) => n.key.startsWith(prefix)),
     dismiss(id) {
-      const n = items.find((x) => x.id === id && x.open) ?? null;
+      // Autorizações, perguntas e aprovações só fecham quando são decididas (senão ficavam pendentes e invisíveis).
+      const n = items.find((x) => x.id === id && x.open && DISMISSABLE.has(x.kind)) ?? null;
       if (n) close((x) => x.id === id);
       return n;
     },
