@@ -93,3 +93,58 @@ Ver o registo de verificação abaixo (secção 6) para o que foi testado com ag
   - escolher "permitir sempre" a partir do cartão: as regras permanentes continuam a ser as das tuas definições.
 - **No terminal (continuar)** valem as perguntas do próprio terminal; as aprovações da app deixam de se aplicar a
   essa janela.
+
+## 5. Playbooks dos papéis
+
+O método, a evidência, a entrega e a definição de concluído de cada papel estão em `server/src/agents.ts`
+(`PLAYBOOKS`). Valem no modo escritório e no modo local.
+
+- **Atlas:** define o resultado e o critério de conclusão e delega com contexto concreto e com o acesso da ordem.
+  Quando há ficheiros alterados pede sempre a revisão da Nina; o orquestrador garante-a, mesmo que o plano a esqueça.
+  O resumo é escrito a partir do rasto registado pelo servidor e organizado em Feito e verificado / Por verificar ou
+  falhou / Precisa da tua decisão.
+- **Mira:** procura a fonte primária e cita cada facto. Entrega um brief com Factos confirmados, Indícios, Por
+  confirmar e Fontes.
+- **Lena:** escreve um rascunho utilizável a partir de fontes verificadas e marca os factos em falta com
+  `[PREENCHER: …]`. Quando lhe pedem, atualiza a nota com Edit e diz o caminho.
+- **Nina:** revê o ficheiro em disco, corre a verificação local quando a há, e cita cada defeito com a correção. O
+  veredicto é aprovado ou precisa de correção.
+
+## 6. Registo de verificação (2026-11-05/06)
+
+Ambiente descartável em `C:\Users\manue\agent-office-e2e`: projeto `projeto-calc` com `npm test`, vault com
+`Projetos/Calc brief.md`, uma nota de injeção e uma pasta `fora`. Instância isolada do servidor na porta 8797, com base
+de dados, áreas de trabalho e configuração próprias. A tua instância e o teu vault não foram tocados. A interface foi
+conduzida pelo browser (`scripts/local-e2e.mjs`) e todas as mensagens do servidor foram registadas.
+
+| Cenário                                                        | Como                                          | Resultado                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Perfil, modos e painel                                         | interface real                                | perfil criado no editor; Atlas, Mira, Lena e Nina em modo local; o painel mostra a pasta e o acesso; a barra de ordens indica o perfil                                                                                                                                                                    |
+| Perfil numa pasta proibida                                     | interface real                                | recusado: "a pasta de configuração do Claude Code não pode ser usada" (`~/.claude`)                                                                                                                                                                                                                       |
+| Tarefa ponta a ponta: ordem ao Atlas                           | **agentes reais**                             | Atlas delegou à Rhea com o acesso do perfil; pedidos reais na app (`npm test` e a edição da nota com o diff) permitidos; só a secção Estado mudou; a Nina reviu a nota em disco, voltou a correr `npm test` e aprovou; o resumo do Atlas baseia-se no rasto                                               |
+| A mesma tarefa no terminal (`claude -p` na pasta)              | agente real                                   | sem quem aprove, os pedidos são recusados e o agente não verificou nada (disse-o); com as ferramentas autorizadas, resultado equivalente ao do escritório (31 a 33 s e 0,09 USD no terminal; cerca de 1,5 min e 0,67 USD no escritório, com plano, revisão independente e resumo)                         |
+| Nota a pedir mais acesso, ordem a pedir escrita fora do perfil | **agentes reais** (interrompido)              | a Rhea recusou os dois pedidos da nota e disse-o; o plano do Atlas não delegou a escrita fora do perfil; a pasta `fora` ficou vazia; a revisão da Nina ficou a meio quando o sistema parou os processos por falta de memória                                                                              |
+| Recusa de uma autorização                                      | testes + sonda do protocolo                   | `git log` não pede autorização (o Claude Code trata comandos só de leitura como seguros), por isso a recusa não foi exercida com agente real. A recusa por stdio foi verificada na sonda inicial (Write recusado, o agente reportou-o), e o hub tem testes para recusar, para o tempo-limite e para parar |
+| Recarregar com uma autorização pendente e retomar a sessão     | **por fazer com agente real**                 | coberto por testes: pedidos pendentes reenviados ao ligar, uma sessão por agente e perfil, `--resume` com os mesmos argumentos do perfil. Os perfis e os modos sobreviveram a reinícios do servidor de teste                                                                                              |
+| Guards, MCP do vault, perfis, delegação                        | testes unitários (`server/src/local.test.ts`) | 21 testes, incluindo todas as correções das revisões                                                                                                                                                                                                                                                      |
+| `npm run check`                                                |                                               | passa (118 + 211 testes, lint, prettier, build)                                                                                                                                                                                                                                                           |
+
+Revisões independentes: dois subagentes do Claude Code (segurança do runner; fluxo do Obsidian) e o Codex 0.160.1, em
+modo só de leitura. Corrigido a seguir:
+
+- diff truncado;
+- BOM no frontmatter;
+- links Markdown e contagens de links;
+- ordem das secções;
+- reescritas feitas em várias edições pequenas;
+- symlinks no vault;
+- `.mcp.json` do projeto (deixou de ser lido e passou a estar protegido);
+- guard a falhar fechado;
+- nomes protegidos com pontos no fim;
+- pasta temporária das corridas fora dos perfis;
+- `claude.exe` resolvido só pelo PATH;
+- título dos pedidos = comando completo;
+- terminal retomado com o mesmo perfil;
+- sessões da interface por perfil.
+
+Ficou documentado como limite (secção 4): comandos de terminal com os teus privilégios e confiança em ligações locais.
