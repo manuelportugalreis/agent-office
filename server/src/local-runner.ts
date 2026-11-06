@@ -134,8 +134,10 @@ export function lineDiff(before: string, after: string): string {
   let i = 0;
   let j = 0;
   while (i < n || j < m) {
-    if (i < n && j < m && a[i] === b[j]) (ops.push({ kind: " ", line: a[i++] }), j++);
-    else if (j < m && (i >= n || lcs[i][j + 1] >= lcs[i + 1][j])) ops.push({ kind: "+", line: b[j++] });
+    if (i < n && j < m && a[i] === b[j]) {
+      ops.push({ kind: " ", line: a[i++] });
+      j++;
+    } else if (j < m && (i >= n || lcs[i][j + 1] >= lcs[i + 1][j])) ops.push({ kind: "+", line: b[j++] });
     else ops.push({ kind: "-", line: a[i++] });
   }
   const keep = ops.map((o, k) => o.kind !== " " || ops.slice(Math.max(0, k - 2), k + 3).some((x) => x.kind !== " "));

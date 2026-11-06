@@ -291,7 +291,9 @@ describe("MCP do vault", () => {
     const waiters = new Map<number, (v: unknown) => void>();
     lines.on("line", (l) => {
       const m = JSON.parse(l) as { id: number; result: unknown };
-      waiters.get(m.id)?.(m.result) ?? replies.set(m.id, m.result);
+      const waiter = waiters.get(m.id);
+      if (waiter) waiter(m.result);
+      else replies.set(m.id, m.result);
     });
     const call = (id: number, method: string, params: unknown) =>
       new Promise<unknown>((resolve) => {
