@@ -77,6 +77,8 @@ export interface RunOptions {
    * null obriga ao modo escritório; omitido usa o modo atual do agente.
    */
   profile?: AccessProfile | null;
+  /** Sem ferramentas (modo escritório só de texto): o plano e o resumo do CEO. */
+  toolless?: boolean;
 }
 
 const DEFAULT_LIMITS: HubLimits = { timeoutMs: 600_000, maxConcurrent: 3 };
@@ -177,7 +179,8 @@ export function createHub({
         sessionId: r.sessionId,
         folder: r.profile.folder,
         profileId: r.profile.id,
-        command: `cd "${r.profile.folder}" && claude --resume ${r.sessionId}`,
+        // O comando exato (com o perfil) é gerado quando pedes para continuar no terminal.
+        command: `claude --resume ${r.sessionId}`,
       });
     }
     emit({ type: "done", agentId, ok, costUsd, error, ...(r.silent ? { silent: true } : {}) });
@@ -268,7 +271,14 @@ export function createHub({
       };
       running.set(agentId, entry);
       entry.handle = run(
-        { agent, text: prompt, sessionId: session.id, resume: session.started, ...(profile ? { profile } : {}) },
+        {
+          agent,
+          text: prompt,
+          sessionId: session.id,
+          resume: session.started,
+          ...(profile ? { profile } : {}),
+          ...(opts.toolless && !profile ? { toolless: true } : {}),
+        },
         {
           onEvent: (e) => onEvent(agentId, runId, e),
           onExit: (code, stderr) =>

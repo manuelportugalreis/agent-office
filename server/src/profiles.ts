@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, normalize, parse, relative, resolve } from "node:path";
 import type { AccessProfile, ProfileInput } from "../../shared/protocol.ts";
 
@@ -10,6 +10,8 @@ import type { AccessProfile, ProfileInput } from "../../shared/protocol.ts";
 
 /** Pasta do próprio Agent Office: um agente local não a pode escrever (seria mudar as próprias regras). */
 const OFFICE_ROOT = resolve(import.meta.dirname, "..", "..");
+/** Política do guard e configurações MCP das corridas: um perfil não pode ler nem escrever aqui. */
+const RUNS_DIR = join(tmpdir(), "agent-office-runs");
 /** Configuração do Claude Code do utilizador (definições, hooks, credenciais): nunca como pasta de trabalho. */
 const CLAUDE_HOME = join(homedir(), ".claude");
 
@@ -34,6 +36,8 @@ function realDir(raw: string, what: string): string {
   if (parse(real).root === real || norm(real) === norm(homedir()))
     throw new ProfileError(`${what}: escolhe uma pasta concreta, não a raiz do disco nem a tua pasta pessoal inteira`);
   if (overlaps(real, CLAUDE_HOME)) throw new ProfileError(`${what}: a pasta de configuração do Claude Code não pode ser usada`);
+  if (overlaps(real, RUNS_DIR))
+    throw new ProfileError(`${what}: inclui a pasta temporária onde o Agent Office guarda as regras das corridas`);
   return real;
 }
 
@@ -67,6 +71,9 @@ export function validateProfile(input: ProfileInput, ctx: ProfileContext): Profi
         throw new ProfileError(`Pasta do vault inválida: ${f} (usa um caminho relativo dentro do vault)`);
       const abs = join(ctx.vaultDir, clean);
       if (!existsSync(abs) || !statSync(abs).isDirectory()) throw new ProfileError(`A pasta "${clean}" não existe no vault.`);
+      // Um atalho (symlink/junction) dentro do vault não pode dar escrita fora dele.
+      if (!isInside(realpathSync.native(ctx.vaultDir), realpathSync.native(abs)))
+        throw new ProfileError(`A pasta "${clean}" aponta para fora do vault.`);
       return clean;
     }),
   );
@@ -83,24 +90,7 @@ export function profileRoots(p: AccessProfile, vaultDir: string): { read: string
   return { read: dedupe([...write, ...p.readDirs, ...vaultRead]), write };
 }
 
-/** O acesso de um perfil em português, para o painel do agente. */
-export function describeProfile(p: AccessProfile): string[] {
-  const vault =
-    p.vault === "none"
-      ? "Obsidian: sem acesso"
-      : p.vault === "read"
-        ? "Obsidian: só leitura"
-        : `Obsidian: leitura e escrita${p.vaultFolders.length ? ` em ${p.vaultFolders.join(", ")}` : " (todo o vault)"}`;
-  return [
-    `Pasta de trabalho: ${p.folder}`,
-    ...(p.writeDirs.length ? [`Também escreve em: ${p.writeDirs.join(", ")}`] : []),
-    ...(p.readDirs.length ? [`Também lê: ${p.readDirs.join(", ")}`] : []),
-    vault,
-    p.bash ? "Comandos de terminal: sim (pede autorização conforme as tuas regras)" : "Comandos de terminal: não",
-    `MCP: ${p.mcp.length === 0 ? "nenhuma" : p.mcp.includes("*") ? "todas as que usas no terminal" : p.mcp.join(", ")}`,
-    p.autoEdits ? "Edições: aceites sem perguntar" : "Edições: pede autorização",
-  ];
-}
+export { describeProfile } from "../../shared/access.ts";
 
 // ---------- servidores MCP da tua configuração ----------
 
@@ -121,8 +111,8 @@ const servers = (v: unknown): Record<string, McpConfig> =>
   typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, McpConfig>) : {};
 
 /**
- * Servidores MCP que o Claude Code usaria nesta pasta: os teus (âmbito utilizador), os do projeto em ~/.claude.json e
- * os de `.mcp.json` na pasta. Só o servidor lê as definições (podem ter segredos); a interface só vê os nomes.
+ * Servidores MCP que podes escolher num perfil: os teus (âmbito utilizador) e os do projeto guardados em ~/.claude.json
+ * (fora do alcance dos agentes). Só o servidor lê as definições (podem ter segredos); a interface só vê os nomes.
  */
 export function mcpCatalog(folder?: string): Record<string, McpConfig> {
   const user = readJson(CLAUDE_JSON());
@@ -132,8 +122,8 @@ export function mcpCatalog(folder?: string): Record<string, McpConfig> {
   for (const [key, proj] of Object.entries(projects))
     if (norm(key.replaceAll("/", isWin ? "\\" : "/")) === norm(folder))
       Object.assign(out, servers((proj as Record<string, unknown>).mcpServers));
-  const local = readJson(join(folder, ".mcp.json"));
-  Object.assign(out, servers(local?.mcpServers));
+  // O .mcp.json da pasta do projeto não conta: um agente com escrita no projeto podia plantar lá um servidor que
+  // correria na sessão seguinte. (Com "todas as do terminal", é o próprio Claude Code que o lê e pede confiança.)
   return out;
 }
 

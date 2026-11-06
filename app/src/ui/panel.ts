@@ -30,6 +30,9 @@ export interface PanelDeps {
   sync(): void;
   /** Leva o avatar do utilizador até à secretária do agente. */
   goTo(a: Agent): void;
+  /** Secção extra do resumo (modo de trabalho: escritório ou Claude Code local) e a ligação dos botões dela. */
+  extra?(a: Agent): string;
+  bindExtra?(a: Agent): void;
 }
 
 /** Primeiras linhas de uma resposta, sem marcas de Markdown, para o resumo do painel. */
@@ -43,7 +46,7 @@ export function snippet(text: string | undefined, max = 280): string {
   return plain.length > max ? `${plain.slice(0, max - 1)}…` : plain;
 }
 
-function summaryHtml(a: Agent, canStop: boolean, courses: readonly string[], lastReply?: string): string {
+function summaryHtml(a: Agent, canStop: boolean, courses: readonly string[], lastReply?: string, extra = ""): string {
   const d = a.def;
   const last = snippet(lastReply);
   let h = `<div class="lbl">Task atual</div><div>${escapeHtml(a.task)}</div>${last ? `<div class="lbl">Última resposta</div><div class="last">${escapeHtml(last)}</div>` : ""}
@@ -67,6 +70,7 @@ function summaryHtml(a: Agent, canStop: boolean, courses: readonly string[], las
     h += `<div class="lbl">Uso nesta sessão</div><div class="row"><span>Tarefas concluídas</span><small>${u.done}${u.failed ? ` · ${u.failed} falhadas` : ""}</small></div>
       <div class="row"><span>Custo equivalente</span><small>$${u.costUsd.toFixed(2)}</small></div>`;
   }
+  h += extra;
   h += `<div style="margin-top:12px"><button id="goBtn">🚶 Ir à secretária</button></div>`;
   if (canStop) h += `<div style="margin-top:12px"><button id="stopBtn">Parar tarefa</button></div>`;
   if (a.state === "appr") h += `<div class="lbl">Aprovação pendente</div><div>Tens ações à espera na fila de aprovações.</div>`;
@@ -102,7 +106,8 @@ export function createPanel(deps: PanelDeps): Panel {
     byId("pState").textContent = STATE_INFO[stateOf(sel)].label;
     byId("pAct").textContent = deps.activityOf(sel) ?? "";
     const agent = sel;
-    sum.innerHTML = summaryHtml(agent, deps.canStop(agent), deps.courses(), deps.lastReply(agent));
+    sum.innerHTML = summaryHtml(agent, deps.canStop(agent), deps.courses(), deps.lastReply(agent), deps.extra?.(agent) ?? "");
+    deps.bindExtra?.(agent);
     const sync = document.getElementById("syncBtn");
     if (sync) sync.onclick = () => deps.sync();
     const go = document.getElementById("goBtn");

@@ -20,6 +20,7 @@ import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
 import type { AccessProfile, AgentMode } from "../../shared/protocol.ts";
 import { describeProfile, mcpNames, ProfileError, validateProfile } from "./profiles.ts";
+import { terminalScript } from "./local-runner.ts";
 import { claudeVersion, openTerminal, resumeCommand } from "./terminal.ts";
 
 const MAX_PAYLOAD_BYTES = 64 * 1024;
@@ -159,16 +160,24 @@ function setMode(agentId: string, mode: AgentMode): void {
 
 function continueInTerminal(agentId: string): void {
   const profile = profileOf(agentId);
-  if (!profile) return broadcast({ type: "error", agentId, message: "Este agente não está no modo Claude Code local." });
+  const agent = findAgent(agentId);
+  if (!profile || !agent) return broadcast({ type: "error", agentId, message: "Este agente não está no modo Claude Code local." });
   if (hub.isRunning(agentId))
     return broadcast({ type: "error", agentId, message: "Espera que o agente termine (ou pára-o) antes de continuar no terminal." });
   const session = hub.localSession(agentId, profile);
   if (!session?.started) return broadcast({ type: "error", agentId, message: "Ainda não há sessão local deste agente para continuar." });
-  const command = resumeCommand(profile.folder, session.id);
+  let script: string;
+  try {
+    script = terminalScript({ agent, text: "", sessionId: session.id, resume: true, profile });
+  } catch (err) {
+    log.warn("não consegui preparar o terminal", err);
+    return broadcast({ type: "error", agentId, message: "Não consegui preparar o terminal." });
+  }
+  const command = resumeCommand(script);
   broadcast({ type: "session", agentId, sessionId: session.id, folder: profile.folder, profileId: profile.id, command });
   let opened = false;
   try {
-    opened = openTerminal(profile.folder, session.id, `Agent Office ${findAgent(agentId)?.name ?? agentId}`);
+    opened = openTerminal(script, `Agent Office ${agent.name}`);
   } catch (err) {
     log.warn("não consegui abrir o terminal", err);
   }
@@ -176,7 +185,7 @@ function continueInTerminal(agentId: string): void {
     type: "log",
     agentId,
     text: opened
-      ? `Abri o terminal com esta sessão (${command}). No terminal valem as tuas definições normais do Claude Code, não os limites do perfil.`
+      ? `Abri o terminal com esta sessão e o perfil "${profile.name}" (mesmas pastas, MCP e regras; as perguntas aparecem lá).`
       : `Para continuar no terminal: ${command}`,
   });
 }

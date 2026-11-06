@@ -102,7 +102,7 @@ describe("argumentos do Claude Code local", () => {
     expect(Object.keys(mcp.mcpServers)).toEqual(["office-vault"]);
     const policy = JSON.parse(readFileSync(files[0], "utf8")) as { write: string[] };
     expect(policy.write).toContain(project);
-    for (const f of files) rmSync(f);
+    for (const f of files) rmSync(f, { force: true, recursive: true });
   });
   it("retomar uma sessão usa o mesmo perfil (mesmas pastas e regras) e o id guardado", () => {
     const p = profile({ writeDirs: [other], autoEdits: true, mcp: ["*"] });
@@ -111,7 +111,7 @@ describe("argumentos do Claude Code local", () => {
     expect(args).toContain(other.replaceAll("\\", "/"));
     expect(args[args.indexOf("--permission-mode") + 1]).toBe("acceptEdits");
     expect(args).not.toContain("--strict-mcp-config");
-    for (const f of files) rmSync(f);
+    for (const f of files) rmSync(f, { force: true, recursive: true });
   });
   it("mostra as alterações propostas a uma nota como diferenças", () => {
     const note = join(vault, "Projetos", "Alfa brief.md");
@@ -315,6 +315,73 @@ describe("MCP do vault", () => {
     expect(note.outgoingLinks.find((l: { link: string }) => l.link === "Notas Alfa").path).toBe("Projetos/Notas Alfa.md");
     const escape = (await call(5, "tools/call", { name: "read_note", arguments: { path: "../fora" } })) as { isError?: boolean };
     expect(escape.isError).toBe(true);
+    mkdirSync(join(vault, ".obsidian"), { recursive: true });
+    writeFileSync(join(vault, ".obsidian", "segredo.md"), "x");
+    const hidden = (await call(6, "tools/call", { name: "read_note", arguments: { path: ".obsidian/segredo.md" } })) as {
+      isError?: boolean;
+    };
+    expect(hidden.isError).toBe(true);
     child.kill();
+  });
+});
+
+describe("correções das revisões independentes", () => {
+  const policy = () => ({ cwd: project, read: [project, vault], write: [project, join(vault, "Projetos")], vault, officePorts: [8787] });
+  it("protege .mcp.json, CLAUDE.local.md e .claude com pontos no fim; bloqueia comandos que falem com o escritório", () => {
+    expect(guard("Write", { file_path: join(project, ".mcp.json"), content: "{}" }, policy()).status).toBe(2);
+    expect(guard("Write", { file_path: join(project, "CLAUDE.local.md"), content: "x" }, policy()).status).toBe(2);
+    if (process.platform === "win32")
+      expect(guard("Write", { file_path: join(project, ".claude.", "settings.json"), content: "{}" }, policy()).status).toBe(2);
+    expect(guard("Bash", { command: "node -e \"new WebSocket('ws://127.0.0.1:8787')\"" }, policy()).status).toBe(2);
+    expect(guard("Bash", { command: "npm test" }, policy()).status).toBe(0);
+  });
+  it("falha fechado com uma política estragada", () => {
+    const file = join(base, "estragada.json");
+    writeFileSync(file, "{nao e json");
+    const r = spawnSync(process.execPath, [join(HOOKS, "local-guard.mjs"), file], {
+      input: JSON.stringify({ tool_name: "Read", tool_input: { file_path: "x" } }),
+      encoding: "utf8",
+    });
+    expect(r.status).toBe(2);
+  });
+  it("notas: BOM, links Markdown, ordem das secções e edições pequenas somadas", () => {
+    const note = join(vault, "Projetos", "Bom.md");
+    writeFileSync(note, "﻿---\ntipo: x\n---\n# A\ntexto [site](https://exemplo.pt)\n## B\nb\n## C\nc\n");
+    expect(guard("Write", { file_path: note, content: "# A\nsó isto\n" }, policy()).status).toBe(2);
+    const p = policy();
+    const md = guard("Edit", { file_path: note, old_string: " [site](https://exemplo.pt)", new_string: "" }, p);
+    expect(JSON.parse(md.stdout).hookSpecificOutput.permissionDecision).toBe("ask");
+    const reorder = guard("Edit", { file_path: note, old_string: "## B\nb\n## C\nc\n", new_string: "## C\nc\n## B\nb\n" }, p);
+    expect(JSON.parse(reorder.stdout).hookSpecificOutput.permissionDecision).toBe("ask");
+    // Várias edições pequenas na mesma corrida: comparadas com a nota original, a reescrita é detetada.
+    const big = join(vault, "Projetos", "Grande.md");
+    writeFileSync(big, Array.from({ length: 12 }, (_, i) => `linha ${i}`).join("\n"));
+    const pfile = join(base, "ledger-policy.json");
+    writeFileSync(pfile, JSON.stringify(p));
+    const run = (old: string, nw: string) =>
+      spawnSync(process.execPath, [join(HOOKS, "local-guard.mjs"), pfile], {
+        input: JSON.stringify({ tool_name: "Edit", tool_input: { file_path: big, old_string: old, new_string: nw } }),
+        encoding: "utf8",
+      });
+    let asked = false;
+    for (let i = 0; i < 6 && !asked; i++) {
+      const r = run(`linha ${i}`, `nova ${i}`);
+      asked = r.stdout.includes('"ask"');
+      if (!asked) writeFileSync(big, readFileSync(big, "utf8").replace(`linha ${i}`, `nova ${i}`));
+    }
+    expect(asked).toBe(true);
+  });
+  it("o diff mostra alterações depois da linha 600 e avisa do que fica de fora", () => {
+    const before = Array.from({ length: 1000 }, (_, i) => `l${i}`).join("\n");
+    const after = before.replace("l700", "MUDOU");
+    const d = lineDiff(before, after);
+    expect(d).toContain("+ MUDOU");
+    expect(d).toContain("- l700");
+    expect(d).toContain("linhas iguais antes");
+  });
+  it("o título de um pedido de comando é o próprio comando, não a descrição do agente", () => {
+    const a = describeAsk("Bash", { command: "rm -rf build", description: "inofensivo" });
+    expect(a.summary).toBe("rm -rf build");
+    expect(a.detail).toContain("descrição do agente: inofensivo");
   });
 });

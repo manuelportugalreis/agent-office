@@ -32,6 +32,41 @@
       <button id="themeBtn" aria-label="Tema da interface">🌓</button>
     </header>
     <div id="appr"></div>
+    <div id="perm" role="region" aria-label="Pedidos de autorização"></div>
+    <dialog id="profileDialog" aria-labelledby="pfTitle">
+      <form id="pfForm" method="dialog">
+        <h3 id="pfTitle">Perfis de acesso (Claude Code local)</h3>
+        <label
+          >Perfil
+          <select id="pfList"></select
+        ></label>
+        <label>Nome <input id="pfName" maxlength="60" placeholder="ex.: Projeto Alfa" /></label>
+        <label>Pasta de trabalho (onde abririas o terminal) <input id="pfFolder" placeholder="C:\Users\tu\projetos\alfa" /></label>
+        <label>Outras pastas que pode ler (uma por linha) <textarea id="pfRead" rows="2"></textarea></label>
+        <label>Outras pastas onde pode escrever (uma por linha) <textarea id="pfWrite" rows="2"></textarea></label>
+        <label
+          >Obsidian
+          <select id="pfVault">
+            <option value="none">Sem acesso</option>
+            <option value="read">Só leitura</option>
+            <option value="write">Leitura e escrita</option>
+          </select></label
+        >
+        <small id="pfVaultInfo"></small>
+        <label
+          >Pastas do vault onde pode escrever (uma por linha; vazio = todo o vault) <textarea id="pfVaultFolders" rows="2"></textarea>
+        </label>
+        <label class="chk"><input type="checkbox" id="pfBash" /> Comandos de terminal (sempre sujeitos às tuas regras de permissão)</label>
+        <label class="chk"><input type="checkbox" id="pfAuto" /> Aceitar edições de ficheiros sem perguntar (como acceptEdits)</label>
+        <div class="lbl">Integrações MCP</div>
+        <div id="pfMcp" class="pf-mcp"></div>
+        <div class="pf-bt">
+          <button type="submit" class="primary">Guardar</button>
+          <button type="button" id="pfDelete">Apagar perfil</button>
+          <button type="button" id="pfClose">Fechar</button>
+        </div>
+      </form>
+    </dialog>
     <div id="feed"></div>
     <div id="palette">
       <div class="pal-box">

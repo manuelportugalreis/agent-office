@@ -44,6 +44,7 @@ import { buildLocations } from "./sim/locations";
 import { byId, isDark, toast } from "./ui/dom";
 import { createApprovals } from "./ui/approvals";
 import { createPanel, type Tab } from "./ui/panel";
+import { createLocalMode, type LocalMode } from "./ui/local-mode";
 
 const SCREEN_REFRESH_S = 0.25;
 const ARRIVAL_LOOK_MS = 6000;
@@ -90,7 +91,11 @@ let userName = "";
 const chatStore = createChatStore();
 let online = false;
 const busy = new Set<string>();
+/** Modo "Claude Code local" (criado depois da ligação ao servidor; o painel usa-o quando já existe). */
+let localMode: LocalMode | null = null;
 const panel = createPanel({
+  extra: (a) => localMode?.sectionHtml(a.def.id, { real: realAgents.has(a.def.id), busy: busy.has(a.def.id) }) ?? "",
+  bindExtra: (a) => localMode?.bind(a.def.id),
   onOpen: (a) => chat.show(chatAgentOf(a)),
   activityOf: (a) => chatStore.get(a.def.id).activity,
   lastReply: (a) => chatStore.lastAssistantText(a.def.id),
@@ -405,6 +410,24 @@ function applySnapshot(s: Snapshot): void {
 }
 
 function onServerMsg(m: ServerMsg): void {
+  if (
+    m.type === "profiles" ||
+    m.type === "modes" ||
+    m.type === "permission" ||
+    m.type === "permission-resolved" ||
+    m.type === "session" ||
+    m.type === "trace"
+  ) {
+    localMode?.handle(m);
+    if (m.type === "permission") {
+      const a = byAgentId.get(m.request.agentId);
+      if (a) {
+        a.state = "appr";
+        note(a, `Pede autorização: ${m.request.summary}`);
+      }
+    }
+    return;
+  }
   if (m.type === "hello") {
     m.fileAgents.forEach((id) => fileAgents.add(id));
     for (const [id, model] of Object.entries(m.models)) models.set(id, model);
@@ -511,6 +534,28 @@ const client = connect(onServerMsg, (isOnline) => {
   for (const a of agents) if (busy.has(a.def.id)) setBusy(a, false);
 });
 
+localMode = createLocalMode({
+  send: (msg) => client.send(msg),
+  nameOf: (id) => byAgentId.get(id)?.def.name ?? id,
+  changed: (agentId) => {
+    const open = panel.selected;
+    if (open && (!agentId || open.def.id === agentId)) panel.refresh();
+    updateOrderHint();
+  },
+  openAgent: (id) => {
+    const a = byAgentId.get(id);
+    if (a) panel.open(a, "sum");
+  },
+});
+
+/** A barra de ordens diz em que perfil a ordem vai correr (o do Atlas, se estiver em modo local). */
+function updateOrderHint(): void {
+  const profile = localMode?.profileOf("ceo");
+  byId<HTMLInputElement>("cmdIn").placeholder = profile
+    ? `Ordem ao Atlas (Claude Code local, perfil ${profile.name})…`
+    : "Dá uma ordem ao CEO…  ex: encontra 10 vagas de Business Analyst";
+}
+
 const sendDossier = (msg: ClientMsg): boolean => {
   const sent = client.send(msg);
   if (!sent) toast("Servidor offline: o dossier só avança com o servidor ligado.");
@@ -537,7 +582,8 @@ byId<HTMLFormElement>("cmd").onsubmit = (e) => {
   const text = input.value.trim();
   const ceo = byAgentId.get("ceo");
   if (!text || !ceo) return;
-  if (realAgents.has("ceo") && client.send({ type: "order", text })) {
+  const orderProfile = localMode?.profileOf("ceo");
+  if (realAgents.has("ceo") && client.send({ type: "order", text, ...(orderProfile ? { profileId: orderProfile.id } : {}) })) {
     input.value = "";
     chatStore.addUser("ceo", text);
     toast("Ordem enviada ao CEO");

@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { AccessProfile } from "../../shared/protocol.ts";
 import { config } from "./config.ts";
@@ -22,9 +22,30 @@ import type { PermissionAsk, RunHandle, RunHandlers, RunRequest } from "./runner
 const slash = (p: string): string => p.replaceAll("\\", "/");
 const hookPath = (name: string): string => slash(join(import.meta.dirname, "..", "hooks", name));
 const node = (): string => `"${slash(process.execPath)}"`;
-const RUN_DIR = join(tmpdir(), "agent-office-runs");
+/** Ficheiros auxiliares das corridas (política do guard, MCP). Nenhum perfil pode incluir esta pasta. */
+export const RUN_DIR = join(tmpdir(), "agent-office-runs");
 const STDERR_LIMIT = 2000;
-const FILE_TOOLS_MATCHER = "Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep";
+const GUARD_MATCHER = "Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|PowerShell";
+
+let claudePath: string | null = null;
+/**
+ * Caminho absoluto do `claude` instalado, procurado só no PATH (no Windows, lançar "claude" com a pasta do projeto
+ * como cwd podia correr um claude.exe plantado nessa pasta).
+ */
+export function claudeExecutable(): string {
+  if (claudePath) return claudePath;
+  try {
+    const finder = process.platform === "win32" ? "where.exe" : "which";
+    const found = execFileSync(finder, ["claude"], { encoding: "utf8", windowsHide: true, cwd: tmpdir() })
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l && isAbsolute(l) && (process.platform !== "win32" || /\.(exe|cmd)$/i.test(l)));
+    claudePath = found ?? "claude";
+  } catch {
+    claudePath = "claude";
+  }
+  return claudePath;
+}
 export const VAULT_MCP = "office-vault";
 export const VAULT_TOOLS = [`mcp__${VAULT_MCP}__find_note`, `mcp__${VAULT_MCP}__read_note`];
 
@@ -57,13 +78,23 @@ function runFiles(): { policy: string; mcp: string } {
 }
 
 /** Argumentos do `claude` para uma sessão local (e os ficheiros temporários que é preciso apagar no fim). */
-export function buildLocalArgs(req: RunRequest & { readonly profile: AccessProfile }, vaultDir: string = config.vaultDir): LocalArgs {
+export function buildLocalArgs(
+  req: RunRequest & { readonly profile: AccessProfile },
+  vaultDir: string = config.vaultDir,
+  opts: { interactive?: boolean; files?: { policy: string; mcp: string } } = {},
+): LocalArgs {
   const p = req.profile;
   const roots = profileRoots(p, vaultDir);
-  const files = runFiles();
+  const files = opts.files ?? runFiles();
   writeFileSync(
     files.policy,
-    JSON.stringify({ cwd: p.folder, read: roots.read, write: roots.write, vault: p.vault !== "none" ? vaultDir : null }),
+    JSON.stringify({
+      cwd: p.folder,
+      read: roots.read,
+      write: roots.write,
+      vault: p.vault !== "none" ? vaultDir : null,
+      officePorts: [config.port],
+    }),
     { mode: 0o600 },
   );
   const catalog = mcpCatalog(p.folder);
@@ -75,27 +106,24 @@ export function buildLocalArgs(req: RunRequest & { readonly profile: AccessProfi
   const hooks = {
     PreToolUse: [
       {
-        matcher: FILE_TOOLS_MATCHER,
+        matcher: GUARD_MATCHER,
         hooks: [{ type: "command", command: `${node()} "${hookPath("local-guard.mjs")}" "${slash(files.policy)}"` }],
       },
     ],
   };
   const extraDirs = roots.read.filter((d) => d !== p.folder);
+  // No terminal (continuar a sessão) as perguntas aparecem lá; aqui chegam por stdio à app.
+  const io = opts.interactive
+    ? []
+    : ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"];
   const args = [
-    "-p",
-    "--input-format",
-    "stream-json",
-    "--output-format",
-    "stream-json",
-    "--verbose",
-    "--include-partial-messages",
+    ...io,
     // As tuas definições, hooks, plugins e regras de permissão contam, como no terminal.
     "--setting-sources",
     "user,project,local",
     "--settings",
     JSON.stringify({ hooks }),
-    "--permission-prompt-tool",
-    "stdio",
+    ...(opts.interactive ? [] : ["--permission-prompt-tool", "stdio"]),
     "--permission-mode",
     p.autoEdits ? "acceptEdits" : "default",
     "--mcp-config",
@@ -111,20 +139,61 @@ export function buildLocalArgs(req: RunRequest & { readonly profile: AccessProfi
     req.resume ? "--resume" : "--session-id",
     req.sessionId,
   ];
-  return { args, files: [files.policy, files.mcp] };
+  return { args, files: [files.policy, files.mcp, `${files.policy}.ledger`] };
+}
+
+/**
+ * Continuar uma sessão local no terminal com o mesmo perfil: escreve um script de PowerShell com os mesmos argumentos
+ * (guard, MCP, terminal, pastas, modo de permissões) e `--resume`. As perguntas aparecem no próprio terminal.
+ * Os ficheiros ficam (são precisos enquanto o terminal estiver aberto) com o nome da sessão.
+ */
+export function terminalScript(req: RunRequest & { readonly profile: AccessProfile }, vaultDir: string = config.vaultDir): string {
+  mkdirSync(RUN_DIR, { recursive: true });
+  const stem = join(RUN_DIR, `terminal-${req.sessionId}`);
+  const { args } = buildLocalArgs({ ...req, resume: true }, vaultDir, {
+    interactive: true,
+    files: { policy: `${stem}-policy.json`, mcp: `${stem}-mcp.json` },
+  });
+  // Plicas de PowerShell: tanto a ASCII como as tipográficas fecham a string, por isso duplicam-se todas.
+  const ps = (v: string): string => `'${v.replace(/['\u2018\u2019\u201A\u201B]/g, (q) => q + q)}'`;
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `Set-Location -LiteralPath ${ps(req.profile.folder)}`,
+    `$a = @(${args.map(ps).join(", ")})`,
+    `& ${ps(claudeExecutable())} @a`,
+    "",
+  ].join("\r\n");
+  const file = `${stem}.ps1`;
+  writeFileSync(file, `\uFEFF${script}`, { mode: 0o600 });
+  return file;
 }
 
 // ---------- pedidos de permissão ----------
 
-const PREVIEW_LINES = 160;
-const DETAIL_MAX = 6000;
+const PREVIEW_LINES = 220;
+const DETAIL_MAX = 20000;
+const DIFF_MAX = 2000;
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
 /** Diferenças linha a linha (LCS) entre duas versões, com contexto curto: o que o agente quer mudar. */
 export function lineDiff(before: string, after: string): string {
-  const a = before.split(/\r?\n/).slice(0, 600);
-  const b = after.split(/\r?\n/).slice(0, 600);
+  const all = { a: before.split(/\r?\n/), b: after.split(/\r?\n/) };
+  // Prefixo e sufixo iguais ficam de fora: o diff é sempre do texto completo, não de um pedaço.
+  let pre = 0;
+  while (pre < all.a.length && pre < all.b.length && all.a[pre] === all.b[pre]) pre++;
+  let suf = 0;
+  while (suf < all.a.length - pre && suf < all.b.length - pre && all.a[all.a.length - 1 - suf] === all.b[all.b.length - 1 - suf]) suf++;
+  const a = all.a.slice(Math.max(0, pre - 2), all.a.length - Math.max(0, suf - 2));
+  const b = all.b.slice(Math.max(0, pre - 2), all.b.length - Math.max(0, suf - 2));
+  const header = pre > 2 ? [`  … (${pre - 2} linhas iguais antes)`] : [];
+  if (a.length > DIFF_MAX || b.length > DIFF_MAX)
+    return [
+      ...header,
+      `[Alteração extensa: ${a.length} linhas passam a ${b.length}. Mostro o texto novo desta zona.]`,
+      ...b.slice(0, PREVIEW_LINES).map((l) => `+ ${l}`),
+      ...(b.length > PREVIEW_LINES ? [`[… mais ${b.length - PREVIEW_LINES} linhas novas não mostradas]`] : []),
+    ].join("\n");
   const n = a.length;
   const m = b.length;
   const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
@@ -146,7 +215,12 @@ export function lineDiff(before: string, after: string): string {
     if (keep[k]) out.push(`${o.kind} ${o.line}`);
     else if (out.at(-1) !== "  …") out.push("  …");
   });
-  return out.slice(0, PREVIEW_LINES).join("\n");
+  const shown = [...header, ...out];
+  const changed = ops.filter((o) => o.kind !== " ").length;
+  const hidden = shown.slice(PREVIEW_LINES).filter((l) => l.startsWith("+ ") || l.startsWith("- ")).length;
+  return [...shown.slice(0, PREVIEW_LINES), ...(hidden ? [`[… mais ${hidden} de ${changed} linhas alteradas não mostradas]`] : [])].join(
+    "\n",
+  );
 }
 
 function applyEdits(text: string, edits: readonly unknown[]): string {
@@ -167,12 +241,18 @@ function readIfFile(path: string): string | null {
 }
 
 /** Texto do pedido de permissão para a interface: resumo e pormenor (diferenças, comando completo...). */
-export function describeAsk(tool: string, input: unknown): { summary: string; detail?: string } {
+export function describeAsk(tool: string, input: unknown, cwd = process.cwd()): { summary: string; detail?: string } {
   const i = isRecord(input) ? input : {};
-  const clip = (s: string): string => (s.length > DETAIL_MAX ? `${s.slice(0, DETAIL_MAX)}\n[…]` : s);
-  if (tool === "Bash" || tool === "PowerShell")
-    return { summary: str(i.description) || str(i.command).slice(0, 120), detail: clip(str(i.command)) };
-  const file = str(i.file_path) || str(i.notebook_path);
+  const clip = (s: string): string =>
+    s.length > DETAIL_MAX ? `${s.slice(0, DETAIL_MAX)}\n[… cortado: o texto completo tem ${s.length} caracteres]` : s;
+  if (tool === "Bash" || tool === "PowerShell") {
+    // O título é o próprio comando (a descrição é escrita pelo agente e pode enganar).
+    const command = str(i.command);
+    const head = command.length > 160 ? `${command.slice(0, 160)}… (${command.length} caracteres)` : command;
+    return { summary: head, detail: clip(`${command}${str(i.description) ? `\n\n(descrição do agente: ${str(i.description)})` : ""}`) };
+  }
+  const raw = str(i.file_path) || str(i.notebook_path);
+  const file = raw && !isAbsolute(raw) ? resolve(cwd, raw) : raw;
   if (file && (tool === "Write" || tool === "Edit" || tool === "MultiEdit")) {
     const before = readIfFile(file);
     const after =
@@ -190,9 +270,9 @@ export function describeAsk(tool: string, input: unknown): { summary: string; de
   return { summary: tool, detail: clip(JSON.stringify(i, null, 2)) };
 }
 
-export function toPermissionAsk(request: Record<string, unknown>): PermissionAsk {
+export function toPermissionAsk(request: Record<string, unknown>, cwd?: string): PermissionAsk {
   const tool = str(request.tool_name) || "ferramenta";
-  const { summary, detail } = describeAsk(tool, request.input);
+  const { summary, detail } = describeAsk(tool, request.input, cwd);
   const reason = str(request.decision_reason) || undefined;
   return { tool, input: request.input, summary, ...(detail ? { detail } : {}), ...(reason ? { reason } : {}) };
 }
@@ -203,9 +283,14 @@ export function toPermissionAsk(request: Record<string, unknown>): PermissionAsk
 export function localRun(req: RunRequest & { readonly profile: AccessProfile }, handlers: RunHandlers): RunHandle {
   const { args, files } = buildLocalArgs(req);
   const cleanup = (): void => {
-    for (const f of files) rmSync(f, { force: true });
+    for (const f of files) rmSync(f, { force: true, recursive: true });
   };
-  const child = spawn("claude", args, { cwd: req.profile.folder, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+  const child = spawn(claudeExecutable(), args, {
+    cwd: req.profile.folder,
+    shell: false,
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+  });
   let stderr = "";
   let ended = false;
   const endInput = (): void => {
@@ -233,7 +318,7 @@ export function localRun(req: RunRequest & { readonly profile: AccessProfile }, 
         write({ type: "control_response", response: { subtype: "success", request_id: requestId, response } });
       if (data.request.subtype !== "can_use_tool") return reply({});
       const input = data.request.input;
-      handlers.onPermission?.(toPermissionAsk(data.request), (allow, message) =>
+      handlers.onPermission?.(toPermissionAsk(data.request, req.profile.folder), (allow, message) =>
         reply(
           allow
             ? { behavior: "allow", updatedInput: input }

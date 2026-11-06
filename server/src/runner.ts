@@ -16,6 +16,8 @@ export interface RunRequest {
   readonly resume: boolean;
   /** Modo "Claude Code local": corre na pasta do perfil, com as tuas definições e os limites do perfil. */
   readonly profile?: AccessProfile;
+  /** Sem ferramentas nenhumas (o plano e o resumo do CEO: só texto, a partir do que lhe é dado). */
+  readonly toolless?: boolean;
 }
 
 /** Uma pergunta de permissão de uma sessão local (o que no terminal te apareceria para confirmar). */
@@ -86,6 +88,7 @@ export function postHooks(agent: RealAgent): Hook[] {
 
 /** Argumentos do `claude -p`: isolado das tuas definições, sem MCP, só com as ferramentas do agente e com os hooks de segurança. */
 export function buildArgs(req: RunRequest): string[] {
+  if (req.toolless) return toollessArgs(req);
   const { agent } = req;
   const builtin = [...(agent.files ? FILE_TOOLS : []), ...agent.tools];
   const allowed = [...builtin, ...(agent.chrome ? CHROME_READ_TOOLS : [])].join(",");
@@ -115,6 +118,30 @@ export function buildArgs(req: RunRequest): string[] {
     agent.model,
     "--append-system-prompt",
     agent.systemPrompt,
+    req.resume ? "--resume" : "--session-id",
+    req.sessionId,
+  ];
+}
+
+/** Só texto: nenhuma ferramenta, nenhum hook, nenhuma pasta extra (o modelo responde ao que lhe é dado). */
+function toollessArgs(req: RunRequest): string[] {
+  return [
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--setting-sources",
+    "local,project",
+    "--strict-mcp-config",
+    "--tools",
+    "",
+    "--permission-mode",
+    "dontAsk",
+    "--model",
+    req.agent.model,
+    "--append-system-prompt",
+    req.agent.systemPrompt,
     req.resume ? "--resume" : "--session-id",
     req.sessionId,
   ];

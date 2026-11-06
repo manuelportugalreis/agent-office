@@ -213,7 +213,13 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void): Orch
       const profile = requested ? (Object.freeze(structuredClone(requested)) as AccessProfile) : null;
       log(`Ordem recebida${profile ? ` (perfil ${profile.name})` : ""}: ${text.slice(0, 120)}`);
       // O plano é só texto (JSON): corre no modo escritório, sem ferramentas.
-      const result = await hub.run("ceo", planPrompt(text, profile), { silent: true, isolated: true, label: text, profile: null });
+      const result = await hub.run("ceo", planPrompt(text, profile), {
+        silent: true,
+        isolated: true,
+        label: text,
+        profile: null,
+        toolless: true,
+      });
       if (!result.ok) return log(`Não consegui planear: ${result.error ?? "erro desconhecido"}`);
       const plan = parsePlan(result.reply, delegable);
       if (!plan) {
@@ -259,7 +265,11 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void): Orch
       for (let attempt = 0; attempt < REPORT_ATTEMPTS && !report.ok; attempt++) {
         await waitUntilFree(hub, "ceo");
         // O resumo usa só a evidência recolhida (texto): corre no modo escritório, sem ferramentas.
-        report = await hub.run("ceo", reportPrompt(text, outcomes), { label: "Resumo do trabalho da equipa", profile: null });
+        report = await hub.run("ceo", reportPrompt(text, outcomes), {
+          label: "Resumo do trabalho da equipa",
+          profile: null,
+          toolless: true,
+        });
         if (!report.ok && !report.error?.includes("ao mesmo tempo")) break;
         if (!report.ok) await new Promise((resolve) => setTimeout(resolve, REPORT_WAIT_MS * 4));
       }

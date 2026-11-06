@@ -3,7 +3,7 @@
 // local-guard.mjs). Uso: node vault-mcp.mjs <vault>
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { basename, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 
 const vaultArg = process.argv[2];
@@ -120,8 +120,13 @@ function readNote(rawPath) {
   if (typeof rawPath !== "string" || !rawPath) return { error: "path em falta" };
   if (isAbsolute(rawPath) || rawPath.split(/[\\/]/).includes(".."))
     return { error: "usa um caminho relativo ao vault (como devolve find_note)" };
-  const path = resolve(vault, rawPath.endsWith(".md") ? rawPath : `${rawPath}.md`);
-  if (!path.startsWith(vault) || !existsSync(path) || !statSync(path).isFile()) return { error: `nota não encontrada: ${rawPath}` };
+  const lexical = resolve(vault, rawPath.endsWith(".md") ? rawPath : `${rawPath}.md`);
+  if (!existsSync(lexical) || !statSync(lexical).isFile()) return { error: `nota não encontrada: ${rawPath}` };
+  // Caminho real (sem atalhos) e contido no vault, fora de pastas escondidas (.obsidian, .git...).
+  const path = realpathSync.native(lexical);
+  const inside = relative(vault.toLowerCase(), path.toLowerCase());
+  if (!inside || inside.startsWith("..") || isAbsolute(inside) || inside.split(sep).some((s) => s.startsWith(".")))
+    return { error: "essa nota está fora do vault ou numa pasta escondida" };
   const text = readFileSync(path, "utf8");
   const { data } = parseFrontmatter(text);
   const index = indexVault();
