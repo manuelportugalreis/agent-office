@@ -47,17 +47,20 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
     store.setSetting(SETTING, JSON.stringify(items));
     emit({ type: "notifications", items });
   };
-  const close = (match: (n: AppNotification) => boolean): void => {
+  const close = (match: (n: AppNotification) => boolean, dismissed = false): void => {
     let changed = false;
-    items = items.map((n) => (n.open && match(n) ? ((changed = true), { ...n, open: false, closedAt: Date.now() }) : n));
+    items = items.map((n) =>
+      n.open && match(n) ? ((changed = true), { ...n, open: false, closedAt: Date.now(), ...(dismissed ? { dismissed } : {}) }) : n,
+    );
     if (changed) publish();
   };
 
   return {
     open(key, agentId, kind, text, data) {
       const clipped = text.length > TEXT_MAX ? `${text.slice(0, TEXT_MAX)}…` : text;
-      // Uma que já fechaste (ou que foi resolvida) não volta a acender com a mesma chave.
-      if (items.some((n) => n.key === key && !n.open)) return;
+      // Uma que tu deste como vista não volta a acender com a mesma chave; uma que o sistema resolveu pode voltar
+      // (ex.: a Mira faz uma segunda pergunta no dossier na mesma etapa).
+      if (items.some((n) => n.key === key && n.dismissed)) return;
       const existing = items.find((n) => n.key === key && n.open);
       if (existing) items = items.map((n) => (n === existing ? { ...n, text: clipped, ...(data ? { data } : {}) } : n));
       else items = [...items, { id: ++counter, key, agentId, kind, text: clipped, ts: Date.now(), open: true, ...(data ? { data } : {}) }];
@@ -68,7 +71,7 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
     dismiss(id) {
       // Autorizações, perguntas e aprovações só fecham quando são decididas (senão ficavam pendentes e invisíveis).
       const n = items.find((x) => x.id === id && x.open && DISMISSABLE.has(x.kind)) ?? null;
-      if (n) close((x) => x.id === id);
+      if (n) close((x) => x.id === id, true);
       return n;
     },
     get: (id) => items.find((n) => n.id === id) ?? null,

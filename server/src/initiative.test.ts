@@ -62,6 +62,19 @@ describe("notificações", () => {
     n.open("dossier-1-review-1-", "ceo", "dossier", "O dossier está à tua espera");
     expect(n.list().filter((x) => x.key.startsWith("dossier") && x.open)).toHaveLength(0);
   });
+
+  it("o que o sistema resolveu pode voltar (segunda pergunta do dossier na mesma etapa)", () => {
+    const n = createNotifications(memoryStore(), () => undefined);
+    n.open("dossier-1-research-0-q", "mira", "dossier", "A Mira precisa de uma resposta tua");
+    n.resolve("dossier-1-research-0-q");
+    n.open("dossier-1-research-0-q", "mira", "dossier", "A Mira precisa de outra resposta tua");
+    expect(
+      n
+        .list()
+        .filter((x) => x.open)
+        .map((x) => x.text),
+    ).toEqual(["A Mira precisa de outra resposta tua"]);
+  });
 });
 
 describe("iniciativa", () => {

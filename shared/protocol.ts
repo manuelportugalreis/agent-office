@@ -207,6 +207,8 @@ export interface AppNotification {
   readonly ts: number;
   readonly open: boolean;
   readonly closedAt?: number;
+  /** Fechada por ti ("Visto", "Dispensar"): não volta a acender com a mesma chave. */
+  readonly dismissed?: boolean;
   /** Pormenores: o pedido de autorização a decidir, ou a ideia (porquê, primeiro passo). */
   readonly data?: { readonly permissionId?: number; readonly why?: string; readonly firstStep?: string };
 }
