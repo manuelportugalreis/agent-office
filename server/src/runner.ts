@@ -141,11 +141,15 @@ function toollessArgs(req: RunRequest): string[] {
     "--model",
     req.agent.model,
     "--append-system-prompt",
-    req.agent.systemPrompt,
+    `${req.agent.systemPrompt} ${TOOLLESS_RULE}`,
     req.resume ? "--resume" : "--session-id",
     req.sessionId,
   ];
 }
+
+/** Sem ferramentas o modelo não pode gravar nada: não pode fingir que gravou (nem escrever chamadas a ferramentas). */
+export const TOOLLESS_RULE =
+  "Nesta resposta não tens ferramentas nenhumas: responde só com texto, nunca escrevas chamadas a ferramentas, não atualizes o teu CLAUDE.md nem outros ficheiros e nunca digas que gravaste ou registaste alguma coisa.";
 
 /** Lança o `claude` num processo próprio. O texto do utilizador vai por stdin, nunca como argumento. */
 export const claudeRunner: Runner = (req, handlers) => {

@@ -16,7 +16,8 @@ export interface Plan {
 }
 
 const MAX_TASKS = 3;
-const MAX_TASK_LENGTH = 1500;
+/** As tarefas levam contexto concreto (ficheiros, notas, comandos, critério de conclusão): podem ser longas. */
+const MAX_TASK_LENGTH = 4000;
 const MAX_SUMMARY_LENGTH = 300;
 /** Quanto do resultado de um colega se passa à tarefa seguinte. */
 const MAX_HANDOFF_LENGTH = 9000;
@@ -121,7 +122,7 @@ export function planPrompt(order: string, profile?: AccessProfile | null): strin
     "Planeia esta ordem para a equipa e responde APENAS com um objeto JSON, sem mais texto:",
     '{"summary":"o plano numa frase","tasks":[{"agent":"id","task":"instrução completa e autónoma","after":["id"]}]}',
     `Equipa: ${team}.`,
-    "No máximo 3 tarefas, uma por agente. Cada tarefa tem de se perceber sozinha.",
+    "No máximo 3 tarefas, uma por agente, cada uma com menos de 3000 caracteres. Cada tarefa tem de se perceber sozinha.",
     '"after" é opcional: lista os agentes cujo resultado esta tarefa precisa; esses resultados são-lhe entregues automaticamente (ex.: a lena escreve o email depois de a mira pesquisar a empresa: {"agent":"lena","after":["mira"]}). Sem "after", corre logo.',
     "Só atribuis a lena ou o theo se o utilizador deu os dados concretos da vaga ou se uma tarefa anterior os vai produzir. Nunca envias nada nem submetes candidaturas: só pesquisa e rascunhos.",
   ].join("\n");

@@ -385,3 +385,13 @@ describe("correções das revisões independentes", () => {
     expect(a.detail).toContain("descrição do agente: inofensivo");
   });
 });
+
+describe("corridas sem ferramentas (plano e resumo do Atlas)", () => {
+  it("não dão ferramentas e proíbem fingir que gravou alguma coisa", async () => {
+    const { buildArgs, TOOLLESS_RULE } = await import("./runner.ts");
+    const args = buildArgs({ agent: findAgent("ceo")!, text: "x", sessionId: "s", resume: false, toolless: true });
+    expect(args[args.indexOf("--tools") + 1]).toBe("");
+    expect(args).not.toContain("--add-dir");
+    expect(args[args.indexOf("--append-system-prompt") + 1]).toContain(TOOLLESS_RULE);
+  });
+});

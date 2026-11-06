@@ -272,7 +272,8 @@ describe("parsePlan", () => {
     expect(parsePlan("{quebrado", allowed)).toBeNull();
   });
   it("rejeita tarefas enormes", () => {
-    expect(parsePlan(`{"summary":"x","tasks":[{"agent":"mira","task":"${"a".repeat(1501)}"}]}`, allowed)).toBeNull();
+    expect(parsePlan(`{"summary":"x","tasks":[{"agent":"mira","task":"${"a".repeat(1661)}"}]}`, allowed)).not.toBeNull();
+    expect(parsePlan(`{"summary":"x","tasks":[{"agent":"mira","task":"${"a".repeat(4001)}"}]}`, allowed)).toBeNull();
   });
 });
 
