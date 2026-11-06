@@ -44,3 +44,36 @@ Ainda: um passo a seguir a outro com ressalvas corre avisado e não aparece como
 - "Pede à Lena para acrescentar esses passos à nota e à Nina para verificar a alteração." — nota alterada em disco (só linhas novas, frontmatter intacto); a Nina revê só a ler.
 - Nota ambígua, destino em falta, escrita recusada (fora do vault e com vault só de leitura), autorização pedida na app (perfil local), dossier completo até à bandeja.
 - Cena comparada com a versão anterior (`08150e9`): 1,02% dos píxeis diferentes, todos nas personagens e no rótulo do dossier.
+- Repetido sobre o código final (`9a56cd5`, base de dados nova): as quatro ordens, nota ambígua, destino em falta, escrita recusada, painel do Dean e o dossier até à bandeja (Atlas → Mira → Lena → Nina, com uma devolução automática).
+
+## Diferenças em relação ao Claude Code no terminal (verificado)
+
+Argumentos que o servidor passa ao `claude` (gerados por `buildLocalArgs` e `buildArgs`, Claude Code 2.1.319):
+
+- **Modo local (perfil):** `--setting-sources user,project,local` (as tuas definições, hooks, plugins e regras de permissão contam), `--permission-prompt-tool stdio` (as perguntas do terminal chegam à app), `--permission-mode default|acceptEdits`, `--mcp-config` (o MCP do vault mais os teus, ou todos com `*`), `--add-dir` com as pastas do perfil, o hook `local-guard.mjs` por cima.
+- **Modo escritório:** `--setting-sources local,project`, `--strict-mcp-config` (sem MCP), `--tools Read,Write,Edit,Glob,Grep` (+ WebSearch/WebFetch para quem tem web), `--permission-mode dontAsk`, hooks `fs-guard`/`web-guard`.
+
+| No terminal                      | Na app                                                                                           | Evidência                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Login e definições do utilizador | Igual no modo local (mesmo `claude` e login; `user,project,local`)                               | Argumentos acima; sessões locais testadas ao vivo                        |
+| Perguntas de permissão           | No modo local aparecem na app (permitir/recusar); no escritório não há perguntas, só os guards   | Teste ao vivo: edição do README pediu autorização e foi permitida na app |
+| Terminal (Bash/PowerShell)       | Só com perfil que o permita; no escritório nunca                                                 | `--disallowedTools Bash,PowerShell` quando o perfil não tem terminal     |
+| Integrações MCP                  | Só no modo local (escolhidas ou todas); no escritório nenhuma                                    | `--strict-mcp-config` no escritório                                      |
+| Comandos `/` e ecrã interativo   | Não existem no chat da app; "Continuar no terminal" abre a mesma sessão no terminal              | `terminal.ts` (`claude --resume` com o mesmo perfil)                     |
+| Interpretar ordens               | O servidor executa sozinho só andar e abrir notas; o resto é o agente                            | `intent.ts`                                                              |
+| Conferir edições                 | Notas conferidas em disco (antes/depois); outros ficheiros só pelo rasto das ferramentas         | `taskEvidence` em `orders.ts`                                            |
+| Continuidade                     | Perguntas pendentes perdem-se ao reiniciar o servidor; o resultado da última ordem fica guardado | `lastOrderResults` em `settings`                                         |
+
+## Relatório do subagente revisor (tal como foi entregue)
+
+> **HIGH**
+>
+> 1. Normal chat messages hijacked by the parser — server/src/intent.ts. In an agent's own chat no vocative is needed (`who = self`) and domain words are place aliases ("pesquisa", "estudos", "candidaturas", "mestrado", "reunioes", "cafe", "bar", "jogos", "pausa"). Scenario: in Lena's chat, "Volta às candidaturas de ontem e revê o email" parses as move(Lena → apply room) and the task becomes the leftover "de ontem e revê o email". Fix: require an explicit movement phrase … or pass the original text intact when the move is not the whole message.
+>
+> **MEDIUM** 2. Vault indexed on every chat message — chat.ts (`findNoteMention`) → vault.ts (`indexVault`): every message walks the vault and reads every .md file synchronously. Fix: cache the index. 3. Missing note is dropped silently — orders.ts: when the plan's `s.note` resolves to `none`, the task still runs and `found.error` is discarded; the summary says "✓ … terminou". Fix: add the error to the evidence and mark the step partial. 4. Edit task reported "done" without evidence — orders.ts: if the note is unchanged and no write step was logged, the state stays "done". Fix: when the task is an edit and the file is unchanged, mark partial. 5. Pending question swallows unrelated messages — `pickOption`: `\b(\d)\b` and `includes("quinta"/"sexta"/"primeira")` match any text; a failed parse cancels the question and blocks the step. Fix: accept only a bare number or ordinal, re-ask once on a parse failure. 6. `ask()` cancels a sibling's question — two parallel steps for the same owner cancel each other. Fix: queue questions per owner or memoise the office choice. 7. First `arrived` wins, from any client — a stale tab's `ok:false` can beat the tab that succeeds. Fix: prefer `ok:true` with a grace period. 8. Superseded move is never answered — main.ts `beginMove`: the old id never gets `arrived`; the server waits 120 s. Fix: send `arrived{ok:false, reason:"substituída"}`.
+>
+> **LOW** 9. Order-card id collision after restart (counters restart at 1). 10. Redo bypasses the order path. 11. Dead option (`conversational`), duplicated agent lists, identical `nameOf`/`names`, stacked JSDoc blocks. 12. Function length (`run` ~150 lines, `runTask` ~65, `placeAt` 4 nested loops).
+>
+> **Checked and fine:** path traversal (`walk`, `findNoteMention`, `openInObsidian` with realpath + `vaultFor`); URI launch (`encodeURIComponent`, no shell, vault id from obsidian.json); `parseClientMsg` validation of `arrived`/`set-office`; dependency propagation.
+
+O relatório do Codex está completo na secção acima (os 9 achados, tal como numerados por ele).
