@@ -72,5 +72,9 @@ edições precisam de autorização.
   "outra vez", "de novo" e "novamente" já não entram no título. A revisão da Nina ("Veredicto: aprovado", com as linhas
   citadas) aparece no chat dela na interface. O caso "já estava aberta" ficou só em testes unitários: exercitá-lo ao
   vivo pedia reiniciar o Obsidian do utilizador.
+- Corrida final no build final (`b453056`): a ordem completa voltou a correr de ponta a ponta (Mira chegou, leu e
+  propôs; Lena acrescentou 3 linhas com frontmatter intacto; Nina leu o ficheiro), com as ressalvas num só nível.
+  "Continuar no terminal" abriu o Claude Code interativo (sem `-p`, `--resume` da sessão do agente,
+  `--setting-sources user,project,local`, `acceptEdits` e a MCP do perfil); "Retirar acesso" voltou ao modo escritório.
 - Modo andar com quem está meio tapado (a Ada atrás do Turing): um clique em cima do eixo de alguém escolhe essa pessoa;
   verificado no build da demo: 5/5 no modo andar, 11/11 na vista normal.
