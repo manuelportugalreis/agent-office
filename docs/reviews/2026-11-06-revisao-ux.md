@@ -76,5 +76,7 @@ edições precisam de autorização.
   propôs; Lena acrescentou 3 linhas com frontmatter intacto; Nina leu o ficheiro), com as ressalvas num só nível.
   "Continuar no terminal" abriu o Claude Code interativo (sem `-p`, `--resume` da sessão do agente,
   `--setting-sources user,project,local`, `acceptEdits` e a MCP do perfil); "Retirar acesso" voltou ao modo escritório.
+- Obsidian ao vivo, depois de reiniciado: a primeira abertura de Planeamento ficou ✓ (o Obsidian confirmou a nota
+  aberta) e a segunda, "abre outra vez a nota Planeamento", ficou ✓ com "já estava aberta (é a nota ativa)".
 - Modo andar com quem está meio tapado (a Ada atrás do Turing): um clique em cima do eixo de alguém escolhe essa pessoa;
   verificado no build da demo: 5/5 no modo andar, 11/11 na vista normal.
