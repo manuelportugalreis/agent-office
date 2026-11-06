@@ -68,5 +68,9 @@ edições precisam de autorização.
   cada vez); "não pede à Lena para…" e texto entre aspas já não criam passos; uma nota nomeada na tarefa ganha à aberta
   antes; "já estava aberta" exige também que seja este vault o aberto no Obsidian; o alvo do modo andar limpa-se ao
   andar pelo corredor.
+- Teste ao vivo depois do deploy: "Abre outra vez a nota Planeamento" procurava a nota «outra vez a nota Planeamento";
+  "outra vez", "de novo" e "novamente" já não entram no título. A revisão da Nina ("Veredicto: aprovado", com as linhas
+  citadas) aparece no chat dela na interface. O caso "já estava aberta" ficou só em testes unitários: exercitá-lo ao
+  vivo pedia reiniciar o Obsidian do utilizador.
 - Modo andar com quem está meio tapado (a Ada atrás do Turing): um clique em cima do eixo de alguém escolhe essa pessoa;
   verificado no build da demo: 5/5 no modo andar, 11/11 na vista normal.

@@ -240,7 +240,13 @@ function openAt(ts: readonly Tok[]): { note: string; used: number } | null {
   const verb = phraseAt(ts, 0, OPEN_VERBS);
   if (!verb) return null;
   let at = verb;
-  while (["a", "o", "essa", "esta", "minha", "me"].includes(ts[at]?.f ?? "")) at++;
+  // "Abre outra vez / de novo / novamente a nota X": as palavras de repetição não fazem parte do título.
+  for (;;) {
+    const again = phraseAt(ts, at, ["outra vez", "de novo", "novamente", "la", "lá", "agora"]);
+    if (again) at += again;
+    else if (["a", "o", "essa", "esta", "minha", "me"].includes(ts[at]?.f ?? "")) at++;
+    else break;
+  }
   const isNote = ts[at]?.f === "nota";
   if (isNote) at++;
   let end = at;

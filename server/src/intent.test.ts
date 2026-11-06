@@ -77,6 +77,15 @@ describe("parseOrder", () => {
     ]);
   });
 
+  it("'abre outra vez / de novo a nota X' abre X", () => {
+    for (const text of [
+      "Abre outra vez a nota Planeamento no Obsidian.",
+      "abre de novo a nota Planeamento",
+      "abre novamente a nota Planeamento",
+    ])
+      expect(parseOrder(text, AGENTS, "ceo")?.steps).toEqual([{ kind: "open_note", note: "Planeamento" }]);
+  });
+
   it("'abre o site' não é abrir uma nota: fica para o agente", () => {
     expect(parseOrder("abre o site da empresa e resume", AGENTS, "mira")).toBeNull();
   });
