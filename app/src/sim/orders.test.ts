@@ -4,6 +4,7 @@ import { createAgent, stateOf, stepAgent } from "./agent";
 import { lifeUpdate } from "./life";
 import { buildLocations } from "./locations";
 import { candidateLocs, moveStatus, startMove } from "./orders";
+import { crowdLocs } from "./crowd";
 
 const setup = () => {
   const locs = buildLocations(AGENTS);
@@ -46,6 +47,31 @@ describe("ordens de movimento na cena", () => {
     expect(candidateLocs("ceo-office", "mira")).toEqual(["visit-ceo"]);
     expect(candidateLocs("gestao", "mira")).toEqual(["meet0", "meet1", "meet2", "meet3"]);
     expect(candidateLocs("ceo-office", "ceo")).toEqual(["desk-ceo"]);
+  });
+
+  it("toda a gente para a sala de jogos: 11 lugares diferentes, todos dentro da sala, e todos chegam", () => {
+    const { locs, agents } = setup();
+    for (const [i, a] of agents.entries()) {
+      const m = startMove(a, "games", locs, 100 + i);
+      if ("error" in m) throw new Error(m.error);
+    }
+    const spots = agents.map((a) => a.dest?.key);
+    expect(new Set(spots).size).toBe(agents.length);
+    for (const a of agents) for (let t = 0; t < 60 * 20; t++) stepAgent(a, 0.05);
+    for (const a of agents) {
+      expect(a.route, a.def.id).toEqual([]);
+      expect(a.x, a.def.id).toBeGreaterThan(18);
+      expect(a.z, a.def.id).toBeGreaterThan(7);
+    }
+  });
+
+  it("as salas grandes têm lugar para a equipa inteira; a sala de reuniões para os chefes", () => {
+    const { locs } = setup();
+    const capacity = (place: string): number => candidateLocs(place, "x").length + crowdLocs(place, locs).length;
+    for (const place of ["pesquisa", "search", "apply", "masters", "rest", "games", "wc"])
+      expect(capacity(place), place).toBeGreaterThanOrEqual(11);
+    expect(capacity("gestao")).toBeGreaterThanOrEqual(5);
+    expect(capacity("ceo-office")).toBeGreaterThanOrEqual(3);
   });
 
   it("sítio sem lugares no mapa devolve um motivo (não fica à espera para sempre)", () => {

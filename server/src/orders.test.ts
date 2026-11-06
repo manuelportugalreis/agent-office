@@ -266,6 +266,27 @@ describe("motor de ordens", () => {
     expect(o.view.detail).toContain("disco ilegível");
   });
 
+  it("as perguntas avisam as notificações quando são feitas e quando ficam respondidas", async () => {
+    const events: string[] = [];
+    const hub = fakeHub();
+    const dir = vault();
+    const engine = createOrderEngine({
+      hub,
+      emit: () => undefined,
+      scene: { move: async () => ({ ok: true, at: 1 }), arrived: () => undefined },
+      vaultDir: () => dir,
+      myOffice: () => null,
+      setMyOffice: () => undefined,
+      onQuestion: (key, owner) => events.push(`aberta ${owner} ${key.startsWith("q-")}`),
+      onQuestionClosed: () => events.push("fechada"),
+    });
+    const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "mine" } }]));
+    await tick();
+    engine.answer("mira", "a copa");
+    await p;
+    expect(events).toEqual(["aberta mira true", "fechada"]);
+  });
+
   it("'para a copa' responde a 'para onde vou?' (não cancela)", async () => {
     const { engine, moves } = setup();
     const p = engine.run("mira", "x", sequence([{ kind: "move", agent: "mira", to: { kind: "unknown", text: "cozinha" } }]));

@@ -33,9 +33,17 @@
       <button id="timeBtn" title="Hora do dia">🕒 Auto</button>
       <button id="feedBtn" title="O que se passou nesta sessão">Atividade</button>
       <button id="apBtn">Aprovações<span class="badge" id="apCount">0</span></button>
+      <button
+        id="notifBtn"
+        title="O que precisa de ti: perguntas, autorizações, aprovações, bloqueios e ideias da equipa"
+        aria-label="Notificações"
+      >
+        🔔<span class="badge" id="notifCount" style="display: none">0</span>
+      </button>
       <button id="themeBtn" aria-label="Tema da interface">🌓</button>
     </header>
     <div id="appr"></div>
+    <div id="notifPanel" role="region" aria-label="Notificações" hidden></div>
     <div id="perm" role="region" aria-label="Pedidos de autorização"></div>
     <dialog id="profileDialog" aria-labelledby="pfTitle">
       <form id="pfForm" method="dialog">

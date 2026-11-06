@@ -19,6 +19,8 @@ import { createOrchestrator } from "./orchestrator.ts";
 import { parsePlaceText } from "./intent.ts";
 import { createOrderEngine } from "./orders.ts";
 import { InstructionsError, readInstructions, saveInstructions, userInstructions } from "./instructions.ts";
+import { createNotifications } from "./notifications.ts";
+import { createInitiative } from "./initiative.ts";
 import { createSceneBridge } from "./scene-bridge.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
@@ -51,13 +53,52 @@ const send = (ws: WebSocket, m: ServerMsg): void => {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
 };
 
-/** Guarda o que interessa guardar e envia a todas as interfaces ligadas. */
+/** Guarda o que interessa guardar, atualiza as notificações e envia a todas as interfaces ligadas. */
 const broadcast = (m: ServerMsg): void => {
   if (m.type === "log") store.addLog(m.agentId, m.text);
   else if (m.type === "reply") store.addChat(m.agentId, false, m.text);
   else if (m.type === "canvas") store.saveCanvas(m.items, m.syncedAt);
   for (const c of clients) send(c, m);
+  notifyFrom(m);
 };
+
+/** O que precisa de ti vira uma notificação (e fecha-se sozinha quando é resolvido noutro sítio). */
+const notifications = createNotifications(store, (m) => {
+  for (const c of clients) send(c, m);
+});
+// Perguntas e pedidos de autorização não sobrevivem a um reinício do servidor.
+notifications.resolvePrefix("q-");
+notifications.resolvePrefix("perm-");
+
+function notifyFrom(m: ServerMsg): void {
+  if (m.type === "permission")
+    notifications.open(`perm-${m.request.id}`, m.request.agentId, "permission", `Pede autorização: ${m.request.summary}`, {
+      permissionId: m.request.id,
+    });
+  else if (m.type === "permission-resolved") notifications.resolve(`perm-${m.id}`);
+  else if (m.type === "approval") notifications.open(`appr-${m.id}`, m.agentId, "approval", `Para aprovares: ${m.title}`);
+  else if (m.type === "approval-resolved") notifications.resolve(`appr-${m.id}`);
+  else if (m.type === "order-steps" && m.finished)
+    for (const s of m.steps.filter((x) => x.state === "blocked"))
+      notifications.open(`order-${m.id}-${s.id}`, m.owner, "blocked", `${s.label}: ${s.detail ?? "bloqueado"}`);
+  else if (m.type === "dossier") {
+    const d = m.dossier;
+    const waiting = d && (d.stage === "review" || d.clarification || d.blocked);
+    const key = d ? `dossier-${d.id}-${d.stage}-${d.draftVersion}-${d.clarification ? "q" : ""}${d.blocked ? "b" : ""}` : "";
+    for (const n of notifications.list()) if (n.open && n.key.startsWith("dossier-") && n.key !== key) notifications.resolve(n.key);
+    if (d && waiting)
+      notifications.open(
+        key,
+        d.holder === "user" ? "ceo" : d.holder,
+        "dossier",
+        d.blocked
+          ? `O dossier «${d.title}» parou: ${d.blocked.reason}`
+          : d.clarification
+            ? `A Mira precisa de uma resposta tua no dossier «${d.title}»`
+            : `O dossier «${d.title}» está à tua espera para rever`,
+      );
+  }
+}
 
 const CANVAS_COMMAND = /^sincroniza o canvas\.?$/i;
 
@@ -111,6 +152,8 @@ const hub = createHub({
   onComplete: (agentId, result) => {
     if (result.ok && result.reply && findAgent(agentId)?.needsApproval)
       approvals.request(agentId, "Rascunho pronto para rever", result.reply);
+    // "Ideia: …" no fim de uma resposta: vai para as notificações.
+    if (result.ok && result.reply) initiative.fromReply(agentId, result.reply);
   },
 });
 const MY_OFFICE_SETTING = "myOffice";
@@ -122,6 +165,9 @@ const orders = createOrderEngine({
   vaultDir: () => config.vaultDir,
   myOffice: () => store.getSetting(MY_OFFICE_SETTING),
   setMyOffice: (place) => setMyOffice(place),
+  // Uma pergunta de um agente também aparece nas notificações (e fecha quando respondes no chat).
+  onQuestion: (key, owner, text) => notifications.open(key, owner, "question", text),
+  onQuestionClosed: (key) => notifications.resolve(key),
 });
 /** Escolhe o gabinete do utilizador (uma sala ou a secretária de alguém) e avisa todas as interfaces. */
 function setMyOffice(place: string): boolean {
@@ -139,6 +185,32 @@ const orchestrator = createOrchestrator(hub, broadcast, orders, {
 });
 const canvas = createCanvasSync(hub, broadcast);
 const chat = createChatService(hub, store, broadcast, { engine: orders, vaultDir: () => config.vaultDir, profileOf });
+/** Ideias da equipa por iniciativa própria (vão para as notificações; avançar põe o Atlas a organizar). */
+const initiative = createInitiative({
+  hub,
+  notifications,
+  store,
+  log: (agentId, text) => broadcast({ type: "log", agentId, text }),
+});
+initiative.start(() => clients.size);
+
+/** Avançar com uma ideia: o Atlas planeia e reparte, com o acesso que o Atlas tem (o do perfil dele, se tiver). */
+function acceptIdea(id: number): void {
+  const n = notifications.dismiss(id);
+  if (!n || n.kind !== "idea") return;
+  const who = findAgent(n.agentId)?.name ?? n.agentId;
+  const order = [
+    `Ideia da ${who} que aprovei: ${n.text}`,
+    n.data?.why ? `Porquê: ${n.data.why}` : "",
+    n.data?.firstStep ? `Primeiro passo sugerido: ${n.data.firstStep}` : "",
+    "Põe-na em marcha com a equipa e diz-me o que ficou feito.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  store.addChat("ceo", true, order);
+  broadcast({ type: "user-message", agentId: "ceo", text: order, files: [] });
+  background(orchestrator.order(order, profileOf("ceo")), "ideia aprovada");
+}
 const dossier = createDossierService({
   hub,
   store,
@@ -251,6 +323,8 @@ wss.on("connection", (ws) => {
   send(ws, profilesMsg());
   send(ws, modesMsg());
   send(ws, { type: "office", myOffice: store.getSetting(MY_OFFICE_SETTING) });
+  send(ws, { type: "notifications", items: notifications.list() });
+  send(ws, { type: "initiative", settings: initiative.settings() });
   // Perguntas de permissão por responder (a página foi recarregada a meio de uma tarefa local).
   for (const request of hub.pendingPermissions()) send(ws, { type: "permission", request });
   // Quem já está a trabalhar (a página foi recarregada a meio): a interface não pode achar que está livre.
@@ -281,6 +355,23 @@ wss.on("connection", (ws) => {
       }
       case "arrived":
         return scene.arrived(msg.id, msg.ok, msg.reason);
+      case "notification-dismiss":
+        notifications.dismiss(msg.id);
+        return;
+      case "idea-decide":
+        if (msg.accept) return acceptIdea(msg.id);
+        notifications.dismiss(msg.id);
+        return;
+      case "initiative-set":
+        initiative.set({ enabled: msg.enabled, everyMin: msg.everyMin });
+        return broadcast({ type: "initiative", settings: initiative.settings() });
+      case "initiative-now":
+        return background(
+          initiative.now().then((ran) => {
+            if (!ran) send(ws, { type: "error", message: "A equipa está ocupada: a próxima ideia vem quando houver alguém livre." });
+          }),
+          "ideia a pedido",
+        );
       case "instructions-get": {
         const agent = findAgent(msg.agentId);
         if (!agent) return send(ws, { type: "error", agentId: msg.agentId, message: "Este agente ainda não é real." });

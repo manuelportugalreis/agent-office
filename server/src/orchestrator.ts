@@ -3,8 +3,9 @@ import { ROOM_PLACES } from "../../shared/places.ts";
 import { AGENT_NAMES, delegableTeam, findAgent } from "./agents.ts";
 import { config } from "./config.ts";
 import type { Hub, RunResult } from "./hub.ts";
+import { CHIEF_IDS, parseGroupMove } from "./group.ts";
 import { parseOrder } from "./intent.ts";
-import { createOrderEngine, sequence, summarize, type ExecStep, type OrderEngine, type StepOutcome } from "./orders.ts";
+import { createOrderEngine, groupSteps, sequence, summarize, type ExecStep, type OrderEngine, type StepOutcome } from "./orders.ts";
 import { describeProfile } from "./profiles.ts";
 import { createSceneBridge } from "./scene-bridge.ts";
 
@@ -25,6 +26,8 @@ export interface Plan {
   readonly tasks: readonly Task[];
   /** Uma nota para abrir no Obsidian do utilizador. */
   readonly openNote?: string;
+  /** Deslocações de grupo (sem limite de pessoas). */
+  readonly moves?: readonly PlanMove[];
 }
 
 const MAX_TASKS = 3;
@@ -89,16 +92,51 @@ export function parsePlan(reply: string, allowed: readonly string[]): Plan | nul
     return null;
   }
   if (typeof data !== "object" || data === null) return null;
-  const { summary, tasks, open_note: openNote } = data as { summary?: unknown; tasks?: unknown; open_note?: unknown };
+  const {
+    summary,
+    tasks,
+    open_note: openNote,
+    moves,
+  } = data as { summary?: unknown; tasks?: unknown; open_note?: unknown; moves?: unknown };
   const open = typeof openNote === "string" && openNote.trim() && openNote.length <= MAX_FIELD ? openNote.trim() : undefined;
   if (openNote !== undefined && openNote !== "" && !open) return null;
   if (typeof summary !== "string" || !Array.isArray(tasks) || tasks.length > MAX_TASKS) return null;
-  if (tasks.length === 0 && !open) return null;
+  const walks = parseMoves(moves);
+  if (walks === null) return null;
+  if (tasks.length === 0 && !open && walks.length === 0) return null;
   const parsed = tasks.map((t) => parseTask(t, allowed));
   if (!parsed.every((t): t is Task => t !== null)) return null;
   if (new Set(parsed.map((t) => t.agent)).size !== parsed.length) return null;
   if (!validDependencies(parsed)) return null;
-  return { summary: summary.slice(0, MAX_SUMMARY_LENGTH), tasks: parsed, ...(open ? { openNote: open } : {}) };
+  return {
+    summary: summary.slice(0, MAX_SUMMARY_LENGTH),
+    tasks: parsed,
+    ...(open ? { openNote: open } : {}),
+    ...(walks.length ? { moves: walks } : {}),
+  };
+}
+
+/** Movimentos de quantas pessoas forem precisas (andar não é uma tarefa: não conta para o limite de 3). */
+export interface PlanMove {
+  readonly agents: readonly string[];
+  readonly go: string;
+}
+const MAX_MOVES = 12;
+const MOVABLE = AGENT_NAMES.map((a) => a.id);
+
+function parseMoves(v: unknown): PlanMove[] | null {
+  if (v === undefined) return [];
+  if (!Array.isArray(v) || v.length > MAX_MOVES) return null;
+  const out: PlanMove[] = [];
+  for (const m of v) {
+    if (typeof m !== "object" || m === null) return null;
+    const { agents, go } = m as { agents?: unknown; go?: unknown };
+    if (typeof go !== "string" || !go.trim() || go.length > MAX_FIELD) return null;
+    const list = agents === "todos" ? MOVABLE : agents === "chefes" ? CHIEF_IDS : agents;
+    if (!Array.isArray(list) || !list.length || !list.every((a) => typeof a === "string" && MOVABLE.includes(a))) return null;
+    out.push({ agents: [...new Set(list as string[])], go: go.trim() });
+  }
+  return out;
 }
 
 /** Passos executáveis de um plano: cada agente vai primeiro ao sítio pedido (se houver) e só depois trabalha. */
@@ -109,6 +147,12 @@ export function planSteps(plan: Plan): ExecStep[] {
   };
   const steps: ExecStep[] = [];
   if (plan.openNote) steps.push({ id: "open", kind: "open_note", note: plan.openNote, after: [] });
+  // Deslocações de grupo: todas ao mesmo tempo; quem também tem uma tarefa já tem o seu "go".
+  (plan.moves ?? []).forEach((m, i) =>
+    m.agents
+      .filter((a) => !plan.tasks.some((t) => t.agent === a && t.go))
+      .forEach((agent) => steps.push({ id: `m${i}:${agent}`, kind: "move", agent, to: m.go, after: [] })),
+  );
   for (const t of plan.tasks) {
     const deps = t.after.map(last);
     if (t.go) steps.push({ id: `${t.agent}:go`, kind: "move", agent: t.agent, to: t.go, after: deps });
@@ -213,6 +257,7 @@ export function planPrompt(order: string, profile?: AccessProfile | null, previo
     "No máximo 3 tarefas, uma por agente, cada uma com menos de 3000 caracteres. Cada tarefa tem de se perceber sozinha: inclui nela os dados concretos de que precisa (por exemplo, os passos a acrescentar, copiados do resultado anterior).",
     '"after" é opcional: lista os agentes cujo resultado esta tarefa precisa; esses resultados são-lhe entregues automaticamente (ex.: a lena escreve o email depois de a mira pesquisar a empresa: {"agent":"lena","after":["mira"]}). Sem "after", corre logo.',
     `"go" faz o agente andar até um sítio do escritório antes de começar a tarefa; a tarefa só começa quando a cena confirmar que chegou. Sítios: ${places}. Usa as palavras do utilizador (ex.: "o meu gabinete"). Para mandar alguém só andar, põe "go" e deixa "task" vazio.`,
+    `"moves" (opcional) desloca várias pessoas sem contar para o limite de tarefas: [{"agents":"todos"|"chefes"|["id",...],"go":"sítio"}]. Ids: ${AGENT_NAMES.map((a) => a.id).join(", ")}. Usa-o quando o utilizador manda várias pessoas ou toda a equipa a um sítio.`,
     '"note": o título, alias, [[link]] ou caminho da nota do Obsidian que a tarefa lê ou edita (o servidor encontra o ficheiro e pergunta ao utilizador se houver várias). "open_note": só quando o utilizador pede explicitamente para abrir ou mostrar a nota no Obsidian dele (abrir não é ler nem editar: para ler, responder ou alterar, é uma tarefa).',
     "Quem altera uma nota ou ficheiro mantém o frontmatter, os links e o conteúdo que não faz parte do pedido; se pedirem verificação, a nina revê depois (after) o ficheiro real em disco.",
     'Se a mensagem não pede trabalho nem ações (conversa, pergunta), responde com "tasks":[] e põe em "summary" a tua resposta direta ao utilizador, em português natural. Não digas que algo foi feito: sem tarefas nada acontece.',
@@ -350,8 +395,18 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
     async order(text, requested = null) {
       const profile = requested ? (Object.freeze(structuredClone(requested)) as AccessProfile) : null;
       log(`Ordem recebida${profile ? ` (perfil ${profile.name})` : ""}: ${text.slice(0, 120)}`);
+      // Movimentos de grupo ("toda a gente para a sala de jogos"): sem plano e sem limite de pessoas.
+      const group = parseGroupMove(text, AGENT_NAMES);
+      if (group) {
+        log(`Ordem de grupo: ${group.agents.length} pessoa(s).`);
+        const outcomes = await orders.run("ceo", text, groupSteps(group), { profile, delegator: "ceo" });
+        emit({ type: "reply", agentId: "ceo", text: summarize(outcomes) });
+        return;
+      }
       const parsed = parseOrder(text, AGENT_NAMES, "ceo");
       if (parsed) return direct(text, parsed, profile);
+      // O Atlas pode estar a escrever o resumo da ordem anterior: a ordem nova espera pela vez dele.
+      if (hub.isRunning("ceo") || !hub.hasCapacity()) await waitUntilFree(hub, "ceo");
       // O plano é só texto (JSON): corre no modo escritório, sem ferramentas.
       const result = await hub.run("ceo", planPrompt(text, profile, previous), {
         silent: true,
@@ -360,7 +415,13 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void, engin
         profile: null,
         toolless: true,
       });
-      if (!result.ok) return log(`Não consegui planear: ${result.error ?? "erro desconhecido"}`);
+      if (!result.ok) {
+        // Nunca em silêncio: a ordem não foi feita e tens de saber porquê.
+        const why = result.error ?? "erro desconhecido";
+        log(`Não consegui planear: ${why}`);
+        emit({ type: "reply", agentId: "ceo", text: `Não consegui planear esta ordem (${why}). Nada foi feito: repete-a daqui a pouco.` });
+        return;
+      }
       const parsedPlan = parsePlan(result.reply, delegable);
       // Abrir uma nota no ecrã do utilizador só quando ele o pediu (ler ou editar uma nota não é abri-la).
       const plan = parsedPlan?.openNote && !OPEN_WORDS.test(text) ? { ...parsedPlan, openNote: undefined } : parsedPlan;

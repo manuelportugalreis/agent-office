@@ -5,7 +5,8 @@ import { log } from "./log.ts";
 import { AGENT_NAMES, findAgent } from "./agents.ts";
 import type { Hub } from "./hub.ts";
 import { parseOrder } from "./intent.ts";
-import { sequence, summarize, type ExecStep, type OrderEngine } from "./orders.ts";
+import { groupSteps, sequence, summarize, type ExecStep, type OrderEngine } from "./orders.ts";
+import { parseGroupMove } from "./group.ts";
 import { findNoteMention } from "./vault.ts";
 import type { Store } from "./store.ts";
 import { inboxDir } from "./workspace.ts";
@@ -73,6 +74,9 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
   /** Passos de uma mensagem que é uma ordem (ações do escritório, ou uma nota do vault a resolver), ou null. */
   function orderSteps(agentId: string, text: string): ExecStep[] | null {
     if (!orders) return null;
+    // "Toda a gente para a copa" também se pode dizer no chat de qualquer um.
+    const group = parseGroupMove(text, AGENT_NAMES);
+    if (group) return groupSteps(group);
     const parsed = parseOrder(text, AGENT_NAMES, agentId);
     if (parsed) return sequence(parsed.steps);
     // Com um perfil sem Obsidian, o servidor nem procura notas pelas mensagens deste agente.

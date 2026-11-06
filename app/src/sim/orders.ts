@@ -1,5 +1,6 @@
 import { AGENT_ROOM, deskOwner } from "../../../shared/places";
 import { cancelAmbient } from "./life";
+import { crowdLocs } from "./crowd";
 import { sendTo, type Agent } from "./agent";
 import type { Loc, LocMap } from "./locations";
 
@@ -33,9 +34,14 @@ export function candidateLocs(place: string, agentId: string): string[] {
   return [...(ROOM_LOCS[place] ?? [])];
 }
 
-/** Escolhe um lugar livre (ou o que já é dele); se todos estiverem ocupados, o primeiro. */
+/**
+ * Escolhe um lugar livre (ou o que já é dele). Quando os lugares da sala acabam, usa os lugares de pé extra
+ * (muita gente no mesmo sítio); se mesmo esses estiverem todos ocupados, o primeiro.
+ */
 export function pickLoc(locs: LocMap, place: string, agentId: string): Loc | null {
-  const keys = candidateLocs(place, agentId).filter((k) => locs[k]);
+  const own = candidateLocs(place, agentId);
+  const extra = own.length === 1 && own[0] === `desk-${agentId}` ? [] : crowdLocs(place, locs).map((l) => l.key);
+  const keys = [...own, ...extra].filter((k) => locs[k]);
   if (keys.length === 0) return null;
   const free = keys.find((k) => locs[k].owner === null || locs[k].owner === agentId);
   return locs[free ?? keys[0]];

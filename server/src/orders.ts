@@ -4,6 +4,7 @@ import { fold, ofPlace, placeName, ROOM_PLACES, toPlace } from "../../shared/pla
 import { AGENT_NAMES, findAgent } from "./agents.ts";
 import type { Hub, RunResult } from "./hub.ts";
 import { withHistory } from "./chat-context.ts";
+import { groupDestination, type GroupMove } from "./group.ts";
 import { parseOrder, parsePlaceText, type PlaceRef } from "./intent.ts";
 import type { SceneBridge } from "./scene-bridge.ts";
 import { findNoteMention, openInObsidian, resolveNote, type NoteMatch, type NoteRef, type OpenResult } from "./vault.ts";
@@ -66,9 +67,14 @@ export interface EngineDeps {
   readonly open?: (absolute: string) => Promise<OpenResult>;
   /** Quanto tempo uma pergunta espera pela resposta. */
   readonly questionTimeoutMs?: number;
+  /** Uma pergunta foi feita / deixou de estar à espera (para as notificações). */
+  readonly onQuestion?: (key: string, owner: string, text: string) => void;
+  readonly onQuestionClosed?: (key: string) => void;
 }
 
 interface Question {
+  /** Chave da notificação desta pergunta. */
+  readonly key: string;
   readonly text: string;
   /** Devolve um valor se a resposta serve, ou undefined se não percebeu. */
   readonly parse: (answer: string) => unknown;
@@ -144,32 +150,40 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
   const officeAsks = new Map<string, Promise<string | null>>();
   /** Muda quando a conversa é recomeçada: as ordens dessa conversa que ainda tinham passos por fazer param. */
   const generations = new Map<string, number>();
+  let questionSeq = 0;
   // Ids a partir da hora: depois de reiniciar o servidor, um cartão antigo numa página aberta não se confunde com um novo.
   let orderCounter = Date.now();
 
   /** Faz uma pergunta no chat `owner` e espera pela resposta (null: sem resposta a tempo ou o utilizador mudou de assunto). */
   function ask<T>(owner: string, text: string, parse: (answer: string) => T | undefined, office = false): Promise<T | null> {
+    /** Faz a pergunta no chat e avisa as notificações. */
+    const pose = (q: Question): void => {
+      emit({ type: "reply", agentId: owner, text: q.text });
+      deps.onQuestion?.(q.key, owner, q.text);
+    };
     return new Promise<T | null>((resolve) => {
       const queue = questions.get(owner) ?? [];
       const q: Question = {
+        key: `q-${owner}-${++questionSeq}`,
         text,
         parse,
         retried: false,
         office,
         resolve: (v) => {
           clearTimeout(timer);
+          deps.onQuestionClosed?.(q.key);
           const current = questions.get(owner) ?? [];
           const rest = current.filter((x) => x !== q);
           if (rest.length) questions.set(owner, rest);
           else questions.delete(owner);
           // Se era a pergunta feita, a seguinte da fila passa a ser feita.
-          if (current[0] === q && rest.length) emit({ type: "reply", agentId: owner, text: rest[0].text });
+          if (current[0] === q && rest.length) pose(rest[0]);
           resolve(v as T | null);
         },
       };
       const timer = setTimeout(() => q.resolve(null), deps.questionTimeoutMs ?? QUESTION_TIMEOUT_MS);
       questions.set(owner, [...queue, q]);
-      if (queue.length === 0) emit({ type: "reply", agentId: owner, text });
+      if (queue.length === 0) pose(q);
     });
   }
 
@@ -519,6 +533,11 @@ async function waitAndRun(
   // A conversa foi recomeçada enquanto esperava a vez: a tarefa já não corre.
   if (!stillWanted()) return { ok: false, reply: "", error: "a conversa foi recomeçada antes de esta tarefa começar" };
   return hub.run(agent, text, opts);
+}
+
+/** Um movimento de grupo: um passo por pessoa, todos ao mesmo tempo. */
+export function groupSteps(move: GroupMove): ExecStep[] {
+  return move.agents.map((agent, i) => ({ id: `g${i + 1}`, kind: "move", agent, to: groupDestination(move, agent), after: [] }));
 }
 
 /** Converte os passos lidos de uma ordem (intent) em passos executáveis, em sequência. */

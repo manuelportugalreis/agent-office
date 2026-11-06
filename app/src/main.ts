@@ -37,6 +37,7 @@ import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, free
 import { moveStatus, startMove, type PendingMove } from "./sim/orders";
 import { createOrdersUi } from "./ui/orders";
 import { createInstructionsUi } from "./ui/instructions";
+import { createNotificationsUi } from "./ui/notifications";
 import { ofPlace, placeName, ROOM_PLACES } from "../../shared/places";
 
 interface LogEvent {
@@ -491,6 +492,8 @@ function onServerMsg(m: ServerMsg): void {
   if (m.type === "order-steps") return ordersUi.update(m);
   if (m.type === "office") return showOffice(m.myOffice);
   if (m.type === "instructions") return instructionsUi.handle(m);
+  if (m.type === "notifications") return notificationsUi.set(m.items);
+  if (m.type === "initiative") return notificationsUi.setInitiative(m.settings);
   if (m.type === "error" && !m.agentId) return toast(m.message);
   const a = m.agentId ? byAgentId.get(m.agentId) : undefined;
   if (!a) return;
@@ -588,6 +591,19 @@ const ordersUi = createOrdersUi(
     if (a) panel.open(a, "chat");
   },
 );
+
+// ---- notificações: o que precisa de ti (perguntas, autorizações, aprovações, bloqueios, dossier, ideias)
+const notificationsUi = createNotificationsUi({
+  send: (m) => client.send(m),
+  nameOf: (id) => agentName(id),
+  emojiOf: (id) => byAgentId.get(id)?.def.emoji ?? "",
+  openChat: (id) => {
+    const a = byAgentId.get(id);
+    if (a) panel.open(a, "chat");
+  },
+  openApprovals: () => byId("apBtn").click(),
+  openDossier: () => dossierUi.open(),
+});
 
 // ---- instruções de cada agente (separador do painel)
 const instructionsUi = createInstructionsUi((m) => client.send(m), agentName);

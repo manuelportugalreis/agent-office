@@ -193,6 +193,31 @@ export interface ToolStep {
   readonly ok?: boolean;
 }
 
+/** De onde vem uma notificação (o que precisa de ti). */
+export type NotificationKind = "question" | "permission" | "approval" | "blocked" | "dossier" | "idea";
+
+/** Uma notificação: algo que precisa de ti (ou uma ideia da equipa). */
+export interface AppNotification {
+  readonly id: number;
+  /** Chave estável (ex.: "perm-3"): a mesma coisa não se repete e fecha-se quando é resolvida. */
+  readonly key: string;
+  readonly agentId: string;
+  readonly kind: NotificationKind;
+  readonly text: string;
+  readonly ts: number;
+  readonly open: boolean;
+  readonly closedAt?: number;
+  /** Pormenores: o pedido de autorização a decidir, ou a ideia (porquê, primeiro passo). */
+  readonly data?: { readonly permissionId?: number; readonly why?: string; readonly firstStep?: string };
+}
+
+/** Ideias por iniciativa própria dos agentes (sem ninguém pedir). */
+export interface InitiativeSettings {
+  readonly enabled: boolean;
+  /** De quantos em quantos minutos um agente propõe uma ideia (só com a app aberta e a equipa livre). */
+  readonly everyMin: number;
+}
+
 /** Estado de um passo de uma ordem. `waiting`: à espera de uma resposta tua; `partial`: feito com ressalvas. */
 export type StepState = "pending" | "running" | "waiting" | "done" | "partial" | "blocked" | "skipped";
 
@@ -304,6 +329,9 @@ export type ServerMsg =
       readonly memoryFile: string;
       readonly saved?: boolean;
     }
+  /** Todas as notificações (abertas e as fechadas recentes) e as definições das ideias por iniciativa. */
+  | { readonly type: "notifications"; readonly items: readonly AppNotification[] }
+  | { readonly type: "initiative"; readonly settings: InitiativeSettings }
   /** Definições do escritório (o gabinete do utilizador; null = ainda não escolhido). */
   | { readonly type: "office"; readonly myOffice: string | null }
   /** Rasto de uma tarefa local terminada: o que mudou e o que correu. */
@@ -328,6 +356,13 @@ export type ClientMsg =
   | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
   /** A personagem chegou (ok) ou não conseguiu ir (ok=false) ao sítio pedido num `move`. */
   | { readonly type: "arrived"; readonly id: number; readonly ok: boolean; readonly reason?: string }
+  /** Marcar uma notificação como vista. */
+  | { readonly type: "notification-dismiss"; readonly id: number }
+  /** Avançar com uma ideia da equipa (o Atlas põe-na em marcha) ou dispensá-la. */
+  | { readonly type: "idea-decide"; readonly id: number; readonly accept: boolean }
+  /** Ligar/desligar as ideias por iniciativa e a frequência; `now` pede uma ideia já. */
+  | { readonly type: "initiative-set"; readonly enabled: boolean; readonly everyMin: number }
+  | { readonly type: "initiative-now" }
   | { readonly type: "instructions-get"; readonly agentId: string }
   /** Guarda as tuas instruções para o agente (CLAUDE.md dele) e, se vier, as regras da equipa (perfil.md). */
   | { readonly type: "instructions-save"; readonly agentId: string; readonly notes: string; readonly shared?: string }
@@ -425,6 +460,16 @@ export function parseClientMsg(raw: string): ClientMsg | null {
         ? { type: "arrived", id: m.id as number, ok: m.ok, ...(reason ? { reason } : {}) }
         : null;
     }
+    case "notification-dismiss":
+      return Number.isInteger(m.id) ? { type: "notification-dismiss", id: m.id as number } : null;
+    case "idea-decide":
+      return Number.isInteger(m.id) && typeof m.accept === "boolean" ? { type: "idea-decide", id: m.id as number, accept: m.accept } : null;
+    case "initiative-set":
+      return typeof m.enabled === "boolean" && Number.isInteger(m.everyMin) && (m.everyMin as number) >= 5 && (m.everyMin as number) <= 1440
+        ? { type: "initiative-set", enabled: m.enabled, everyMin: m.everyMin as number }
+        : null;
+    case "initiative-now":
+      return { type: "initiative-now" };
     case "instructions-get":
       return agentId ? { type: "instructions-get", agentId } : null;
     case "instructions-save": {
