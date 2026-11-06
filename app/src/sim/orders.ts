@@ -9,6 +9,9 @@ import type { Loc, LocMap } from "./locations";
  * mapa, leva a personagem até lá (e deixa-a ficar) e diz ao servidor quando ela chegou, pelo estado da cena.
  */
 
+/** Quanto tempo quem recebeu uma ordem de movimento fica onde lhe pediste (sem a vida de ambiente o levar). */
+export const HOLD_MS = 15 * 60_000;
+
 /** Lugares de cada sala onde alguém pode ficar de pé ou sentado (sem roubar a secretária de ninguém). */
 const ROOM_LOCS: Readonly<Record<string, readonly string[]>> = {
   pesquisa: ["visit-rhea", "visit-mira"],
@@ -54,10 +57,12 @@ export interface PendingMove {
 }
 
 /** Leva o agente até ao sítio. Devolve a deslocação a acompanhar, ou um motivo se não há lugar para isso. */
-export function startMove(agent: Agent, place: string, locs: LocMap, id: number): PendingMove | { error: string } {
+export function startMove(agent: Agent, place: string, locs: LocMap, id: number, now = 0): PendingMove | { error: string } {
   const loc = pickLoc(locs, place, agent.def.id);
   if (!loc) return { error: `não há lugar para ${agent.def.name} em "${place}" no mapa` };
   cancelAmbient(agent);
+  // Fica onde lhe pediste: sem café nem passeios durante um bom bocado (ou até à próxima ordem).
+  agent.holdUntil = now + HOLD_MS;
   const kind = loc.key === `desk-${agent.def.id}` ? "desk" : "go";
   // Já lá está, parado: não sai e volta a entrar.
   if (agent.loc === loc && agent.route.length === 0) agent.kind = kind;

@@ -3,7 +3,8 @@ import { AGENTS } from "../data/agents";
 import { createAgent, stateOf, stepAgent } from "./agent";
 import { lifeUpdate } from "./life";
 import { buildLocations } from "./locations";
-import { candidateLocs, moveStatus, startMove } from "./orders";
+import { candidateLocs, HOLD_MS, moveStatus, startMove } from "./orders";
+import { isIdleAtDesk, lifeTick } from "./life";
 import { crowdLocs } from "./crowd";
 
 const setup = () => {
@@ -63,6 +64,20 @@ describe("ordens de movimento na cena", () => {
       expect(a.x, a.def.id).toBeGreaterThan(18);
       expect(a.z, a.def.id).toBeGreaterThan(7);
     }
+  });
+
+  it("'cada um para o seu gabinete': quem recebeu a ordem fica na secretária (a vida de ambiente não o leva)", () => {
+    const { locs, agents, mira } = setup();
+    const m = startMove(mira, "desk:mira", locs, 7, 1000);
+    if ("error" in m) throw new Error(m.error);
+    for (let t = 0; t < 30 * 20; t++) stepAgent(mira, 0.05);
+    mira.sit = mira.sitTarget = 1;
+    // Muitos "ticks" de vida de ambiente com uma sorte que mandaria toda a gente ao café: a Mira não sai.
+    for (let i = 0; i < 50; i++) lifeTick(agents, locs, 2000 + i * 2000, () => 0);
+    expect(mira.loc.key).toBe("desk-mira");
+    expect(mira.route).toEqual([]);
+    // Passado o tempo, volta à vida normal.
+    expect(isIdleAtDesk(mira, 1000 + HOLD_MS + 1)).toBe(true);
   });
 
   it("as salas grandes têm lugar para a equipa inteira; a sala de reuniões para os chefes", () => {

@@ -554,7 +554,7 @@ const agentName = (id: string): string => byAgentId.get(id)?.def.name ?? id;
 function beginMove(id: number, agentId: string, place: string): void {
   const a = byAgentId.get(agentId);
   if (!a) return void client.send({ type: "arrived", id, ok: false, reason: "essa pessoa não existe na cena" });
-  const started = startMove(a, place, locs, id);
+  const started = startMove(a, place, locs, id, performance.now());
   if ("error" in started) return void client.send({ type: "arrived", id, ok: false, reason: started.error });
   // Uma ordem nova para a mesma pessoa substitui a anterior.
   for (let i = pendingMoves.length - 1; i >= 0; i--)

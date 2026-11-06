@@ -35,9 +35,9 @@ const between = ([lo, hi]: readonly [number, number], rng: Rng): number => lo + 
 const pick = <T>(items: readonly T[], rng: Rng): T => items[Math.floor(rng() * items.length)];
 const home = (a: Agent, locs: LocMap) => locs[`desk-${a.def.id}`];
 
-/** Livre e sentado à secretária: pode fazer coisas de ambiente. */
-export const isIdleAtDesk = (a: Agent): boolean =>
-  a.kind === "desk" && isSettled(a) && !a.pinned && a.state === "idle" && !a.carrying && a.visitQueue.length === 0;
+/** Livre e sentado à secretária: pode fazer coisas de ambiente (a não ser que lhe tenhas pedido para ficar). */
+export const isIdleAtDesk = (a: Agent, now = 0): boolean =>
+  a.kind === "desk" && isSettled(a) && !a.pinned && a.state === "idle" && !a.carrying && a.visitQueue.length === 0 && a.holdUntil <= now;
 
 type AwayKind = "rest" | "chat" | "meet" | "wc" | "play" | "gym" | "server";
 
@@ -50,7 +50,7 @@ function goAway(a: Agent, loc: Parameters<typeof sendTo>[1], kind: AwayKind, sta
 
 /** Decisões de ambiente (chamar de tempos a tempos, por exemplo de 2 em 2 segundos). */
 export function lifeTick(agents: readonly Agent[], locs: LocMap, now: number, rng: Rng = Math.random): void {
-  const idle = agents.filter(isIdleAtDesk);
+  const idle = agents.filter((a) => isIdleAtDesk(a, now));
 
   for (const a of idle) {
     if (!a.fidget && rng() < FIDGET_CHANCE) {
@@ -119,8 +119,10 @@ export function startPlay(candidates: readonly Agent[], locs: LocMap, _now: numb
 }
 
 /** Reunião de ambiente: o CEO e os chefes, se estiverem todos livres. Devolve quem foi. */
-export function startMeeting(agents: readonly Agent[], locs: LocMap, _now: number): Agent[] {
-  const who = MEETING_IDS.map((id) => agents.find((a) => a.def.id === id)).filter((a): a is Agent => a !== undefined && isIdleAtDesk(a));
+export function startMeeting(agents: readonly Agent[], locs: LocMap, now: number): Agent[] {
+  const who = MEETING_IDS.map((id) => agents.find((a) => a.def.id === id)).filter(
+    (a): a is Agent => a !== undefined && isIdleAtDesk(a, now),
+  );
   if (who.length < MIN_MEETING_SIZE) return [];
   who.forEach((a, i) => goAway(a, locs[`meet${i}`], "meet", MEETING_DWELL_MS));
   return who;

@@ -59,6 +59,8 @@ export interface Agent {
   usage: { done: number; failed: number; costUsd: number };
   /** Para onde está a olhar (o colega com quem fala, quem lhe traz um papel). */
   lookAt: { x: number; z: number; until: number } | null;
+  /** Até quando fica onde lhe pediste (ms, relógio de performance.now): sem passeios nem café entretanto. */
+  holdUntil: number;
 }
 
 export function createAgent(def: AgentDef, home: Loc): Agent {
@@ -93,6 +95,7 @@ export function createAgent(def: AgentDef, home: Loc): Agent {
     lastError: null,
     dwellFor: 0,
     lookAt: null,
+    holdUntil: 0,
     usage: { done: 0, failed: 0, costUsd: 0 },
   };
 }
