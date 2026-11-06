@@ -71,6 +71,7 @@ export function localRules(p: AccessProfile, vaultDir: string = config.vaultDir)
 const disallowed = (p: AccessProfile, readOnly = false): string[] => [
   ...(p.bash && !readOnly ? [] : ["Bash", "PowerShell"]),
   ...(readOnly ? ["Write", "Edit", "MultiEdit", "NotebookEdit"] : []),
+  ...(p.skills === false ? ["Skill"] : []),
 ];
 
 export interface LocalArgs {

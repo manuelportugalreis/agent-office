@@ -18,29 +18,38 @@
         <span class="na-text"><b class="na-title">Sem dossier ativo</b><span class="na-sub">Nada à espera de ti.</span></span>
         <button id="naBtn" class="na-btn" type="button">Novo dossier</button>
       </div>
+      <button id="palBtn" class="pal-btn" title="Escolher um agente para falar (Ctrl+K)">👥 Falar com… <kbd>Ctrl K</kbd></button>
       <span class="sp"></span>
+      <a id="demoBadge" class="demo-badge" hidden target="_blank" rel="noopener noreferrer"
+        ><b>Demonstração</b> · Instalar no meu computador</a
+      >
       <span class="mock" id="conn" title="Servidor de agentes">servidor: offline</span>
       <span class="mock" id="quota" style="display: none" title="Uso do plano (5h / 7 dias)"></span>
-      <label class="office-pick" title="O teu gabinete: para onde vai quem mandas ao «meu gabinete»"
-        >📍
-        <select id="officeSel" aria-label="O meu gabinete"></select
-      ></label>
-      <button id="dossierBtn" title="Dossier de candidatura">📁 Dossier</button>
       <button id="walkBtn" title="Andar pelo escritório (tecla G)" aria-pressed="false">🚶 Andar</button>
-      <button id="editBtn" title="Mudar a mobília de sítio (tecla M)" aria-pressed="false">🛋 Mobília</button>
-      <button id="palBtn" title="Falar com um agente (Ctrl+K)">Ctrl+K</button>
-      <button id="qualBtn" title="Qualidade gráfica (alta: sombras de contacto, brilho e reflexos)">✨ Alta</button>
-      <button id="timeBtn" title="Hora do dia">🕒 Auto</button>
-      <button id="feedBtn" title="O que se passou nesta sessão">Atividade</button>
-      <button id="apBtn">Aprovações<span class="badge" id="apCount">0</span></button>
+      <details id="viewMenu" class="menu">
+        <summary title="Vista e preferências">⚙ Vista</summary>
+        <div class="menu-pop">
+          <label class="office-pick" title="Para onde vai quem mandas ao «meu gabinete»"
+            >📍 O meu gabinete
+            <select id="officeSel" aria-label="O meu gabinete"></select
+          ></label>
+          <button id="editBtn" title="Mudar a mobília de sítio (tecla M)" aria-pressed="false">🛋 Mudar a mobília</button>
+          <button id="qualBtn" title="Qualidade gráfica (alta: sombras de contacto, brilho e reflexos)">✨ Alta</button>
+          <button id="timeBtn" title="Hora do dia">🕒 Auto</button>
+          <button id="themeBtn" aria-label="Tema da interface">🌓 Tema claro/escuro</button>
+          <button id="feedBtn" title="O que se passou nesta sessão">📜 Atividade da sessão</button>
+        </div>
+      </details>
       <button
         id="notifBtn"
+        class="attn-btn"
         title="O que precisa de ti: perguntas, autorizações, aprovações, bloqueios e ideias da equipa"
-        aria-label="Notificações"
+        aria-label="Precisa de ti"
       >
-        🔔<span class="badge" id="notifCount" style="display: none">0</span>
+        🔔 Precisa de ti<span class="badge" id="notifCount" style="display: none">0</span>
       </button>
-      <button id="themeBtn" aria-label="Tema da interface">🌓</button>
+      <!-- As aprovações abrem-se a partir das notificações (um só sítio para o que precisa de ti). -->
+      <button id="apBtn" hidden>Aprovações<span class="badge" id="apCount">0</span></button>
     </header>
     <div id="appr"></div>
     <div id="notifPanel" role="region" aria-label="Notificações" hidden></div>
@@ -48,6 +57,13 @@
     <dialog id="profileDialog" aria-labelledby="pfTitle">
       <form id="pfForm" method="dialog">
         <h3 id="pfTitle">Perfis de acesso (Claude Code local)</h3>
+        <p class="pf-note">
+          O agente trabalha como o Claude Code no teu terminal, com a tua sessão e as tuas regras de permissão. O que pedir e não estiver
+          permitido aparece-te para decidires.
+          <button type="button" id="pfBroad" title="Preenche: Obsidian com escrita, terminal, todas as MCP, skills e edições sem perguntar">
+            Acesso amplo (trabalho de confiança)
+          </button>
+        </p>
         <label
           >Perfil
           <select id="pfList"></select
@@ -70,6 +86,9 @@
         </label>
         <label class="chk"><input type="checkbox" id="pfBash" /> Comandos de terminal (sempre sujeitos às tuas regras de permissão)</label>
         <label class="chk"><input type="checkbox" id="pfAuto" /> Aceitar edições de ficheiros sem perguntar (como acceptEdits)</label>
+        <label class="chk"
+          ><input type="checkbox" id="pfSkills" /> As minhas skills do Claude Code (~/.claude/skills e as do projeto)</label
+        >
         <div class="lbl">Integrações MCP</div>
         <div id="pfMcp" class="pf-mcp"></div>
         <div class="pf-bt">
@@ -88,9 +107,10 @@
       </div>
     </div>
     <div id="toast"></div>
-    <main id="main">
-      <section id="stage">
+    <main id="main" class="no-sel">
+      <section id="stage" tabindex="-1" aria-label="Escritório">
         <div id="tag"></div>
+        <div id="walkStatus" class="walk-status" role="status" aria-live="polite" hidden></div>
         <button id="dossierChip" class="dossier-chip" hidden tabindex="-1" aria-hidden="true"></button>
         <div id="editBar" hidden>
           <span id="editInfo">Arrasta uma peça para a mudar de sítio.</span>
@@ -111,12 +131,14 @@
       <section id="dossierCard" class="dossier-card" role="complementary" aria-label="Dossier de candidatura" hidden></section>
       <aside>
         <div id="resizer" title="Arrastar para alargar"></div>
-        <div id="empty">Clica numa pessoa<br />para abrir o painel dela.</div>
         <div id="panel">
           <div class="ph">
             <div class="av" id="pAv"></div>
             <div class="pwho"><b id="pName"></b><span id="pRole"></span><span id="pAct"></span></div>
             <div class="pill" id="pState"></div>
+            <button id="pClose" class="p-close" type="button" aria-label="Fechar o painel e alargar o escritório" title="Fechar (Esc)">
+              ×
+            </button>
           </div>
           <div class="tabs">
             <button data-t="sum" class="on">Resumo</button><button data-t="log">Log</button><button data-t="chat">Chat</button

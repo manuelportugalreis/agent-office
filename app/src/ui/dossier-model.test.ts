@@ -173,7 +173,7 @@ describe("perguntas que ainda precisam da tua resposta", () => {
 
 describe("quadro da sala de Gestão", () => {
   it("sem dossier diz que não há nenhum e onde abrir", () => {
-    expect(boardView(null)).toMatchObject({ tone: "empty", headline: "Sem dossier ativo", hint: "Abre um em 📁 Dossier" });
+    expect(boardView(null)).toMatchObject({ tone: "empty", headline: "Sem dossier ativo", hint: "Abre um em «Novo dossier», lá em cima" });
   });
 
   it("em curso: quem tem o dossier e o que está a fazer, incluindo a Nina a verificar", () => {

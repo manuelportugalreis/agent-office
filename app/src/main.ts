@@ -1,4 +1,5 @@
 import "./style.css";
+import "./shell.css";
 import "./chat/chat.css";
 import { AGENTS } from "./data/agents";
 import type { Light } from "three";
@@ -13,6 +14,7 @@ import { editables, loadLayout } from "./scene/editable";
 import { createEditor } from "./scene/editor";
 import { createScreen, drawScreen, type ScreenHandle } from "./scene/screens";
 import { createStage, DEFAULT_ZOOM, type TimeMode } from "./scene/stage";
+import { nearestFigure, pickRadius } from "./scene/pick";
 import type { ChatActions, ChatAgent } from "./chat/ChatPanel";
 import type { ChatMount } from "./chat/mount";
 import { createChatStore } from "./chat/store";
@@ -36,6 +38,8 @@ import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
 import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, freeWalk, PLAYER_DEF } from "./sim/player";
 import { moveStatus, startMove, type PendingMove } from "./sim/orders";
 import { createOrdersUi } from "./ui/orders";
+import { createTour, IS_DEMO, SETUP_URL } from "./ui/demo";
+import { createWalkStatus } from "./ui/walk-status";
 import { createInstructionsUi } from "./ui/instructions";
 import { createNotificationsUi } from "./ui/notifications";
 import { ofPlace, placeName, ROOM_PLACES } from "../../shared/places";
@@ -114,8 +118,9 @@ const panel = createPanel({
   },
   goTo: (a) => {
     setWalkMode(true);
-    if (goToDesk(player, locs, a.def.id)) walk.arrivedFor = null;
+    walkTo(a);
   },
+  onClose: () => byId("stage").focus({ preventScroll: true }),
   sync: () => {
     if (realAgents.has("dean") && client.send({ type: "sync" })) toast("A sincronizar o Canvas (o Dean vai ler o teu Chrome)…");
     else toast("Servidor offline: a sincronização só funciona com o servidor ligado.");
@@ -189,19 +194,22 @@ byId("editDone").onclick = () => setEditMode(false);
 
 /** Modo andar: clicar numa pessoa leva-te à secretária dela; no corredor, ao sítio clicado; numa sala, à secretária mais próxima. */
 function clickInWalkMode(e: PointerEvent, clicked: Agent | null): void {
-  if (clicked) {
-    goToDesk(player, locs, clicked.def.id);
-    walk.arrivedFor = null;
-    return;
-  }
+  if (clicked) return walkTo(clicked);
   const ground = stage.pickGround(e);
   if (!ground) return;
-  if (clickCorridor(player, ground)) return;
+  if (clickCorridor(player, ground)) return walkStatus.heading(null);
   const desk = nearestDesk(agents, ground);
-  if (desk) {
-    goToDesk(player, locs, desk.def.id);
-    walk.arrivedFor = null;
-  }
+  if (desk) walkTo(desk);
+}
+
+const walkStatus = createWalkStatus(byId("walkStatus"));
+let walkTarget: Agent | null = null;
+/** Vai à secretária de alguém, a dizer para quem vais. */
+function walkTo(a: Agent): void {
+  if (!goToDesk(player, locs, a.def.id)) return toast(`Não encontro caminho até ${a.def.name}.`);
+  walk.arrivedFor = null;
+  walkTarget = a;
+  walkStatus.heading(a.def.name);
 }
 
 function setWalkMode(on: boolean): void {
@@ -220,6 +228,8 @@ function setWalkMode(on: boolean): void {
   } else {
     stage.setFollow(null);
     walk.keys.clear();
+    walkTarget = null;
+    walkStatus.heading(null);
   }
 }
 
@@ -245,6 +255,8 @@ function handleArrival(now: number): void {
   const worker = byAgentId.get(id);
   if (!worker) return;
   worker.lookAt = { x: player.x, z: player.z, until: now + ARRIVAL_LOOK_MS };
+  walkTarget = null;
+  walkStatus.arrived(worker.def.name);
   panel.open(worker, "chat");
 }
 
@@ -270,14 +282,34 @@ addEventListener("keydown", (e) => {
     else if (k === "Escape") setEditMode(false);
     return;
   }
+  // Esc fecha primeiro o que está por cima (menu, notificações, atividade, diálogo, dossier); só depois o painel.
+  if (k === "Escape") return closeTopmost();
   if (!walk.on) return;
   if (k === "f" && !e.repeat) return setFollow(!walk.follow);
   if (k in MOVE_KEYS) {
     e.preventDefault();
     walk.keys.add(k);
     walk.arrivedFor = null;
+    if (walkTarget) {
+      walkTarget = null;
+      walkStatus.heading(null);
+    }
   }
 });
+/**
+ * Esc: fecha uma coisa de cada vez, a de cima primeiro. As sobreposições com Esc próprio (notificações, atividade,
+ * aprovações, dossier) fecham-se sozinhas e marcam o evento, que já não chega aqui.
+ */
+function closeTopmost(): void {
+  const menu = byId<HTMLDetailsElement>("viewMenu");
+  if (menu.open) {
+    menu.open = false;
+    return;
+  }
+  const covered = document.querySelector("dialog[open]") !== null || byId("main").classList.contains("dossier-open");
+  if (!covered && panel.selected) panel.close();
+}
+
 /** Perder o foco (mudar de janela ou separador) larga as setas: senão o avatar continuava a andar sozinho. */
 function releaseWalkKeys(): void {
   if (walk.keys.size === 0) return;
@@ -302,9 +334,25 @@ function pickId(e: PointerEvent): string | null {
   return stage.pickAgent(e, [...[...views.values()].map((v) => v.group), dossierProp.group]);
 }
 
+/** Altura da cabeça acima dos pés (m), para o segmento de toque de cada pessoa. */
+const FIGURE_HEIGHT = 1.6;
+
 function pickAt(e: PointerEvent): Agent | null {
   const id = pickId(e);
-  return id && id !== DOSSIER_ID ? (byAgentId.get(id) ?? null) : null;
+  if (id && id !== DOSSIER_ID) return byAgentId.get(id) ?? null;
+  // Sem acerto exato na malha: a pessoa mais próxima do clique no ecrã (são pequenas e mexem-se).
+  const r = stage.dom.getBoundingClientRect();
+  const click = { x: e.clientX - r.left, y: e.clientY - r.top };
+  let tallest = 0;
+  const figures = [...views].map(([agentId, v]) => {
+    const p = v.group.position;
+    const foot = stage.project(p.x, p.y, p.z);
+    const head = stage.project(p.x, p.y + FIGURE_HEIGHT, p.z);
+    tallest = Math.max(tallest, Math.abs(foot.y - head.y));
+    return { id: agentId, foot, head };
+  });
+  const near = nearestFigure(click, figures, pickRadius(tallest));
+  return near ? (byAgentId.get(near) ?? null) : null;
 }
 
 const agentNamed = (name: string): Agent | undefined => agents.find((a) => a.def.name === name);
@@ -340,6 +388,7 @@ const chatAgentOf = (a: Agent): ChatAgent => ({
   userName,
   model: modelLabel(models.get(a.def.id)),
   suggestions: SUGGESTIONS[a.def.id] ?? [],
+  task: a.task,
 });
 const sendToServer = (agentId: string, msg: ClientMsg): boolean => realAgents.has(agentId) && client.send(msg);
 const chatActions: ChatActions = {
@@ -361,6 +410,7 @@ const chatActions: ChatActions = {
     panel.open(to, "chat");
     return true;
   },
+  ...(IS_DEMO ? { demo: { setupUrl: SETUP_URL, tour: () => void runTour() } } : {}),
 };
 /** O chat (React + assistant-ui) só é descarregado quando é preciso: o arranque da cena 3D fica mais leve. */
 function lazyChat(): ChatMount {
@@ -590,6 +640,24 @@ const ordersUi = createOrdersUi(
     const a = byAgentId.get(owner);
     if (a) panel.open(a, "chat");
   },
+  (text) => {
+    if (IS_DEMO) {
+      void runTour();
+      return true;
+    }
+    if (busy.has("ceo")) {
+      toast("O Atlas ainda está ocupado: repete a ordem quando ele acabar (ou responde-lhe no chat).");
+      return false;
+    }
+    const profile = localMode?.profileOf("ceo");
+    if (!realAgents.has("ceo") || !client.send({ type: "order", text, ...(profile ? { profileId: profile.id } : {}) })) {
+      toast("Servidor offline: não consegui repetir a ordem.");
+      return false;
+    }
+    chatStore.addUser("ceo", text);
+    toast("Ordem repetida");
+    return true;
+  },
 );
 
 // ---- notificações: o que precisa de ti (perguntas, autorizações, aprovações, bloqueios, dossier, ideias)
@@ -637,13 +705,48 @@ function applyDossier(d: Dossier | null): void {
   reviewTray.setAttention(waitingForUser(d));
 }
 
-/** Na demonstração publicada (GitHub Pages) os agentes não trabalham: diz-se logo, com o caminho para os usar. */
-if (import.meta.env.VITE_DEMO === "1") {
-  const demo = document.createElement("div");
-  demo.id = "demoBanner";
-  demo.innerHTML =
-    'Demonstração: aqui vês o escritório, mas os agentes só trabalham no teu computador, com o teu Claude Code. <a href="https://github.com/manuelportugalreis/agent-office#quick-start" target="_blank" rel="noopener noreferrer">Como instalar</a>';
-  document.body.append(demo);
+/** O exemplo da demonstração desiste da deslocação se não chegar neste tempo (não fica preso). */
+const TOUR_MOVE_TIMEOUT_MS = 60_000;
+
+/** Leva uma pessoa a um lugar e espera que a cena confirme a chegada (o exemplo da demonstração). */
+function moveAndWait(agentId: string, place: string): Promise<boolean> {
+  const a = byAgentId.get(agentId);
+  if (!a) return Promise.resolve(false);
+  const started = startMove(a, place, locs, Date.now(), performance.now());
+  if ("error" in started) return Promise.resolve(false);
+  a.task = `A caminho ${ofPlace(placeName(place, agentName))}.`;
+  const deadline = performance.now() + TOUR_MOVE_TIMEOUT_MS;
+  return new Promise((resolve) => {
+    const poll = setInterval(() => {
+      const status = moveStatus(started);
+      if (status === "walking" && performance.now() < deadline) return;
+      clearInterval(poll);
+      resolve(status === "arrived");
+    }, 250);
+  });
+}
+
+const runTour = createTour({
+  move: moveAndWait,
+  showOrder: (v) => ordersUi.update(v),
+  addUser: (id, text) => chatStore.addUser(id, text),
+  reply: (id, text) => chatStore.reply(id, text),
+  openChat: (id) => {
+    const a = byAgentId.get(id);
+    if (a) panel.open(a, "chat");
+  },
+  notify: toast,
+});
+
+/** Na demonstração publicada (GitHub Pages) os agentes não trabalham: diz-se onde se age, com um exemplo e um caminho para instalar. */
+if (IS_DEMO) {
+  const badge = byId<HTMLAnchorElement>("demoBadge");
+  badge.href = SETUP_URL;
+  badge.hidden = false;
+  byId("conn").hidden = true;
+  byId("cmd").classList.add("is-demo");
+  byId<HTMLInputElement>("cmdIn").placeholder = "Demonstração: os agentes não respondem aqui. Vê um exemplo de ordem →";
+  byId("cmd").querySelector("button")!.textContent = "▶ Ver exemplo";
 }
 
 const client = connect(onServerMsg, (isOnline) => {
@@ -682,14 +785,16 @@ const sendDossier = (msg: ClientMsg): boolean => {
   if (!sent) toast("Servidor offline: o dossier só avança com o servidor ligado.");
   return sent;
 };
-const dossierUi = createDossierUi({
-  start: (request, materials) => sendDossier({ type: "dossier-start", request, ...(materials ? { materials } : {}) }),
-  answer: (id, answer, companyOnly) => sendDossier({ type: "dossier-answer", id, answer, ...(companyOnly ? { companyOnly } : {}) }),
-  returnDraft: (id, note) => sendDossier({ type: "dossier-return", id, note }),
-  approve: (id) => sendDossier({ type: "dossier-approve", id }),
-  retry: (id) => sendDossier({ type: "dossier-retry", id }),
-});
-byId("dossierBtn").onclick = () => dossierUi.toggle();
+const dossierUi = createDossierUi(
+  {
+    start: (request, materials) => sendDossier({ type: "dossier-start", request, ...(materials ? { materials } : {}) }),
+    answer: (id, answer, companyOnly) => sendDossier({ type: "dossier-answer", id, answer, ...(companyOnly ? { companyOnly } : {}) }),
+    returnDraft: (id, note) => sendDossier({ type: "dossier-return", id, note }),
+    approve: (id) => sendDossier({ type: "dossier-approve", id }),
+    retry: (id) => sendDossier({ type: "dossier-retry", id }),
+  },
+  IS_DEMO ? { setupUrl: SETUP_URL } : undefined,
+);
 
 // ---- comportamento
 // A vida de ambiente (café, conversas, gestos) só envolve quem está livre; o resto do tempo é tempo real.
@@ -700,6 +805,7 @@ setInterval(() => lifeUpdate(agents, locs, performance.now()), 100);
 byId<HTMLFormElement>("cmd").onsubmit = (e) => {
   e.preventDefault();
   const input = byId<HTMLInputElement>("cmdIn");
+  if (IS_DEMO) return void runTour();
   const text = input.value.trim();
   const ceo = byAgentId.get("ceo");
   if (!text || !ceo) return;
@@ -783,7 +889,7 @@ function frame(now: number): void {
   dossierProp.update(dt, t);
   reviewTray.update(t);
   stage.update(dt);
-  placeTag(panel.selected ?? hovered);
+  placeTag(walkTarget ?? panel.selected ?? hovered);
   stage.render();
   requestAnimationFrame(frame);
 }
@@ -795,7 +901,9 @@ function placeTag(a: Agent | null): void {
   }
   const p = stage.project(a.x, 2.5 - a.sit * 0.45, a.z);
   tag.style.display = "block";
-  tag.textContent = `${a.def.name} · ${a.role.split("·")[0].trim()}`;
+  const selected = a === panel.selected;
+  tag.classList.toggle("is-selected", selected);
+  tag.textContent = `${a === walkTarget ? "🚶 " : selected ? "● " : ""}${a.def.name} · ${a.role.split("·")[0].trim()}`;
   tag.style.left = `${p.x}px`;
   tag.style.top = `${p.y - 22}px`;
 }
@@ -809,6 +917,12 @@ const palette = createPalette(
   },
 );
 byId("palBtn").onclick = () => palette.open();
+byId("pClose").onclick = () => panel.close();
+// O menu Vista fecha-se ao clicar fora dele.
+document.addEventListener("pointerdown", (e) => {
+  const menu = byId<HTMLDetailsElement>("viewMenu");
+  if (menu.open && !menu.contains(e.target as Node)) menu.open = false;
+});
 installResizer(byId("main"), byId("resizer"));
 
 // ---- ligação direta: #ada ou #ada/chat abre logo o painel desse agente

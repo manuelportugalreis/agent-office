@@ -476,12 +476,33 @@ describe("notas", () => {
       activeFile: () => "Projetos/Planeamento.md",
       waitMs: 20,
       pollMs: 5,
+      isRunning: () => false,
     };
+    // Obsidian fechado e um workspace antigo a mostrar a nota: não prova nada.
     expect(await openInObsidian(abs, { ...base, workspaceStamp: () => 100 })).toEqual({ launched: true, confirmed: false });
     let stamp = 100;
     const fresh = await openInObsidian(abs, { ...base, workspaceStamp: () => (stamp += 50) });
     expect(fresh).toEqual({ launched: true, confirmed: true });
     expect(uris[0]).toBe("obsidian://open?vault=abc&file=Projetos%2FPlaneamento");
+  });
+
+  it("abrir no Obsidian: se a nota já é a ativa no Obsidian aberto, está à vista (o Obsidian não regrava nada)", async () => {
+    const dir = vault();
+    const abs = join(dir, "Projetos", "Planeamento.md");
+    const opts = {
+      vaults: [{ id: "abc", path: dir }],
+      launch: () => true,
+      activeFile: () => "Projetos/Planeamento.md",
+      workspaceStamp: () => 100,
+      waitMs: 20,
+      pollMs: 5,
+    };
+    expect(await openInObsidian(abs, { ...opts, isRunning: () => true })).toEqual({ launched: true, confirmed: true, already: true });
+    // Outra nota ativa antes: tem de ser o Obsidian a confirmar a mudança.
+    expect(await openInObsidian(abs, { ...opts, activeFile: () => "Outra.md", isRunning: () => true })).toEqual({
+      launched: true,
+      confirmed: false,
+    });
   });
 
   it("vaultFor só aceita notas dentro de um vault registado no Obsidian", () => {

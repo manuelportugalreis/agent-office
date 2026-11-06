@@ -1,0 +1,193 @@
+/* ---- barra de cima: a próxima ação e o «Falar com…» à frente; a vista num menu; o que precisa de ti num só botão */
+.pal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.pal-btn kbd {
+  font:
+    11px/1 ui-monospace,
+    monospace;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.attn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.attn-btn.attn {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.menu {
+  position: relative;
+}
+.menu > summary {
+  list-style: none;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  user-select: none;
+}
+.menu > summary::-webkit-details-marker {
+  display: none;
+}
+.menu[open] > summary {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+.menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  z-index: 30;
+}
+.menu-pop > button {
+  text-align: left;
+}
+.menu-pop .office-pick {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.menu-pop .office-pick select {
+  max-width: none;
+}
+
+/* ---- demonstração: dita no sítio onde se age, com um só caminho para instalar */
+.demo-badge {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--ink);
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  white-space: nowrap;
+}
+.demo-badge:hover {
+  border-color: var(--accent);
+}
+.chat-demo {
+  max-width: 420px;
+  margin: 4px auto 10px;
+  text-align: center;
+}
+.chat-demo p {
+  margin: 0 0 10px;
+}
+.chat-demo-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.chat-chip-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  text-decoration: none;
+}
+#cmd.is-demo button {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--accent);
+}
+.dz-demo {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+  font-size: 13px;
+}
+.dz-demo a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- painel lateral: só aparece quando escolhes alguém; o escritório usa o espaço todo */
+main.no-sel > aside {
+  display: none;
+}
+.p-close {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.p-close:hover {
+  color: var(--ink);
+}
+.chat-head-name small {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+.chat-head-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.pf-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.pf-note button {
+  display: block;
+  margin-top: 6px;
+}
+
+/* ---- modo andar: para quem vais, e quando chegas */
+.walk-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(20, 20, 19, 0.88);
+  color: #fff;
+  font-size: 13px;
+  pointer-events: none;
+}
+.walk-status.arrived {
+  background: color-mix(in srgb, #2f8f4e 88%, black);
+}
+#tag.is-selected {
+  outline: 2px solid var(--accent);
+}
+#cmd.is-demo + .demo-hint,
+.order-card .oc-recover {
+  font-size: 12px;
+  color: var(--muted);
+}
+.order-card .oc-recover button {
+  margin-left: 6px;
+  font-size: 12px;
+  padding: 2px 8px;
+}

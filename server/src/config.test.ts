@@ -73,6 +73,10 @@ describe("configuração", () => {
     const good = join(dir, "ok.json");
     writeFileSync(good, JSON.stringify({ userName: "Alex" }));
     expect(loadConfig({ AGENT_OFFICE_CONFIG: good }).userName).toBe("Alex");
+    // Gravado pelo Bloco de Notas (UTF-8 com BOM): lê-se na mesma.
+    const bom = join(dir, "bom.json");
+    writeFileSync(bom, `\uFEFF${JSON.stringify({ userName: "Alex" })}`);
+    expect(loadConfig({ AGENT_OFFICE_CONFIG: bom }).userName).toBe("Alex");
     const broken = join(dir, "broken.json");
     writeFileSync(broken, "{não é json");
     expect(() => loadConfig({ AGENT_OFFICE_CONFIG: broken })).toThrow(/não consegui ler/);

@@ -192,10 +192,33 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       const r = dom.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
       ray.setFromCamera(ndc, cam);
-      const hit = ray.intersectObjects([...groups], true)[0];
-      return hit ? (hit.object.userData.agentId as string) : null;
+      // Só conta o que se vê: um balão escondido de outra pessoa não pode "roubar" o clique.
+      for (const h of ray.intersectObjects([...groups], true)) {
+        if (!isShown(h.object)) continue;
+        const id = agentIdOf(h.object);
+        if (id) return id;
+      }
+      return null;
     },
   };
+}
+
+/**
+ * O id do agente de uma malha: o dela ou o do primeiro antepassado que o tenha. As personagens realistas são carregadas
+ * depois de o id ser posto no grupo; as malhas delas não o têm, e o clique nelas não abria nada.
+ */
+function agentIdOf(o: THREE.Object3D): string | null {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) {
+    const id: unknown = p.userData.agentId;
+    if (typeof id === "string") return id;
+  }
+  return null;
+}
+
+/** Visível, e todos os pais também. */
+function isShown(o: THREE.Object3D): boolean {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
 }
 
 interface ControlHandlers {

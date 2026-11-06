@@ -31,6 +31,14 @@ export interface ChatAgent {
   readonly suggestions: readonly string[];
   /** Nome do utilizador (da configuração do servidor); vazio se não estiver definido. */
   readonly userName: string;
+  /** O que está a fazer agora (o nome e a função já estão no cabeçalho do painel). */
+  readonly task: string;
+}
+
+/** Demonstração publicada: os agentes não respondem; mostra-se um exemplo e o caminho para instalar. */
+export interface DemoInfo {
+  readonly setupUrl: string;
+  tour(): void;
 }
 
 export interface ChatActions extends UploadActions {
@@ -42,6 +50,8 @@ export interface ChatActions extends UploadActions {
   /** Passa a conversa a outro agente (@menção): abre o chat dele e envia-lhe o pedido com o contexto. */
   handoff(fromId: string, toId: string, text: string, files: readonly string[]): boolean;
   mentionables(): readonly Mentionable[];
+  /** Presente só na demonstração. */
+  readonly demo?: DemoInfo;
 }
 
 const fileAttachment = (id: string, name: string, status: CompleteAttachment["status"]): CompleteAttachment => ({
@@ -247,7 +257,12 @@ interface ComposerProps {
   readonly running: boolean;
 }
 
-function Composer({ agent, online, running }: ComposerProps): ReactElement {
+function Composer({ agent, online, running, demo }: ComposerProps & { demo: boolean }): ReactElement {
+  const placeholder = online
+    ? `Responde a ${agent.name}…`
+    : demo
+      ? "Demonstração: os agentes só respondem na app instalada"
+      : "Servidor offline: arranca-o com npm run dev";
   return (
     <ComposerPrimitive.Root className="chat-composer">
       <div className="chat-attachments">
@@ -258,7 +273,7 @@ function Composer({ agent, online, running }: ComposerProps): ReactElement {
         rows={1}
         autoFocus
         disabled={!online}
-        placeholder={online ? `Responde a ${agent.name}…` : "Servidor offline"}
+        placeholder={placeholder}
         aria-label={`Mensagem para ${agent.name}`}
       />
       <div className="chat-composer-bar">
@@ -288,23 +303,46 @@ function Composer({ agent, online, running }: ComposerProps): ReactElement {
   );
 }
 
-function Welcome({ agent }: { agent: ChatAgent }): ReactElement {
+function DemoNotice({ demo }: { demo: DemoInfo }): ReactElement {
+  return (
+    <div className="chat-demo" role="note">
+      <p>
+        <b>Isto é uma demonstração.</b> Aqui os agentes não respondem: trabalham no teu computador, com o teu Claude Code.
+      </p>
+      <div className="chat-demo-actions">
+        <button type="button" className="chat-chip" onClick={demo.tour}>
+          ▶ Ver um exemplo de ordem
+        </button>
+        <a className="chat-chip chat-chip-primary" href={demo.setupUrl} target="_blank" rel="noopener noreferrer">
+          Instalar no meu computador
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function Welcome({ agent, demo }: { agent: ChatAgent; demo?: DemoInfo }): ReactElement {
+  const hello = agent.userName ? `${greeting(new Date().getHours())}, ${agent.userName}` : greeting(new Date().getHours());
   return (
     <div className="chat-welcome">
       <div className="chat-hello">
         <Spark size={30} />
-        <h2>{agent.userName ? `${greeting(new Date().getHours())}, ${agent.userName}` : greeting(new Date().getHours())}</h2>
+        <h2>{hello}</h2>
       </div>
-      <p>
-        {agent.emoji} {agent.name} · {agent.role}
-      </p>
-      <div className="chat-chips">
-        {agent.suggestions.map((s) => (
-          <ThreadPrimitive.Suggestion key={s} prompt={s} className="chat-chip">
-            {s}
-          </ThreadPrimitive.Suggestion>
-        ))}
-      </div>
+      {demo ? (
+        <DemoNotice demo={demo} />
+      ) : (
+        <>
+          <p>Pede-me, por exemplo:</p>
+          <div className="chat-chips">
+            {agent.suggestions.map((s) => (
+              <ThreadPrimitive.Suggestion key={s} prompt={s} className="chat-chip">
+                {s}
+              </ThreadPrimitive.Suggestion>
+            ))}
+          </div>
+        </>
+      )}
       <small>
         {agent.files
           ? "Podes anexar ficheiros e escrever @nome para passar a conversa a outro agente. Lembro-me do que for importante entre conversas."
@@ -363,9 +401,8 @@ function Thread({ agent, store, actions, online }: ThreadProps): ReactElement {
     <AssistantRuntimeProvider runtime={runtime}>
       <ThreadPrimitive.Root className="chat-thread" data-agent={agent.id}>
         <div className="chat-head">
-          <span className="chat-head-name">
-            {agent.name}
-            <small>{agent.role}</small>
+          <span className="chat-head-name" title={agent.task}>
+            <small>Agora</small> {agent.task}
           </span>
           <button
             type="button"
@@ -380,7 +417,7 @@ function Thread({ agent, store, actions, online }: ThreadProps): ReactElement {
         <ThreadPrimitive.Viewport className="chat-viewport">
           <div className="chat-column">
             <AuiIf condition={(s) => s.thread.isEmpty}>
-              <Welcome agent={agent} />
+              <Welcome agent={agent} demo={actions.demo} />
             </AuiIf>
             <ThreadPrimitive.Messages>
               {({ message }) =>
@@ -391,7 +428,7 @@ function Thread({ agent, store, actions, online }: ThreadProps): ReactElement {
           </div>
         </ThreadPrimitive.Viewport>
         <div className="chat-footer">
-          <Composer agent={agent} online={online} running={state.running} />
+          <Composer agent={agent} online={online} running={state.running} demo={Boolean(actions.demo)} />
         </div>
       </ThreadPrimitive.Root>
     </AssistantRuntimeProvider>

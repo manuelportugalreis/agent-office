@@ -39,7 +39,17 @@ export interface OrdersUi {
   update(view: OrderView): void;
 }
 
-export function createOrdersUi(root: HTMLElement, nameOf: (id: string) => string, openChat: (owner: string) => void): OrdersUi {
+/** O que fazer quando um passo fica bloqueado: o motivo está no passo; isto diz como seguir. */
+export const RECOVER_TEXT =
+  "Como seguir: resolve o motivo indicado (responde no chat, dá o acesso no perfil ou corrige a nota) e repete a ordem.";
+
+export function createOrdersUi(
+  root: HTMLElement,
+  nameOf: (id: string) => string,
+  openChat: (owner: string) => void,
+  /** Repete uma ordem do Atlas (o título é o texto que escreveste); devolve se a enviou. */
+  retry?: (title: string) => boolean,
+): OrdersUi {
   const orders = new Map<number, OrderView>();
 
   function render(): void {
@@ -54,17 +64,34 @@ export function createOrdersUi(root: HTMLElement, nameOf: (id: string) => string
           )
           .join("");
         const blocked = o.steps.some((s) => s.state === "blocked" || s.state === "waiting");
+        const failed = o.finished && o.steps.some((s) => s.state === "blocked");
+        const recover =
+          failed && retry && o.owner === "ceo"
+            ? `<p class="oc-recover">${esc(RECOVER_TEXT)}<button type="button" data-retry="${o.id}">Repetir a ordem</button></p>`
+            : failed
+              ? `<p class="oc-recover">${esc(RECOVER_TEXT)}</p>`
+              : "";
         return `<article class="order-card${o.finished ? " done" : ""}${blocked ? " attn" : ""}" data-id="${o.id}">
           <header><span class="oc-who">${esc(nameOf(o.owner))}</span><span class="oc-title" title="${esc(o.title)}">${esc(o.title)}</span>
           <button type="button" class="oc-chat" data-owner="${esc(o.owner)}" title="Abrir a conversa">Chat</button>
           ${o.finished ? `<button type="button" class="oc-x" data-close="${o.id}" aria-label="Fechar">×</button>` : ""}</header>
-          <ol>${steps}</ol></article>`;
+          <ol>${steps}</ol>${recover}</article>`;
       })
       .join("");
   }
 
   root.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    const again = t.closest<HTMLElement>("[data-retry]")?.dataset.retry;
+    const order = again ? orders.get(Number(again)) : undefined;
+    if (order && retry && order.owner === "ceo") {
+      // O cartão (com o motivo) só sai quando a ordem foi mesmo reenviada.
+      if (retry(order.title)) {
+        orders.delete(order.id);
+        render();
+      }
+      return;
+    }
     const close = t.closest<HTMLElement>("[data-close]")?.dataset.close;
     if (close) {
       orders.delete(Number(close));

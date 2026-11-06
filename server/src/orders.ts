@@ -203,7 +203,7 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
       if (!pending) {
         pending = ask(
           owner,
-          `Ainda não sei qual é o teu gabinete. Qual destes é? ${officeChoices()}. (Também o podes escolher em «O meu gabinete», no topo.)`,
+          `Ainda não sei qual é o teu gabinete. Qual destes é? ${officeChoices()}. (Também o podes escolher em ⚙ Vista › O meu gabinete, lá em cima.)`,
           parseRoom,
           true,
         ).then((chosen) => {
@@ -317,7 +317,9 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         // Um passo anterior feito com ressalvas (sem toda a evidência) não trava este, mas fica dito: quem trabalha a
         // seguir é avisado para confirmar, e o resultado deste passo não pode aparecer como limpo.
         const shaky = deps_.filter((d) => d.view.state === "partial");
-        const caveat = shaky.map((d) => `«${d.view.label}» ficou com ressalvas (${d.view.detail ?? "sem evidência"})`).join("; ");
+        // Só a ressalva do próprio passo, não a cadeia toda (senão o texto crescia passo a passo e ficava ilegível).
+        const own = (detail: string | undefined): string => (detail ?? "sem evidência").split("; depois de:")[0];
+        const caveat = shaky.map((d) => `«${d.view.label}» ficou com ressalvas (${own(d.view.detail)})`).join("; ");
         set(s, { state: "running" });
         const out =
           s.kind === "move"
@@ -383,9 +385,11 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         if (!r.launched) return done(s, { state: "blocked", detail: `${found.note.path}: ${r.error ?? "não consegui abrir"}` });
         return done(s, {
           state: r.confirmed ? "done" : "partial",
-          detail: r.confirmed
-            ? `abri ${found.note.path} no Obsidian (o Obsidian confirmou que a nota está aberta)`
-            : `lancei o Obsidian com ${found.note.path}, mas não consegui confirmar que a nota ficou aberta`,
+          detail: r.already
+            ? `${found.note.path} já estava aberta no Obsidian (é a nota ativa)`
+            : r.confirmed
+              ? `abri ${found.note.path} no Obsidian (o Obsidian confirmou que a nota está aberta)`
+              : `lancei o Obsidian com ${found.note.path}, mas não consegui confirmar que a nota ficou aberta`,
         });
       }
 

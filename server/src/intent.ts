@@ -13,7 +13,13 @@ export type PlaceRef =
 export type Step =
   | { readonly kind: "move"; readonly agent: string; readonly to: PlaceRef }
   | { readonly kind: "open_note"; readonly note: string }
-  | { readonly kind: "task"; readonly agent: string; readonly task: string };
+  | {
+      readonly kind: "task";
+      readonly agent: string;
+      readonly task: string;
+      /** A nota aberta antes na mesma ordem ("abre a nota X, lê-a"): o servidor resolve-a e confere as edições. */
+      readonly note?: string;
+    };
 
 export interface ParsedOrder {
   /** A quem a ordem é dirigida ("Mira, ..."), se for dita a alguém. */
@@ -330,6 +336,45 @@ function taskText(ts: readonly Tok[]): string {
   return rawOf(ts.slice(at));
 }
 
+const ARTICLES = ["a", "o", "ao", "à"];
+const LINKS = ["para", "que"];
+
+/** "(pede) à Lena para": o agente e quantos tokens ocupa, se `ts[at]` começa um pedido a um colega. */
+function delegationAt(
+  ts: readonly Tok[],
+  at: number,
+  agents: readonly AgentName[],
+  afterDelegation: boolean,
+): { id: string; used: number } | null {
+  let i = at;
+  const verb = phraseAt(ts, i, SEND_VERBS);
+  if (verb) i += verb;
+  // Sem verbo, só depois de outro pedido: "pede à Lena para X e à Nina para Y".
+  else if (!(afterDelegation && ts[i]?.f === "e")) return null;
+  else i += 1;
+  if (ARTICLES.includes(ts[i]?.f ?? "")) i++;
+  const a = agents.find((x) => fold(x.name) === ts[i]?.f || x.id === ts[i]?.f);
+  if (!a || !LINKS.includes(ts[i + 1]?.f ?? "")) return null;
+  return { id: a.id, used: i + 2 - at };
+}
+
+/** Parte o resto de uma ordem por pessoa: o que é de `who` e cada pedido a outro colega, pela ordem em que aparecem. */
+function splitDelegations(ts: readonly Tok[], agents: readonly AgentName[], who: string): { agent: string; ts: Tok[] }[] {
+  const parts: { agent: string; ts: Tok[] }[] = [{ agent: who, ts: [] }];
+  let i = 0;
+  while (i < ts.length) {
+    const d = delegationAt(ts, i, agents, parts.length > 1);
+    if (d) {
+      parts.push({ agent: d.id, ts: [] });
+      i += d.used;
+      continue;
+    }
+    parts[parts.length - 1].ts.push(ts[i]);
+    i++;
+  }
+  return parts.filter((p) => p.ts.length > 0);
+}
+
 /**
  * Lê uma ordem. `self` é o agente com quem se está a falar (no chat dele); no chat do Atlas é "ceo".
  * Devolve null se não houver nada que o servidor saiba executar sozinho (andar, abrir uma nota): nesse caso a ordem
@@ -382,13 +427,25 @@ export function parseOrder(text: string, agents: readonly AgentName[], self: str
       i += open.used;
       continue;
     }
-    // O resto da ordem é trabalho para o agente (com o Claude Code).
-    const rest = taskText(ts.slice(i));
-    if (!rest) break;
+    // O resto da ordem é trabalho para o agente (com o Claude Code); "pede à Lena para X e à Nina para Y" são passos
+    // seguintes de outros colegas, cada um depois do anterior.
+    if (!taskText(ts.slice(i))) break;
     if (!who || who === "ceo") return null;
-    steps.push({ kind: "task", agent: who, task: rest });
+    for (const part of splitDelegations(ts.slice(i), agents, who)) {
+      const task = taskText(part.ts);
+      if (task) steps.push({ kind: "task", agent: part.agent, task });
+    }
     break;
   }
   if (!steps.some((s) => s.kind !== "task")) return null;
-  return { addressee, steps };
+  return { addressee, steps: withOpenedNote(steps) };
+}
+
+/** "Abre a nota X, lê-a… pede à Lena para os acrescentar": as tarefas depois de abrir uma nota referem-se a ela. */
+function withOpenedNote(steps: readonly Step[]): Step[] {
+  let opened: string | null = null;
+  return steps.map((s) => {
+    if (s.kind === "open_note") opened = s.note;
+    return s.kind === "task" && opened && s.note === undefined ? { ...s, note: opened } : s;
+  });
 }

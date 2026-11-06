@@ -189,7 +189,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
       // Só a sessão deste perfil (uma tarefa delegada noutro perfil não conta).
       const last = state.sessions[agentId];
       const cmd = last?.profileId === profile.id && last.command.includes("-File") ? last.command : undefined;
-      h += `<div class="mode-row"><button id="termBtn"${busy ? " disabled" : ""}>Continuar no terminal</button>${cmd ? `<button id="copyCmd" title="${escapeHtml(cmd)}">Copiar comando</button>` : ""}</div>
+      h += `<div class="mode-row"><button id="termBtn"${busy ? " disabled" : ""}>Continuar no terminal</button>${cmd ? `<button id="copyCmd" title="${escapeHtml(cmd)}">Copiar comando</button>` : ""}<button id="revokeBtn"${busy ? " disabled" : ""} title="Volta ao modo escritório: sem projeto, terminal nem MCP">Retirar acesso</button></div>
         <div class="mode-note">Abre uma janela de terminal com esta sessão e o mesmo perfil (pastas, MCP, terminal e regras); as perguntas de permissão passam a aparecer lá.</div>`;
     }
     const pending = state.permissions.filter((p) => p.agentId === agentId);
@@ -214,6 +214,13 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
     if (select) select.onchange = () => profileOf(agentId) && setLocal();
     const profiles = el<HTMLButtonElement>("profilesBtn");
     if (profiles) profiles.onclick = () => openEditor(profileOf(agentId)?.id);
+    const revoke = el<HTMLButtonElement>("revokeBtn");
+    if (revoke)
+      revoke.onclick = () => {
+        if (deps.send({ type: "set-mode", agentId, mode: { kind: "office" } }))
+          toast(`${deps.nameOf(agentId)} voltou ao modo escritório: o acesso do perfil foi retirado.`);
+        else toast("Servidor offline: não consegui retirar o acesso.");
+      };
     const term = el<HTMLButtonElement>("termBtn");
     if (term) term.onclick = () => deps.send({ type: "open-terminal", agentId });
     const copy = el<HTMLButtonElement>("copyCmd");
@@ -239,6 +246,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
     byId<HTMLTextAreaElement>("pfVaultFolders").value = (p?.vaultFolders ?? []).join("\n");
     f("pfBash").checked = p?.bash ?? true;
     f("pfAuto").checked = p?.autoEdits ?? false;
+    f("pfSkills").checked = p?.skills !== false;
     const chosen = new Set(p?.mcp ?? []);
     byId("pfMcp").innerHTML =
       `<label><input type="checkbox" value="*"${chosen.has("*") ? " checked" : ""}> Todas as que uso no terminal</label>` +
@@ -272,6 +280,17 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
     fill(state.profiles.find((p) => p.id === editing));
   };
   byId("pfClose").onclick = () => dialog.close();
+  // Acesso amplo: para trabalho em que confias. A pasta continua a ser tua a escolher, e o terminal continua sujeito às
+  // tuas regras de permissão do Claude Code (o que lá pede autorização continua a pedir aqui).
+  byId("pfBroad").onclick = () => {
+    if (state.vaultDir) byId<HTMLSelectElement>("pfVault").value = "write";
+    byId<HTMLTextAreaElement>("pfVaultFolders").value = "";
+    for (const id of ["pfBash", "pfAuto", "pfSkills"]) byId<HTMLInputElement>(id).checked = true;
+    byId("pfMcp")
+      .querySelectorAll<HTMLInputElement>("input")
+      .forEach((i) => (i.checked = i.value === "*"));
+    toast("Acesso amplo preenchido: revê a pasta e guarda.");
+  };
   byId("pfDelete").onclick = () => {
     if (editing === undefined) return;
     deps.send({ type: "profile-delete", id: editing });
@@ -290,6 +309,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
       vaultFolders: lines(byId<HTMLTextAreaElement>("pfVaultFolders").value),
       bash: byId<HTMLInputElement>("pfBash").checked,
       autoEdits: byId<HTMLInputElement>("pfAuto").checked,
+      skills: byId<HTMLInputElement>("pfSkills").checked,
       mcp: [...byId("pfMcp").querySelectorAll<HTMLInputElement>("input:checked")].map((i) => i.value),
     };
     if (!profile.name || !profile.folder) return toast("Dá um nome ao perfil e escolhe a pasta de trabalho.");

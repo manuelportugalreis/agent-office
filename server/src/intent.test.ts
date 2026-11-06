@@ -70,7 +70,7 @@ describe("parseOrder", () => {
     ]);
     expect(parseOrder("abre a nota «Pesquisa e Desenvolvimento» e lê-a", AGENTS, "mira")?.steps).toEqual([
       { kind: "open_note", note: "Pesquisa e Desenvolvimento" },
-      { kind: "task", agent: "mira", task: "lê-a" },
+      { kind: "task", agent: "mira", task: "lê-a", note: "Pesquisa e Desenvolvimento" },
     ]);
     expect(parseOrder("abre a nota [[Pesquisa e Desenvolvimento]] no Obsidian", AGENTS, "ceo")?.steps).toEqual([
       { kind: "open_note", note: "[[Pesquisa e Desenvolvimento]]" },
@@ -99,6 +99,27 @@ describe("parseOrder", () => {
         { kind: "task", agent: "mira", task: "ler Planeamento e propor três próximos passos" },
       ],
     });
+  });
+
+  it("numa ordem só ao Atlas, os pedidos à Lena e à Nina são passos delas, por ordem", () => {
+    expect(
+      parseOrder(
+        "Atlas, manda a Mira ao meu gabinete. Quando chegar, abre a nota Planeamento no Obsidian, lê-a e propõe três próximos passos. Pede à Lena para os acrescentar e à Nina para verificar.",
+        AGENTS,
+        "ceo",
+      )?.steps,
+    ).toEqual([
+      { kind: "move", agent: "mira", to: { kind: "mine" } },
+      { kind: "open_note", note: "Planeamento" },
+      { kind: "task", agent: "mira", task: "lê-a e propõe três próximos passos.", note: "Planeamento" },
+      { kind: "task", agent: "lena", task: "os acrescentar", note: "Planeamento" },
+      { kind: "task", agent: "nina", task: "verificar", note: "Planeamento" },
+    ]);
+  });
+
+  it("'pede-lhe' continua a ser da mesma pessoa; um nome sem 'para' não é um pedido", () => {
+    const steps = parseOrder("Mira, vai ao meu gabinete e pede-lhe para falar com a Lena sobre o plano", AGENTS, null)?.steps;
+    expect(steps?.filter((s) => s.kind === "task").map((s) => s.kind === "task" && s.agent)).toEqual(["mira"]);
   });
 
   it("movimento seguido de leitura no chat do agente", () => {

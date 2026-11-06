@@ -7,6 +7,8 @@ const LOG_LIMIT = 30;
 
 export interface Panel {
   open(a: Agent, tab?: Tab): void;
+  /** Fecha o painel: o escritório fica com o espaço todo. */
+  close(): void;
   refresh(): void;
   appendLog(a: Agent): void;
   readonly selected: Agent | null;
@@ -32,6 +34,8 @@ export interface PanelDeps {
   goTo(a: Agent): void;
   /** Abriu-se um separador (o das instruções pede-as ao servidor). */
   onTab?(a: Agent, tab: Tab): void;
+  /** O painel fechou (ninguém escolhido). */
+  onClose?(): void;
   /** Secção extra do resumo (modo de trabalho: escritório ou Claude Code local) e a ligação dos botões dela. */
   extra?(a: Agent): string;
   bindExtra?(a: Agent): void;
@@ -137,7 +141,7 @@ export function createPanel(deps: PanelDeps): Panel {
     },
     open(a, tab = "sum") {
       sel = a;
-      byId("empty").style.display = "none";
+      document.querySelector("main")?.classList.remove("no-sel");
       byId("panel").style.display = "flex";
       const av = byId("pAv");
       av.textContent = a.def.emoji;
@@ -148,6 +152,15 @@ export function createPanel(deps: PanelDeps): Panel {
       drawLog();
       deps.onOpen(a);
       showTab(tab);
+    },
+    close() {
+      if (!sel) return;
+      sel = null;
+      byId("panel").style.display = "none";
+      const main = document.querySelector("main");
+      main?.classList.add("no-sel");
+      main?.classList.remove("chat-wide");
+      deps.onClose?.();
     },
     refresh: drawSummary,
     appendLog(a) {

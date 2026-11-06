@@ -185,7 +185,7 @@ const DOING = {
 } as const;
 
 export function boardView(d: Dossier | null): BoardView {
-  if (!d) return { tone: "empty", headline: "Sem dossier ativo", title: "", lines: [], hint: "Abre um em 📁 Dossier" };
+  if (!d) return { tone: "empty", headline: "Sem dossier ativo", title: "", lines: [], hint: "Abre um em «Novo dossier», lá em cima" };
   const title = clip(d.title, 40);
   if (d.blocked) {
     return {

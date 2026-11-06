@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AccessProfile, ServerMsg } from "../../shared/protocol.ts";
-import { parseClientMsg } from "../../shared/protocol.ts";
+import { parseClientMsg, parseProfileInput } from "../../shared/protocol.ts";
 import { createHub } from "./hub.ts";
 import { buildLocalArgs, describeAsk, lineDiff, VAULT_TOOLS } from "./local-runner.ts";
 import { changedFiles, createOrchestrator, traceText } from "./orchestrator.ts";
@@ -103,6 +103,15 @@ describe("argumentos do Claude Code local", () => {
     const policy = JSON.parse(readFileSync(files[0], "utf8")) as { write: string[] };
     expect(policy.write).toContain(project);
     for (const f of files) rmSync(f, { force: true, recursive: true });
+  });
+  it("as skills são tuas por defeito (perfis antigos incluídos); tirá-las no perfil retira a ferramenta Skill", () => {
+    const withSkills = buildLocalArgs(req(profile()), vault);
+    expect(withSkills.args[withSkills.args.indexOf("--disallowedTools") + 1] ?? "").not.toContain("Skill");
+    const without = buildLocalArgs(req(profile({ skills: false })), vault);
+    expect(without.args[without.args.indexOf("--disallowedTools") + 1]).toContain("Skill");
+    expect(parseProfileInput({ ...profile(), skills: undefined })?.skills).toBe(true);
+    expect(parseProfileInput({ ...profile(), skills: "sim" })).toBeNull();
+    for (const f of [...withSkills.files, ...without.files]) rmSync(f, { force: true, recursive: true });
   });
   it("retomar uma sessão usa o mesmo perfil (mesmas pastas e regras) e o id guardado", () => {
     const p = profile({ writeDirs: [other], autoEdits: true, mcp: ["*"] });

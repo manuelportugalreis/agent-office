@@ -237,21 +237,29 @@ export function defaultTab(d: Dossier): DossierTab {
   return "activity";
 }
 
-function newForm(label: string): string {
-  return `<section class="dz-new"><div class="lbl">Novo dossier de candidatura</div>
-    <textarea id="dzRequest" rows="3" maxlength="${MAX_REQUEST_LENGTH}" placeholder="Empresa ou vaga, e o link do anúncio se tiveres. Ex.: Business Analyst na ACME (remoto), https://acme.com/careers/ba"></textarea>
-    <label for="dzMaterials">Factos teus que a Lena pode usar (opcional)</label>
-    <textarea id="dzMaterials" rows="2" maxlength="${MAX_MATERIALS_LENGTH}" placeholder="Ex.: pontos do CV, projetos, resultados. A Lena só afirma o que estiver aqui ou no teu perfil."></textarea>
-    <div class="dz-actions"><button class="primary" data-act="start">${label}</button></div>
-    <small>O Atlas distribui: a Mira pesquisa a vaga, a Lena redige a carta, a Nina verifica-a e só depois chega à tua bandeja.</small></section>`;
+/** Na demonstração não há servidor: o formulário não convida a submeter, e diz onde se usa a sério. */
+export interface DossierDemo {
+  readonly setupUrl: string;
 }
 
-const emptyHtml = `
-  <header class="dz-head"><h3>📁 Dossier de candidatura</h3><button class="dz-close" data-act="close" aria-label="Fechar o dossier e voltar ao escritório">← Escritório</button></header>
-  <p class="dz-intro">Um processo que passa de mão em mão: o Atlas planeia, a Mira pesquisa a vaga, a Lena redige a carta, a Nina verifica-a e tu decides. Vês a pasta a andar pelo escritório.</p>
-  ${newForm("Abrir dossier")}`;
+function newForm(label: string, demo?: DossierDemo): string {
+  const off = demo ? " disabled" : "";
+  const action = demo
+    ? `<p class="dz-demo" role="note"><b>Demonstração:</b> aqui não se abre dossier. Os agentes trabalham no teu computador. <a href="${demo.setupUrl}" target="_blank" rel="noopener noreferrer">Instalar no meu computador</a></p>`
+    : `<div class="dz-actions"><button class="primary" data-act="start">${label}</button></div>`;
+  return `<section class="dz-new"><div class="lbl">Novo dossier de candidatura</div>
+    <textarea id="dzRequest" rows="3" maxlength="${MAX_REQUEST_LENGTH}"${off} placeholder="Empresa ou vaga, e o link do anúncio se tiveres. Ex.: Business Analyst na ACME (remoto), https://acme.com/careers/ba"></textarea>
+    <label for="dzMaterials">Factos teus que a Lena pode usar (opcional)</label>
+    <textarea id="dzMaterials" rows="2" maxlength="${MAX_MATERIALS_LENGTH}"${off} placeholder="Ex.: pontos do CV, projetos, resultados. A Lena só afirma o que estiver aqui ou no teu perfil."></textarea>
+    ${action}</section>`;
+}
 
-export function createDossierUi(actions: DossierActions): DossierUi {
+const emptyHtml = (demo?: DossierDemo): string => `
+  <header class="dz-head"><h3>📁 Dossier de candidatura</h3><button class="dz-close" data-act="close" aria-label="Fechar o dossier e voltar ao escritório">← Escritório</button></header>
+  <p class="dz-intro">Um processo que passa de mão em mão: o Atlas planeia, a Mira pesquisa a vaga, a Lena redige a carta, a Nina verifica-a e só depois chega à tua bandeja para decidires. Vês a pasta a andar pelo escritório.</p>
+  ${newForm("Abrir dossier", demo)}`;
+
+export function createDossierUi(actions: DossierActions, demo?: DossierDemo): DossierUi {
   const chip = byId<HTMLButtonElement>("dossierChip");
   const card = byId("dossierCard");
   let dossier: Dossier | null = null;
@@ -304,7 +312,7 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     const body = card.querySelector<HTMLElement>(".dz-body");
     if (body && renderedKey) scrolls.set(renderedKey, body.scrollTop);
     const caret = active instanceof HTMLTextAreaElement ? active.selectionStart : null;
-    card.innerHTML = dossier ? cardHtml(dossier, note, answer, tab) : emptyHtml;
+    card.innerHTML = dossier ? cardHtml(dossier, note, answer, tab) : emptyHtml(demo);
     const nextBody = card.querySelector<HTMLElement>(".dz-body");
     if (nextBody) nextBody.scrollTop = scrolls.get(bodyKey()) ?? 0;
     renderedKey = dossier ? bodyKey() : "";
@@ -388,6 +396,7 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     if (e.key !== "Escape" || !opened) return;
     const t = e.target as HTMLElement | null;
     if (t && /^(INPUT|SELECT)$/.test(t.tagName)) return;
+    e.preventDefault(); // Esc fecha só o dossier (não também o painel do agente).
     ui.close();
   });
   chip.onclick = () => {
@@ -432,7 +441,9 @@ export function createDossierUi(actions: DossierActions): DossierUi {
     close() {
       opened = false;
       render();
-      opener?.focus();
+      // Volta ao que abriu o dossier; se já não se vê (ex.: abriste pela pasta na cena), volta ao escritório.
+      const back = opener?.isConnected && opener.offsetParent !== null ? opener : document.getElementById("stage");
+      back?.focus({ preventScroll: true });
       opener = null;
     },
     toggle() {

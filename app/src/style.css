@@ -210,12 +210,6 @@ body.resizing {
   cursor: col-resize;
   user-select: none;
 }
-#empty {
-  margin: auto;
-  color: var(--muted);
-  text-align: center;
-  padding: 24px;
-}
 #panel {
   display: none;
   flex-direction: column;
@@ -1248,27 +1242,6 @@ header h1 {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 6px;
-}
-
-/* Faixa da demonstração publicada (GitHub Pages) */
-#demoBanner {
-  position: fixed;
-  left: 50%;
-  top: 64px;
-  transform: translateX(-50%);
-  max-width: calc(100% - 32px);
-  background: var(--ink);
-  color: var(--bg);
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  z-index: 20;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-}
-#demoBanner a {
-  color: var(--accent);
-  font-weight: 600;
-  margin-left: 6px;
 }
 
 /* ---- ordens em curso (passos com estado e evidência) */

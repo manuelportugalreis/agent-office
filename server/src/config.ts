@@ -105,7 +105,8 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>> = p
   if (path === "none" || !existsSync(path)) return parseConfig(undefined, env);
   let raw: unknown;
   try {
-    raw = JSON.parse(readFileSync(path, "utf8"));
+    // O Bloco de Notas do Windows (e o PowerShell 5) gravam UTF-8 com BOM: aceita-se na mesma.
+    raw = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
   } catch (err) {
     throw new ConfigError(`não consegui ler ${path}: ${err instanceof Error ? err.message : String(err)}`);
   }

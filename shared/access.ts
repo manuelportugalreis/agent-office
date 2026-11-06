@@ -17,6 +17,7 @@ export function describeProfile(p: AccessProfile): string[] {
       ? "Comandos de terminal: sim, com os teus privilégios e sem ficarem presos às pastas do perfil (cada comando pede autorização conforme as tuas regras)"
       : "Comandos de terminal: não",
     `MCP: ${p.mcp.length === 0 ? "nenhuma" : p.mcp.includes("*") ? "todas as que usas no terminal" : p.mcp.join(", ")}`,
+    p.skills === false ? "Skills: não" : "Skills: as tuas (as de ~/.claude/skills e as do projeto)",
     p.autoEdits ? "Edições: aceites sem perguntar" : "Edições: pede autorização",
   ];
 }

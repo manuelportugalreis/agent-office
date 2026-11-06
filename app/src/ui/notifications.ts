@@ -145,7 +145,9 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
     if (!panel.contains(t) && !btn.contains(t)) panel.hidden = true;
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") panel.hidden = true;
+    if (e.key !== "Escape" || panel.hidden) return;
+    panel.hidden = true;
+    e.preventDefault(); // Esc fecha só isto (não também o painel do agente).
   });
 
   return {

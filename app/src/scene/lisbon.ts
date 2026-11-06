@@ -1,6 +1,7 @@
 import { ground } from "./building";
 import { Batch } from "./lisbon/batch";
 import { buildCity } from "./lisbon/city";
+import { recedeCity } from "./lisbon/grade";
 import { buildLargo } from "./lisbon/largo";
 import { buildLife, type Life } from "./lisbon/life";
 import { buildPastelaria } from "./lisbon/pastelaria";
@@ -24,7 +25,7 @@ export function buildLisbon(): void {
   buildStreet(b);
   buildPastelaria(b);
   buildLargo(b);
-  b.build(scene);
+  recedeCity(b.build(scene));
   tram = buildTram(scene);
   life = buildLife(scene);
 }

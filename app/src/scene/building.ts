@@ -3,10 +3,11 @@ import { GESTAO_SPLIT_X, ROOMS, ROOM_D, ROOM_W, type RoomDef } from "../data/roo
 import { box, floorTexture, group, mat } from "./util";
 import { lamps, scene } from "./world";
 
-const WALL = mat("#ece7de", { roughness: 0.9 });
-const BASE = mat("#cdc6b8", { roughness: 0.8 });
-const FRAME = mat("#8d939c", { metalness: 0.5, roughness: 0.4 });
-const FROST = mat("#e9eef3", { roughness: 0.4 });
+// Paredes e divisórias num branco-pérola mate: ao sol, o branco puro com brilho estourava e roubava o olhar às pessoas.
+const WALL = mat("#e0dace", { roughness: 0.92 });
+const BASE = mat("#c6bfb1", { roughness: 0.85 });
+const FRAME = mat("#8d939c", { metalness: 0.4, roughness: 0.5 });
+const FROST = mat("#d9d8d3", { roughness: 0.8 });
 
 export const glassMaterial = new THREE.MeshStandardMaterial({
   color: 0xaed6f0,

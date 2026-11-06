@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -287,6 +287,8 @@ export interface OpenResult {
   readonly launched: boolean;
   /** O workspace do Obsidian passou a mostrar esta nota (evidência de que abriu mesmo). */
   readonly confirmed: boolean;
+  /** Já era a nota ativa no Obsidian aberto (o Obsidian não regrava o workspace quando nada muda). */
+  readonly already?: boolean;
   readonly error?: string;
 }
 
@@ -298,6 +300,19 @@ export interface OpenDeps {
   readonly workspaceStamp?: (vault: string) => number;
   readonly waitMs?: number;
   readonly pollMs?: number;
+  /** Se o Obsidian está a correr neste computador. */
+  readonly isRunning?: () => boolean;
+}
+
+/** O Obsidian está aberto? (Windows: pela lista de processos, sem shell.) */
+export function obsidianRunning(): boolean {
+  if (process.platform !== "win32") return false;
+  try {
+    const out = execFileSync("tasklist", ["/FI", "IMAGENAME eq Obsidian.exe", "/NH"], { encoding: "utf8", windowsHide: true });
+    return /obsidian\.exe/i.test(out);
+  } catch {
+    return false;
+  }
 }
 
 /** Lança um URI obsidian:// sem passar por uma shell (sem interpretação de % ou &). */
@@ -339,15 +354,19 @@ export async function openInObsidian(absolute: string, deps: OpenDeps = {}): Pro
   // Só conta como confirmado se o Obsidian gravar o workspace depois de o lançarmos (um estado antigo que já
   // mostrava esta nota não prova que abriu agora).
   const stamp = deps.workspaceStamp ?? workspaceStamp;
+  const active = deps.activeFile ?? obsidianActiveFile;
   const before = stamp(vault);
+  const shownBefore = active(vault) === rel;
   const launched = (deps.launch ?? launchUri)(uri);
   if (!launched) return { launched: false, confirmed: false, error: "não consegui lançar o Obsidian" };
-  const active = deps.activeFile ?? obsidianActiveFile;
   const wait = deps.waitMs ?? 15_000;
   const poll = deps.pollMs ?? 500;
   for (let t = 0; t <= wait; t += poll) {
     if (stamp(vault) > before && active(vault) === rel) return { launched: true, confirmed: true };
     await new Promise((r) => setTimeout(r, poll));
   }
+  // Se a nota já era a ativa e o Obsidian está aberto, o Obsidian não grava nada (nada mudou), mas a nota está à vista.
+  if (shownBefore && active(vault) === rel && (deps.isRunning ?? obsidianRunning)())
+    return { launched: true, confirmed: true, already: true };
   return { launched: true, confirmed: false };
 }

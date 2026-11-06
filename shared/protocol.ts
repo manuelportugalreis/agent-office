@@ -161,6 +161,8 @@ export interface AccessProfile {
   readonly mcp: readonly string[];
   /** Aceitar edições de ficheiros sem perguntar (como o modo acceptEdits do terminal). */
   readonly autoEdits: boolean;
+  /** Usar as tuas skills do Claude Code (as de ~/.claude/skills e as do projeto). Perfis antigos sem o campo: sim. */
+  readonly skills?: boolean;
 }
 
 /** O que a interface envia para criar ou alterar um perfil (sem id = novo). */
@@ -574,6 +576,7 @@ export function parseProfileInput(v: unknown): ProfileInput | null {
   const vault = p.vault === "none" || p.vault === "read" || p.vault === "write" ? p.vault : null;
   if (!name || name.length > 60 || !folder || !readDirs || !writeDirs || !vaultFolders || !mcp || !vault) return null;
   if (typeof p.bash !== "boolean" || typeof p.autoEdits !== "boolean") return null;
+  if (p.skills !== undefined && typeof p.skills !== "boolean") return null;
   if (p.id !== undefined && !Number.isInteger(p.id)) return null;
   return {
     ...(p.id !== undefined ? { id: p.id as number } : {}),
@@ -586,5 +589,6 @@ export function parseProfileInput(v: unknown): ProfileInput | null {
     bash: p.bash,
     mcp,
     autoEdits: p.autoEdits,
+    skills: p.skills !== false,
   };
 }
