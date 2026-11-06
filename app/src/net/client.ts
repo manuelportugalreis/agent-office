@@ -13,9 +13,22 @@ const isServerMsg = (v: unknown): v is ServerMsg =>
 /** Liga ao servidor de agentes e religa-se sozinho se cair. */
 export function connect(onMessage: (m: ServerMsg) => void, onConnection: (online: boolean) => void): Client {
   let ws: WebSocket | null = null;
+  // Demonstração (GitHub Pages): não há servidor de agentes; a interface fica offline sem tentar ligar.
+  if (import.meta.env.VITE_DEMO === "1") {
+    setTimeout(() => onConnection(false), 0);
+    return { send: () => false };
+  }
 
   const open = (): void => {
-    const socket = new WebSocket(wsUrl());
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(wsUrl());
+    } catch {
+      // O browser recusou a ligação (ex.: página https a tentar ws://): fica offline e tenta mais tarde.
+      onConnection(false);
+      setTimeout(open, RECONNECT_MS * 5);
+      return;
+    }
     ws = socket;
     socket.onopen = () => onConnection(true);
     socket.onmessage = (e) => {

@@ -525,6 +525,15 @@ function applyDossier(d: Dossier | null): void {
   reviewTray.setAttention(waitingForUser(d));
 }
 
+/** Na demonstração publicada (GitHub Pages) os agentes não trabalham: diz-se logo, com o caminho para os usar. */
+if (import.meta.env.VITE_DEMO === "1") {
+  const demo = document.createElement("div");
+  demo.id = "demoBanner";
+  demo.innerHTML =
+    'Demonstração: aqui vês o escritório, mas os agentes só trabalham no teu computador, com o teu Claude Code. <a href="https://github.com/manuelportugalreis/agent-office#quick-start" target="_blank" rel="noopener noreferrer">Como instalar</a>';
+  document.body.append(demo);
+}
+
 const client = connect(onServerMsg, (isOnline) => {
   online = isOnline;
   chat.setOnline(isOnline);

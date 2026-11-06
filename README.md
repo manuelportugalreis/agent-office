@@ -2,7 +2,7 @@
 
 > A 3D isometric office where **every person is a [Claude Code](https://docs.claude.com/en/docs/claude-code) agent**. Click a character to chat with it, give orders to the CEO and watch the team walk, sit, research and write.
 
-[Português (pt-PT)](README.pt-PT.md)
+[Português (pt-PT)](README.pt-PT.md) · **[Live demo](https://manuelportugalreis.github.io/agent-office/)** (the office and the city only: the agents work on your own machine, see below)
 
 ![The office](docs/img/office.png)
 
@@ -81,6 +81,21 @@ npm run dev
 ```
 
 Click a person in the office, or press `Ctrl+K`, and start talking.
+
+### For your friends
+
+The GitHub Pages demo shows the office, but the agents do not run there: they run in the Claude Code of whoever has the
+server on. To really use it, each person installs it on their own machine (Node 24 and Claude Code with their own
+account):
+
+```bash
+git clone https://github.com/manuelportugalreis/agent-office.git
+cd agent-office
+npm install
+npm start           # opens http://127.0.0.1:8787
+```
+
+To let the agents work on a project and in Obsidian like the terminal does, see [the local Claude Code mode](docs/claude-code-local.md) (in Portuguese).
 
 ## Configuration
 

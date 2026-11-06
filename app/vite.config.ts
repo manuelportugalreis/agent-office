@@ -2,6 +2,8 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  // No GitHub Pages o site vive em /agent-office/ (VITE_BASE); localmente na raiz.
+  base: process.env.VITE_BASE ?? "/",
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 900,
