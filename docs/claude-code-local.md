@@ -112,7 +112,7 @@ O método, a evidência, a entrega e a definição de concluído de cada papel e
 
 ## 6. Registo de verificação (2026-11-05/06)
 
-Ambiente descartável em `C:\Users\manue\agent-office-e2e`: projeto `projeto-calc` com `npm test`, vault com
+Ambiente descartável em `C:\Users\<utilizador>\agent-office-e2e`: projeto `projeto-calc` com `npm test`, vault com
 `Projetos/Calc brief.md`, uma nota de injeção e uma pasta `fora`. Instância isolada do servidor na porta 8797, com base
 de dados, áreas de trabalho e configuração próprias. A tua instância e o teu vault não foram tocados. A interface foi
 conduzida pelo browser (`scripts/local-e2e.mjs`) e todas as mensagens do servidor foram registadas.
