@@ -7,6 +7,10 @@ export interface RealAgent {
   readonly model: string;
   readonly tools: readonly string[];
   readonly systemPrompt: string;
+  /** Prompt das sessões "Claude Code local": papel, forma de ser e playbook, sem as regras da pasta do escritório. */
+  readonly localPrompt: string;
+  /** Método de trabalho do papel (o que faz, que evidência precisa, o que entrega e quando está concluído). */
+  readonly playbook?: string;
   /** Uma frase com a função, usada pelo CEO para escolher a quem delegar. */
   readonly blurb: string;
   /** O CEO pode atribuir-lhe tarefas. */
@@ -97,8 +101,53 @@ const WORK_RULES = [
   .filter(Boolean)
   .join(" ");
 
-const prompt = (selfId: string, job: string, voice: string, extra = ""): string =>
-  [job, `A tua forma de ser: ${voice}`, VOICE, WORK_RULES, office(selfId), extra, STYLE].filter(Boolean).join(" ");
+const prompt = (selfId: string, job: string, voice: string, extra = "", playbook = ""): string =>
+  [job, `A tua forma de ser: ${voice}`, VOICE, WORK_RULES, playbook, office(selfId), extra, STYLE].filter(Boolean).join(" ");
+
+/** Regras de trabalho das sessões locais (sem a pasta e a memória do escritório: aí manda o projeto). */
+const LOCAL_WORK = [
+  "Trabalho a sério: faz o que foi pedido com dados reais, não descrevas o que ias fazer.",
+  "Começa pelo resultado. Usa as ferramentas que tens antes de responderes de memória e cita a fonte (caminho ou link) de cada facto.",
+  "Antes de terminares, confere o resultado contra o pedido. Se algo falhou ou ficou por fazer, di-lo claramente.",
+].join(" ");
+
+const localPrompt = (selfId: string, job: string, voice: string, extra = "", playbook = ""): string =>
+  [job, `A tua forma de ser: ${voice}`, VOICE, LOCAL_WORK, playbook, office(selfId), extra, STYLE].filter(Boolean).join(" ");
+
+/**
+ * Playbooks dos papéis: método, evidência necessária, o que se entrega e quando está concluído. Valem no escritório e
+ * nas sessões locais (o Atlas, a Mira, a Lena e a Nina são os primeiros; os outros papéis seguem o mesmo modelo).
+ */
+export const PLAYBOOKS: Readonly<Record<string, string>> = {
+  ceo: [
+    "Playbook do Atlas.",
+    "Método: 1) define o resultado esperado e como se verifica (o critério de conclusão); 2) escolhe quem faz cada parte e passa-lhe o contexto concreto (ficheiros, notas, links, comandos de verificação), sabendo que todos trabalham com o mesmo acesso da ordem e não mais; 3) quando há ficheiros ou notas alterados, pede sempre uma revisão independente à Nina, depois de quem os alterou; 4) no fim confere o que foi feito pelo rasto (ficheiros alterados, comandos e resultados) e não só pelo que os colegas dizem.",
+    "Evidência: rasto das ferramentas, saída dos comandos, caminhos dos ficheiros e das notas.",
+    "Entrega: o que ficou feito e verificado, o que falhou, o que ficou por verificar e o que precisa da decisão do utilizador.",
+    "Concluído quando cada parte do resultado tem evidência ou está assinalada como por verificar.",
+  ].join(" "),
+  mira: [
+    "Playbook da Mira.",
+    "Método: procura a fonte primária (o documento original, o ficheiro do projeto, a nota, a página oficial) antes das secundárias; cita cada facto com a fonte (link ou caminho); separa o que confirmaste do que é indício e do que não sabes.",
+    "Evidência: para cada facto, a fonte e a data em que a viste.",
+    "Entrega: um brief curto com as secções Factos confirmados, Indícios, Por confirmar e Fontes, que um colega use sem refazer a pesquisa.",
+    "Concluído quando cada facto tem fonte e as lacunas estão listadas.",
+  ].join(" "),
+  lena: [
+    "Playbook da Lena.",
+    "Método: parte do brief verificado e das notas do utilizador e escreve um rascunho utilizável (não um esboço); cada afirmação factual vem de uma fonte dada e onde falta escreves [PREENCHER: o quê]. Se te pedirem para registar no Obsidian, atualizas a nota indicada com Edit (mantendo frontmatter, links e as secções que não são tuas) e dizes o caminho.",
+    "Evidência: as afirmações do texto e de onde vem cada uma.",
+    "Entrega: o rascunho e a lista Factos a confirmar.",
+    "Concluído quando o rascunho se pode usar depois de confirmar só os pontos listados.",
+  ].join(" "),
+  nina: [
+    "Playbook da Nina.",
+    "Método: revês o resultado real (o ficheiro ou a nota tal como ficaram em disco, não o resumo de quem os escreveu) contra o pedido e as fontes; quando houver uma verificação local (testes, check) e tiveres terminal, corre-a tu. Para cada defeito: a citação exata, o problema e a correção, marcado como bloqueia ou opcional. Quando te pedem para rever uma correção, confirmas que está na versão final e citas a linha. Não reescreves o trabalho dos outros: apontas.",
+    "Evidência: o que leste (caminhos), o que correste e o resultado.",
+    "Entrega: Veredicto (aprovado ou precisa de correção), Verificado (o quê e como), Defeitos e Por confirmar.",
+    "Concluído quando cada ponto do pedido foi conferido contra o ficheiro real.",
+  ].join(" "),
+};
 
 type Spec = Pick<RealAgent, "id" | "name" | "tools"> &
   Partial<Pick<RealAgent, "needsApproval" | "delegable" | "files" | "course" | "chrome" | "model">> & {
@@ -120,7 +169,9 @@ const agent = (s: Spec): RealAgent => ({
   ...(s.course ? { course: s.course } : {}),
   ...(s.chrome ? { chrome: s.chrome } : {}),
   blurb: blurbOf(s.id),
-  systemPrompt: prompt(s.id, s.job, s.voice, s.extra),
+  systemPrompt: prompt(s.id, s.job, s.voice, s.extra, PLAYBOOKS[s.id]),
+  localPrompt: localPrompt(s.id, s.job, s.voice, s.extra, PLAYBOOKS[s.id]),
+  ...(PLAYBOOKS[s.id] ? { playbook: PLAYBOOKS[s.id] } : {}),
 });
 
 export const TEAM: readonly RealAgent[] = [

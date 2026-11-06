@@ -4,6 +4,8 @@ import { createInterface } from "node:readline";
 import { CHROME_READ_TOOLS, FILE_TOOLS, WEB_TOOLS, type RealAgent } from "./agents.ts";
 import { config } from "./config.ts";
 import { parseLine, type AgentEvent } from "./events.ts";
+import type { AccessProfile } from "../../shared/protocol.ts";
+import { localRun } from "./local-runner.ts";
 import { ensureWorkspace, WORKSPACES_DIR, workspaceDir } from "./workspace.ts";
 
 export interface RunRequest {
@@ -12,11 +14,24 @@ export interface RunRequest {
   readonly sessionId: string;
   /** true se a sessão já existe (continua a conversa em vez de criar uma nova). */
   readonly resume: boolean;
+  /** Modo "Claude Code local": corre na pasta do perfil, com as tuas definições e os limites do perfil. */
+  readonly profile?: AccessProfile;
+}
+
+/** Uma pergunta de permissão de uma sessão local (o que no terminal te apareceria para confirmar). */
+export interface PermissionAsk {
+  readonly tool: string;
+  readonly input: unknown;
+  readonly summary: string;
+  readonly detail?: string;
+  readonly reason?: string;
 }
 
 export interface RunHandlers {
   onEvent(event: AgentEvent): void;
   onExit(code: number | null, stderr: string): void;
+  /** Só nas sessões locais: responde com `respond(true)` para permitir ou `respond(false, motivo)` para recusar. */
+  onPermission?(ask: PermissionAsk, respond: (allow: boolean, message?: string) => void): void;
 }
 
 export interface RunHandle {
@@ -107,6 +122,7 @@ export function buildArgs(req: RunRequest): string[] {
 
 /** Lança o `claude` num processo próprio. O texto do utilizador vai por stdin, nunca como argumento. */
 export const claudeRunner: Runner = (req, handlers) => {
+  if (req.profile) return localRun({ ...req, profile: req.profile }, handlers);
   const cwd = ensureWorkspace(req.agent);
   const child = spawn("claude", buildArgs(req), { cwd, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
 

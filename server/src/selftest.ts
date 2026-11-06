@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -33,6 +33,16 @@ export function runGuardSelfTest(hooksDir: string = DEFAULT_HOOKS_DIR): SelfTest
   const fs = join(hooksDir, "fs-guard.mjs");
   const web = join(hooksDir, "web-guard.mjs");
   const chrome = join(hooksDir, "chrome-guard.mjs");
+  // Guard das sessões locais: projeto (escrita), vault com uma nota que tem frontmatter.
+  const local = join(hooksDir, "local-guard.mjs");
+  const project = join(base, "projeto");
+  const vault = join(base, "vault");
+  mkdirSync(project, { recursive: true });
+  mkdirSync(vault, { recursive: true });
+  const note = join(vault, "brief.md");
+  writeFileSync(note, "---\ntipo: brief\n---\n# Brief\nTexto.\n");
+  const policy = join(base, "policy.json");
+  writeFileSync(policy, JSON.stringify({ cwd: project, read: [project, vault], write: [project, vault], vault }));
   const probes: Probe[] = [
     {
       name: "fs: ler dentro da pasta",
@@ -83,6 +93,46 @@ export function runGuardSelfTest(hooksDir: string = DEFAULT_HOOKS_DIR): SelfTest
       args: ["canvas.example.edu"],
       tool: "mcp__claude-in-chrome__computer",
       input: {},
+      expect: 2,
+    },
+    {
+      name: "local: escrever no projeto",
+      script: local,
+      args: [policy],
+      tool: "Write",
+      input: { file_path: join(project, "a.md") },
+      expect: 0,
+    },
+    {
+      name: "local: escrever fora do perfil",
+      script: local,
+      args: [policy],
+      tool: "Write",
+      input: { file_path: join(base, "fora.md") },
+      expect: 2,
+    },
+    {
+      name: "local: ler fora do perfil",
+      script: local,
+      args: [policy],
+      tool: "Read",
+      input: { file_path: join(base, "policy.json") },
+      expect: 2,
+    },
+    {
+      name: "local: escrever em .claude",
+      script: local,
+      args: [policy],
+      tool: "Write",
+      input: { file_path: join(project, ".claude", "settings.json") },
+      expect: 2,
+    },
+    {
+      name: "local: apagar o frontmatter de uma nota",
+      script: local,
+      args: [policy],
+      tool: "Write",
+      input: { file_path: note, content: "# Brief\nTexto.\n" },
       expect: 2,
     },
   ];

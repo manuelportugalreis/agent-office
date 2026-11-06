@@ -47,8 +47,15 @@ describe("parseLine", () => {
     });
     expect(parseLine(line)).toEqual([
       { kind: "text", text: "olá" },
-      { kind: "tool", name: "WebSearch", summary: "ai analyst jobs" },
+      { kind: "tool", name: "WebSearch", summary: "ai analyst jobs", input: { query: "ai analyst jobs" } },
     ]);
+  });
+  it("lê resultados de ferramentas com erro (recusas e falhas) para o rasto", () => {
+    const line = JSON.stringify({
+      type: "user",
+      message: { content: [{ type: "tool_result", tool_use_id: "t1", is_error: true, content: "Bloqueado pelo perfil de acesso" }] },
+    });
+    expect(parseLine(line)).toEqual([{ kind: "toolError", id: "t1", text: "Bloqueado pelo perfil de acesso" }]);
   });
   it("lê a quota e o resultado final", () => {
     const quota = JSON.stringify({

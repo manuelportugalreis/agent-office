@@ -2,7 +2,16 @@ import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
-import type { CanvasItem, ChatEntry, Dossier, LogEntry, PendingApproval, Snapshot } from "../../shared/protocol.ts";
+import type {
+  AccessProfile,
+  AgentMode,
+  CanvasItem,
+  ChatEntry,
+  Dossier,
+  LogEntry,
+  PendingApproval,
+  Snapshot,
+} from "../../shared/protocol.ts";
 
 // Carregado com require para o Vite/Vitest (que ainda não conhecem `node:sqlite`) não tentarem resolvê-lo.
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite") as { DatabaseSync: typeof DatabaseSyncType };
@@ -46,6 +55,13 @@ export interface Store {
   setSession(agentId: string, session: SessionInfo): void;
   clearSession(agentId: string): void;
   snapshot(): Snapshot;
+  /** Perfis de acesso (modo Claude Code local). */
+  profiles(): AccessProfile[];
+  /** Guarda um perfil já validado (sem id = novo). Devolve-o com o id. */
+  saveProfile(profile: Omit<AccessProfile, "id"> & { id?: number }): AccessProfile;
+  deleteProfile(id: number): void;
+  modes(): Record<string, AgentMode>;
+  setMode(agentId: string, mode: AgentMode): void;
   close(): void;
 }
 
@@ -57,6 +73,8 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS canvas (id INTEGER PRIMARY KEY CHECK (id = 1), items TEXT NOT NULL, synced_at INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS sessions (agent_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, started INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS conversations (agent_id TEXT PRIMARY KEY, conv INTEGER NOT NULL);
+  CREATE TABLE IF NOT EXISTS profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, json TEXT NOT NULL);
+  CREATE TABLE IF NOT EXISTS modes (agent_id TEXT PRIMARY KEY, json TEXT NOT NULL);
 `;
 
 type Row = Record<string, unknown>;
@@ -130,7 +148,8 @@ export function openStore(path: string): Store {
         agentId,
         convOf(agentId) + 1,
       );
-      db.prepare("DELETE FROM sessions WHERE agent_id = ?").run(agentId);
+      // Também as sessões locais deste agente ("agente@pN"): a conversa nova recomeça em todos os perfis.
+      db.prepare("DELETE FROM sessions WHERE agent_id = ? OR agent_id LIKE ?").run(agentId, `${agentId}@p%`);
     },
     dropLastExchange(agentId) {
       const last = db
@@ -226,6 +245,49 @@ export function openStore(path: string): Store {
         })),
         canvas: store.canvas(),
       };
+    },
+    profiles() {
+      const rows = db.prepare("SELECT id, json FROM profiles ORDER BY id").all() as Row[];
+      return rows.flatMap((r) => {
+        try {
+          return [{ ...(JSON.parse(String(r.json)) as Omit<AccessProfile, "id">), id: Number(r.id) }];
+        } catch {
+          return [];
+        }
+      });
+    },
+    saveProfile(profile) {
+      const { id, ...data } = profile;
+      if (id !== undefined && db.prepare("SELECT 1 AS x FROM profiles WHERE id = ?").get(id)) {
+        db.prepare("UPDATE profiles SET json = ? WHERE id = ?").run(JSON.stringify(data), id);
+        return { ...data, id };
+      }
+      const r = db.prepare("INSERT INTO profiles (json) VALUES (?)").run(JSON.stringify(data));
+      return { ...data, id: Number(r.lastInsertRowid) };
+    },
+    deleteProfile(id) {
+      db.prepare("DELETE FROM profiles WHERE id = ?").run(id);
+      // Quem trabalhava com este perfil volta ao modo escritório.
+      for (const [agentId, mode] of Object.entries(store.modes()))
+        if (mode.kind === "local" && mode.profileId === id) store.setMode(agentId, { kind: "office" });
+    },
+    modes() {
+      const rows = db.prepare("SELECT agent_id, json FROM modes").all() as Row[];
+      const out: Record<string, AgentMode> = {};
+      for (const r of rows) {
+        try {
+          out[String(r.agent_id)] = JSON.parse(String(r.json)) as AgentMode;
+        } catch {
+          /* linha estragada: o agente fica no modo escritório */
+        }
+      }
+      return out;
+    },
+    setMode(agentId, mode) {
+      db.prepare("INSERT INTO modes (agent_id, json) VALUES (?, ?) ON CONFLICT(agent_id) DO UPDATE SET json = excluded.json").run(
+        agentId,
+        JSON.stringify(mode),
+      );
     },
     close: () => db.close(),
   };

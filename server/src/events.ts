@@ -3,7 +3,16 @@ export type AgentEvent =
   | { readonly kind: "think" }
   | { readonly kind: "delta"; readonly text: string }
   | { readonly kind: "text"; readonly text: string }
-  | { readonly kind: "tool"; readonly name: string; readonly summary: string }
+  | {
+      readonly kind: "tool";
+      readonly name: string;
+      readonly summary: string;
+      readonly id?: string;
+      /** Entrada da ferramenta (para o rasto: ficheiro escrito, comando corrido). */
+      readonly input?: Record<string, unknown>;
+    }
+  /** Uma ferramenta terminou com erro ou foi recusada. */
+  | { readonly kind: "toolError"; readonly id: string; readonly text: string }
   | { readonly kind: "quota"; readonly fiveHour: number; readonly sevenDay: number }
   | { readonly kind: "done"; readonly ok: boolean; readonly costUsd?: number; readonly error?: string };
 
@@ -26,7 +35,13 @@ function fromAssistant(message: unknown): AgentEvent[] {
     if (block.type === "text" && typeof block.text === "string" && block.text.trim()) events.push({ kind: "text", text: block.text });
     else if (block.type === "thinking") events.push({ kind: "think" });
     else if (block.type === "tool_use" && typeof block.name === "string")
-      events.push({ kind: "tool", name: block.name, summary: summarizeInput(block.input) });
+      events.push({
+        kind: "tool",
+        name: block.name,
+        summary: summarizeInput(block.input),
+        ...(typeof block.id === "string" ? { id: block.id } : {}),
+        ...(isRecord(block.input) ? { input: block.input } : {}),
+      });
   }
   return events;
 }
@@ -46,6 +61,21 @@ function fromStream(event: unknown): AgentEvent[] {
   return d.type === "text_delta" && typeof d.text === "string" && d.text ? [{ kind: "delta", text: d.text }] : [];
 }
 
+/** Resultados de ferramentas com erro (vêm numa mensagem "user" com blocos tool_result). */
+function fromToolResults(message: unknown): AgentEvent[] {
+  if (!isRecord(message) || !Array.isArray(message.content)) return [];
+  return message.content.flatMap((b): AgentEvent[] => {
+    if (!isRecord(b) || b.type !== "tool_result" || b.is_error !== true || typeof b.tool_use_id !== "string") return [];
+    const text =
+      typeof b.content === "string"
+        ? b.content
+        : Array.isArray(b.content)
+          ? b.content.map((c) => (isRecord(c) && typeof c.text === "string" ? c.text : "")).join(" ")
+          : "";
+    return [{ kind: "toolError", id: b.tool_use_id, text: clip(text || "erro") }];
+  });
+}
+
 /** Converte uma linha de saída em zero ou mais eventos. Linhas inválidas são ignoradas. */
 export function parseLine(line: string): AgentEvent[] {
   let data: unknown;
@@ -62,6 +92,8 @@ export function parseLine(line: string): AgentEvent[] {
       return data.parent_tool_use_id ? [] : fromStream(data.event);
     case "assistant":
       return fromAssistant(data.message);
+    case "user":
+      return fromToolResults(data.message);
     case "rate_limit_event":
       return fromQuota(data.rate_limit_info);
     case "result": {

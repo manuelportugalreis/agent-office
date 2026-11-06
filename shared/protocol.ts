@@ -137,6 +137,62 @@ export interface Dossier {
   readonly updatedAt: number;
 }
 
+/** Acesso ao vault do Obsidian num perfil: nenhum, só leitura ou leitura e escrita (nas pastas autorizadas). */
+export type VaultAccess = "none" | "read" | "write";
+
+/**
+ * Perfil de acesso de um projeto, para o modo "Claude Code local": a pasta onde o agente trabalha (como se abrisses
+ * o terminal lá), as pastas extra que pode ler ou escrever, o Obsidian, os comandos de terminal e as integrações MCP.
+ * O servidor valida tudo e é a única fonte do acesso: nada do que um agente escreve o pode alargar.
+ */
+export interface AccessProfile {
+  readonly id: number;
+  readonly name: string;
+  /** Pasta de trabalho (cwd do Claude Code). Leitura e escrita. */
+  readonly folder: string;
+  readonly readDirs: readonly string[];
+  readonly writeDirs: readonly string[];
+  readonly vault: VaultAccess;
+  /** Pastas do vault (relativas) onde se pode escrever; vazio = todo o vault. */
+  readonly vaultFolders: readonly string[];
+  /** Comandos de terminal (Bash/PowerShell), sempre sujeitos às tuas regras de permissão do Claude Code. */
+  readonly bash: boolean;
+  /** Servidores MCP que o agente pode usar ("*" = todos os que usas no terminal). */
+  readonly mcp: readonly string[];
+  /** Aceitar edições de ficheiros sem perguntar (como o modo acceptEdits do terminal). */
+  readonly autoEdits: boolean;
+}
+
+/** O que a interface envia para criar ou alterar um perfil (sem id = novo). */
+export type ProfileInput = Omit<AccessProfile, "id"> & { readonly id?: number };
+
+/** Como um agente trabalha: no escritório (pasta própria, ferramentas limitadas) ou como Claude Code local num perfil. */
+export type AgentMode = { readonly kind: "office" } | { readonly kind: "local"; readonly profileId: number };
+
+/** Um pedido de permissão de uma sessão local (o que no terminal seria uma pergunta do Claude Code). */
+export interface PermissionRequest {
+  readonly id: number;
+  readonly agentId: string;
+  readonly tool: string;
+  /** Resumo legível (o comando, o ficheiro...). */
+  readonly summary: string;
+  /** Pormenor: as alterações propostas a uma nota, o comando completo... */
+  readonly detail?: string;
+  /** Porque é que o Claude Code pergunta (ex.: ficheiro sensível, alteração grande a uma nota). */
+  readonly reason?: string;
+  readonly ts: number;
+}
+
+/** Uma ação de uma sessão local, para o rasto de trabalho (o que o agente fez e verificou). */
+export interface ToolStep {
+  readonly tool: string;
+  readonly summary: string;
+  /** Ficheiro escrito ou editado (caminho absoluto). */
+  readonly file?: string;
+  /** false: a ferramenta falhou ou foi recusada. */
+  readonly ok?: boolean;
+}
+
 export type ServerMsg =
   | { readonly type: "dossier"; readonly dossier: Dossier | null }
   | {
@@ -181,6 +237,35 @@ export type ServerMsg =
   /** A conversa de um agente recomeçou (nova conversa, ou editar/regenerar): a interface recarrega-a. */
   | { readonly type: "conversation"; readonly agentId: string; readonly chat: readonly ChatEntry[]; readonly cleared?: boolean }
   | ({ readonly type: "snapshot" } & Snapshot)
+  /** Perfis de acesso guardados, os servidores MCP que tens configurados e o vault do Obsidian. */
+  | {
+      readonly type: "profiles";
+      readonly profiles: readonly AccessProfile[];
+      readonly mcpAvailable: readonly string[];
+      readonly vaultDir: string;
+      readonly cliVersion: string;
+    }
+  /** Modo de cada agente (escritório ou Claude Code local com um perfil). */
+  | { readonly type: "modes"; readonly modes: Readonly<Record<string, AgentMode>> }
+  | { readonly type: "permission"; readonly request: PermissionRequest }
+  | {
+      readonly type: "permission-resolved";
+      readonly id: number;
+      readonly agentId: string;
+      readonly allowed: boolean;
+      readonly by: "user" | "timeout" | "stopped";
+    }
+  /** Sessão local de um agente: para continuar no terminal (`claude --resume`). */
+  | {
+      readonly type: "session";
+      readonly agentId: string;
+      readonly sessionId: string;
+      readonly folder: string;
+      readonly profileId: number;
+      readonly command: string;
+    }
+  /** Rasto de uma tarefa local terminada: o que mudou e o que correu. */
+  | { readonly type: "trace"; readonly agentId: string; readonly steps: readonly ToolStep[] }
   /** `op`: que operação do chat falhou (só o envio recusado faz a interface tirar a mensagem otimista). */
   | { readonly type: "error"; readonly agentId?: string; readonly message: string; readonly op?: "send" | "redo" | "newchat" };
 
@@ -191,7 +276,13 @@ export type ClientMsg =
   | { readonly type: "redo"; readonly agentId: string; readonly text: string; readonly files?: readonly string[] }
   | { readonly type: "newchat"; readonly agentId: string }
   | { readonly type: "stop"; readonly agentId: string }
-  | { readonly type: "order"; readonly text: string }
+  /** `profileId`: a ordem corre em modo local com este perfil (a equipa herda só este acesso). */
+  | { readonly type: "order"; readonly text: string; readonly profileId?: number }
+  | { readonly type: "profile-save"; readonly profile: ProfileInput }
+  | { readonly type: "profile-delete"; readonly id: number }
+  | { readonly type: "set-mode"; readonly agentId: string; readonly mode: AgentMode }
+  | { readonly type: "permission-decide"; readonly id: number; readonly allow: boolean }
+  | { readonly type: "open-terminal"; readonly agentId: string }
   | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
   | { readonly type: "sync" }
   | { readonly type: "dossier-start"; readonly request: string; readonly materials?: string }
@@ -250,8 +341,29 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     }
     case "order": {
       const text = cleanText(m.text);
-      return text ? { type: "order", text } : null;
+      if (m.profileId !== undefined && !Number.isInteger(m.profileId)) return null;
+      return text ? { type: "order", text, ...(m.profileId !== undefined ? { profileId: m.profileId as number } : {}) } : null;
     }
+    case "profile-save": {
+      const profile = parseProfileInput(m.profile);
+      return profile ? { type: "profile-save", profile } : null;
+    }
+    case "profile-delete":
+      return Number.isInteger(m.id) ? { type: "profile-delete", id: m.id as number } : null;
+    case "set-mode": {
+      const mode = m.mode as Record<string, unknown> | null;
+      if (!agentId || typeof mode !== "object" || mode === null) return null;
+      if (mode.kind === "office") return { type: "set-mode", agentId, mode: { kind: "office" } };
+      if (mode.kind === "local" && Number.isInteger(mode.profileId))
+        return { type: "set-mode", agentId, mode: { kind: "local", profileId: mode.profileId as number } };
+      return null;
+    }
+    case "permission-decide":
+      return Number.isInteger(m.id) && typeof m.allow === "boolean"
+        ? { type: "permission-decide", id: m.id as number, allow: m.allow }
+        : null;
+    case "open-terminal":
+      return agentId ? { type: "open-terminal", agentId } : null;
     case "sync":
       return { type: "sync" };
     case "dossier-start": {
@@ -319,4 +431,45 @@ export interface Snapshot {
   readonly chat: Readonly<Record<string, readonly ChatEntry[]>>;
   readonly approvals: readonly PendingApproval[];
   readonly canvas: { readonly items: readonly CanvasItem[]; readonly syncedAt: number } | null;
+}
+
+const MAX_PATH = 400;
+const MAX_DIRS = 12;
+const MCP_NAME = /^(\*|[A-Za-z0-9_.-]{1,64})$/;
+
+const cleanPath = (v: unknown): string | null =>
+  typeof v === "string" && v.trim().length > 0 && v.length <= MAX_PATH && !/[\r\n\0]/.test(v) ? v.trim() : null;
+
+function cleanList(v: unknown, item: (x: unknown) => string | null, max = MAX_DIRS): string[] | null {
+  if (!Array.isArray(v) || v.length > max) return null;
+  const out = v.map(item);
+  return out.every((x): x is string => x !== null) ? out : null;
+}
+
+/** Forma de um perfil vindo do browser (os caminhos voltam a ser verificados no servidor: existem, são pastas, etc.). */
+export function parseProfileInput(v: unknown): ProfileInput | null {
+  if (typeof v !== "object" || v === null) return null;
+  const p = v as Record<string, unknown>;
+  const name = typeof p.name === "string" ? p.name.trim() : "";
+  const folder = cleanPath(p.folder);
+  const readDirs = cleanList(p.readDirs ?? [], cleanPath);
+  const writeDirs = cleanList(p.writeDirs ?? [], cleanPath);
+  const vaultFolders = cleanList(p.vaultFolders ?? [], cleanPath);
+  const mcp = cleanList(p.mcp ?? [], (x) => (typeof x === "string" && MCP_NAME.test(x) ? x : null), 32);
+  const vault = p.vault === "none" || p.vault === "read" || p.vault === "write" ? p.vault : null;
+  if (!name || name.length > 60 || !folder || !readDirs || !writeDirs || !vaultFolders || !mcp || !vault) return null;
+  if (typeof p.bash !== "boolean" || typeof p.autoEdits !== "boolean") return null;
+  if (p.id !== undefined && !Number.isInteger(p.id)) return null;
+  return {
+    ...(p.id !== undefined ? { id: p.id as number } : {}),
+    name,
+    folder,
+    readDirs,
+    writeDirs,
+    vault,
+    vaultFolders,
+    bash: p.bash,
+    mcp,
+    autoEdits: p.autoEdits,
+  };
 }

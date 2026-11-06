@@ -18,6 +18,9 @@ import { log } from "./log.ts";
 import { createOrchestrator } from "./orchestrator.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
+import type { AccessProfile, AgentMode } from "../../shared/protocol.ts";
+import { describeProfile, mcpNames, ProfileError, validateProfile } from "./profiles.ts";
+import { claudeVersion, openTerminal, resumeCommand } from "./terminal.ts";
 
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 /** Uma ligação não pode mandar mais de 40 mensagens em 10 segundos. */
@@ -83,9 +86,16 @@ const approvals = createApprovals(
   (agentId) => hub.isRunning(agentId),
   (agentId, draft) => saveApprovedDraft(config.vaultDir, findAgent(agentId)?.name ?? agentId, draft),
 );
+/** Perfil do modo local de um agente (null = modo escritório, ou perfil que já não existe). */
+const profileOf = (agentId: string): AccessProfile | null => {
+  const mode = store.modes()[agentId];
+  return mode?.kind === "local" ? (store.profiles().find((p) => p.id === mode.profileId) ?? null) : null;
+};
+
 const hub = createHub({
   emit: broadcast,
   sessions: store,
+  profileFor: profileOf,
   context: (agentId) => {
     const course = findAgent(agentId)?.course;
     return course ? canvasContext(store.canvas()?.items, course) : "";
@@ -112,6 +122,64 @@ const dossier = createDossierService({
     }
   },
 });
+
+let cliVersion = "";
+void claudeVersion().then((v) => {
+  cliVersion = v;
+  if (v) log.info(`Claude Code instalado: ${v}`);
+});
+
+const profilesMsg = (): ServerMsg => {
+  const profiles = store.profiles();
+  return { type: "profiles", profiles, mcpAvailable: mcpNames(profiles.map((p) => p.folder)), vaultDir: config.vaultDir, cliVersion };
+};
+const modesMsg = (): ServerMsg => ({ type: "modes", modes: store.modes() });
+
+function saveProfile(input: Parameters<typeof validateProfile>[0]): void {
+  try {
+    const clean = validateProfile(input, { vaultDir: config.vaultDir, mcpNames: mcpNames([input.folder]) });
+    const saved = store.saveProfile(clean);
+    broadcast(profilesMsg());
+    broadcast({ type: "log", agentId: "ceo", text: `Perfil "${saved.name}" guardado: ${describeProfile(saved).join("; ")}` });
+  } catch (err) {
+    broadcast({ type: "error", message: err instanceof ProfileError ? err.message : "Não consegui guardar o perfil." });
+  }
+}
+
+function setMode(agentId: string, mode: AgentMode): void {
+  if (!findAgent(agentId)) return broadcast({ type: "error", agentId, message: "Este agente ainda não é real." });
+  if (hub.isRunning(agentId)) return broadcast({ type: "error", agentId, message: "Espera que o agente termine antes de mudar o modo." });
+  if (mode.kind === "local" && !store.profiles().some((p) => p.id === mode.profileId))
+    return broadcast({ type: "error", agentId, message: "Esse perfil não existe." });
+  if (mode.kind === "local" && agentId === "dean")
+    return broadcast({ type: "error", agentId, message: "O Dean só lê o Canvas: fica no modo escritório." });
+  store.setMode(agentId, mode);
+  broadcast(modesMsg());
+}
+
+function continueInTerminal(agentId: string): void {
+  const profile = profileOf(agentId);
+  if (!profile) return broadcast({ type: "error", agentId, message: "Este agente não está no modo Claude Code local." });
+  if (hub.isRunning(agentId))
+    return broadcast({ type: "error", agentId, message: "Espera que o agente termine (ou pára-o) antes de continuar no terminal." });
+  const session = hub.localSession(agentId, profile);
+  if (!session?.started) return broadcast({ type: "error", agentId, message: "Ainda não há sessão local deste agente para continuar." });
+  const command = resumeCommand(profile.folder, session.id);
+  broadcast({ type: "session", agentId, sessionId: session.id, folder: profile.folder, profileId: profile.id, command });
+  let opened = false;
+  try {
+    opened = openTerminal(profile.folder, session.id, `Agent Office ${findAgent(agentId)?.name ?? agentId}`);
+  } catch (err) {
+    log.warn("não consegui abrir o terminal", err);
+  }
+  broadcast({
+    type: "log",
+    agentId,
+    text: opened
+      ? `Abri o terminal com esta sessão (${command}). No terminal valem as tuas definições normais do Claude Code, não os limites do perfil.`
+      : `Para continuar no terminal: ${command}`,
+  });
+}
 
 const hello = (): ServerMsg => ({
   type: "hello",
@@ -141,6 +209,10 @@ wss.on("connection", (ws) => {
   send(ws, hello());
   send(ws, { type: "dossier", dossier: dossier.current() });
   send(ws, { type: "snapshot", ...store.snapshot() });
+  send(ws, profilesMsg());
+  send(ws, modesMsg());
+  // Perguntas de permissão por responder (a página foi recarregada a meio de uma tarefa local).
+  for (const request of hub.pendingPermissions()) send(ws, { type: "permission", request });
   // Quem já está a trabalhar (a página foi recarregada a meio): a interface não pode achar que está livre.
   for (const { agentId, task } of hub.active()) send(ws, { type: "status", agentId, status: "work", task });
   ws.on("message", (raw) => {
@@ -158,10 +230,27 @@ wss.on("connection", (ws) => {
         return chat.newChat(msg.agentId);
       case "stop":
         return hub.stop(msg.agentId);
-      case "order":
+      case "order": {
+        const profile = msg.profileId === undefined ? null : (store.profiles().find((p) => p.id === msg.profileId) ?? null);
+        if (msg.profileId !== undefined && !profile) return send(ws, { type: "error", agentId: "ceo", message: "Esse perfil não existe." });
         store.addChat("ceo", true, msg.text);
         broadcast({ type: "user-message", agentId: "ceo", text: msg.text, files: [] });
-        return background(orchestrator.order(msg.text), "ordem ao CEO");
+        return background(orchestrator.order(msg.text, profile), "ordem ao CEO");
+      }
+      case "profile-save":
+        return saveProfile(msg.profile);
+      case "profile-delete":
+        if (Object.entries(store.modes()).some(([a, m]) => m.kind === "local" && m.profileId === msg.id && hub.isRunning(a)))
+          return send(ws, { type: "error", message: "Há um agente a trabalhar com este perfil." });
+        store.deleteProfile(msg.id);
+        broadcast(profilesMsg());
+        return broadcast(modesMsg());
+      case "set-mode":
+        return setMode(msg.agentId, msg.mode);
+      case "permission-decide":
+        return hub.decidePermission(msg.id, msg.allow);
+      case "open-terminal":
+        return continueInTerminal(msg.agentId);
       case "dossier-start":
         return background(dossier.start(msg.request, msg.materials), "dossier");
       case "dossier-answer":
