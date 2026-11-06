@@ -95,6 +95,9 @@ npm install
 npm start           # opens http://127.0.0.1:8787
 ```
 
+On Windows, `npm run app:install` adds an **Agent Office** icon to the desktop and Start menu: it opens the office in its
+own window (no browser tabs), starts the server by itself and stops it when you close the window.
+
 To let the agents work on a project and in Obsidian like the terminal does, see [the local Claude Code mode](docs/claude-code-local.md) (in Portuguese).
 
 ## Configuration

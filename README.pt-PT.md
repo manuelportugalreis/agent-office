@@ -70,6 +70,9 @@ npm install
 npm start           # abre http://127.0.0.1:8787
 ```
 
+No Windows, `npm run app:install` cria um ícone **Agent Office** no ambiente de trabalho e no menu Iniciar: abre o
+escritório numa janela própria (sem browser à vista), arranca o servidor sozinho e desliga-o quando fechas a janela.
+
 Para os agentes trabalharem num projeto e no Obsidian como no terminal, vê [o modo Claude Code local](docs/claude-code-local.md).
 
 ## Configuração

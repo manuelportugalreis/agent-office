@@ -16,6 +16,8 @@
     "dev": "node scripts/dev.mjs",
     "build": "npm run build -w app",
     "start": "npm run build && node server/src/index.ts",
+    "app": "node scripts/app.mjs",
+    "app:install": "node scripts/install-app.mjs",
     "doctor": "node scripts/doctor.mjs",
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm test --workspaces",

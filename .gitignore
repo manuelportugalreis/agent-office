@@ -23,3 +23,6 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+
+# atalho da app (gerado com caminhos locais)
+scripts/agent-office.vbs
