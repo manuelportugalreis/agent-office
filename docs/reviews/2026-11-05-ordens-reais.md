@@ -104,3 +104,12 @@ Subagente: nenhum crítico/alto; 3 médios, 3 baixos. Codex: 1 alto, 4 médios. 
 - Perfil sem vault: o servidor ainda procurava/lia notas pela tarefa → deixa de o fazer.
 - Revisão final da Nina dispensada mesmo quando ela reviu antes de quem escreveu → só se dispensa se reviu, com sucesso, depois de todos os que alteraram ficheiros.
 - Gabinete guardado com o id antigo "gestao" → verificado: a base de dados real não tem nenhum guardado.
+
+## Quarta ronda (sobre `cea0463`)
+
+Subagente e Codex confirmaram as correções anteriores (incluindo que os agentes leem mas não escrevem `_company/instrucoes/`, verificado contra o `fs-guard.mjs`). Nenhum crítico/alto. Médios corrigidos:
+
+- Perfil sem vault: o chat ainda procurava notas nas mensagens → deixa de procurar.
+- A revisão final da Nina era dispensada com base no processo ter terminado, mesmo com a revisão dela "com ressalvas" (ex.: leitura recusada) → só se dispensa se o passo dela ficou feito sem ressalvas.
+- "Continuar no terminal" não levava as tuas instruções → vão no prompt do terminal.
+- Baixo, aceite: o agente continua a escrever a sua memória (`CLAUDE.md`), mostrada só para ler; as tuas instruções antigas no `CLAUDE.md` não migram (o separador é novo e a base real não tinha nenhuma).

@@ -43,6 +43,27 @@ describe("instruções dos agentes", () => {
     expect(text).toContain("cortado");
   });
 
+  it("continuar no terminal leva as tuas instruções; as tarefas da app levam-nas pelo contexto de cada pedido", async () => {
+    const { buildLocalArgs } = await import("./local-runner.ts");
+    saveInstructions("lena", "Regra para o terminal: responde em tópicos.");
+    const profile = {
+      id: 1,
+      name: "p",
+      folder: tmpdir(),
+      readDirs: [],
+      writeDirs: [],
+      vault: "none" as const,
+      vaultFolders: [],
+      bash: false,
+      mcp: [],
+      autoEdits: false,
+    };
+    const req = { agent: findAgent("lena")!, text: "x", sessionId: "s", resume: true, profile };
+    const promptOf = (args: string[]): string => args[args.indexOf("--append-system-prompt") + 1];
+    expect(promptOf(buildLocalArgs(req, "", { interactive: true }).args)).toContain("Regra para o terminal");
+    expect(promptOf(buildLocalArgs(req, "").args)).not.toContain("Regra para o terminal");
+  });
+
   it("recusa agentes que não existem e textos grandes demais", () => {
     expect(() => saveInstructions("hacker", "x")).toThrow(InstructionsError);
     expect(() => saveInstructions("lena", "x".repeat(MAX_INSTRUCTIONS + 1))).toThrow(InstructionsError);

@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 import type { AccessProfile } from "../../shared/protocol.ts";
 import { config } from "./config.ts";
 import { parseLine } from "./events.ts";
+import { userInstructions } from "./instructions.ts";
 import { describeProfile, mcpCatalog, profileRoots } from "./profiles.ts";
 import type { PermissionAsk, RunHandle, RunHandlers, RunRequest } from "./runner.ts";
 
@@ -143,7 +144,10 @@ export function buildLocalArgs(
     "--model",
     req.agent.model,
     "--append-system-prompt",
-    `${req.agent.localPrompt} ${localRules(p, vaultDir)}`,
+    // No terminal (continuar a sessão) não há o contexto do hub em cada pedido: as tuas instruções vão aqui.
+    [`${req.agent.localPrompt} ${localRules(p, vaultDir)}`, opts.interactive ? userInstructions(req.agent.id) : ""]
+      .filter(Boolean)
+      .join("\n\n"),
     req.resume ? "--resume" : "--session-id",
     req.sessionId,
   ];

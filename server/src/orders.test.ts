@@ -358,6 +358,25 @@ describe("revisora só de leitura (modo local)", () => {
     expect(rw.args.includes("--disallowedTools") ? rw.args[rw.args.indexOf("--disallowedTools") + 1] : "").not.toContain("Bash");
   });
 
+  it("revisão final da Nina: dispensada só se a revisão dela ficou feita sem ressalvas depois de quem escreveu", async () => {
+    const { createOrchestrator } = await import("./orchestrator.ts");
+    const runs: string[] = [];
+    const hub = fakeHub((agent) => {
+      runs.push(agent);
+      if (agent === "ceo" && runs.length === 1)
+        return {
+          reply: '{"summary":"s","tasks":[{"agent":"lena","task":"escreve x.md"},{"agent":"nina","task":"revê x.md","after":["lena"]}]}',
+        };
+      if (agent === "lena") return { steps: [{ tool: "Write", summary: "C:/p/x.md", file: "C:/p/x.md", ok: true }] };
+      // A Nina tenta ler mas a leitura é recusada: a revisão dela fica com ressalvas.
+      if (agent === "nina") return { steps: [{ tool: "Read", summary: "C:/p/x.md", ok: false }] };
+      return {};
+    });
+    await createOrchestrator(hub, () => undefined).order("escreve e revê");
+    // Depois da Lena e da Nina (com ressalvas), há mais uma revisão independente da Nina antes do resumo do Atlas.
+    expect(runs).toEqual(["ceo", "lena", "nina", "nina", "ceo"]);
+  });
+
   it("uma tarefa à espera de vaga não corre se a conversa for recomeçada", async () => {
     const hub = fakeHub();
     let busy = true;

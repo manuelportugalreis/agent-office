@@ -75,7 +75,8 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
     if (!orders) return null;
     const parsed = parseOrder(text, AGENT_NAMES, agentId);
     if (parsed) return sequence(parsed.steps);
-    const vault = orders.vaultDir();
+    // Com um perfil sem Obsidian, o servidor nem procura notas pelas mensagens deste agente.
+    const vault = orders.profileOf?.(agentId)?.vault === "none" ? "" : orders.vaultDir();
     return vault && findNoteMention(vault, text) !== null ? sequence([{ kind: "task", agent: agentId, task: text }]) : null;
   }
 
