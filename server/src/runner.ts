@@ -18,6 +18,8 @@ export interface RunRequest {
   readonly profile?: AccessProfile;
   /** Sem ferramentas nenhumas (o plano e o resumo do CEO: só texto, a partir do que lhe é dado). */
   readonly toolless?: boolean;
+  /** Modo local só de leitura (revisão independente). */
+  readonly readOnly?: boolean;
 }
 
 /** Uma pergunta de permissão de uma sessão local (o que no terminal te apareceria para confirmar). */

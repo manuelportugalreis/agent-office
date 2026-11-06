@@ -114,10 +114,11 @@ if (scenario === "deny") {
   await openAgent("Lena");
   await page.locator('.tabs button[data-t="chat"]').click();
   const box = page.locator("#chatRoot textarea, #chatRoot [contenteditable=true]").first();
-  await box.fill("Corre o comando git log -1 na pasta do projeto e diz-me o resultado.");
+  await box.fill("Cria o ficheiro notas-lena.txt na pasta do projeto com o texto 'rascunho' e diz-me se ficou criado.");
   await box.press("Enter");
   const ok = await serve(
-    (t) => !/git/i.test(t),
+    // Recusa tudo: o pedido de escrita tem de aparecer na app e o agente tem de reportar a recusa.
+    () => false,
     () => finished("lena"),
     6 * 60_000,
   );

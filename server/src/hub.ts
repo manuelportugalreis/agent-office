@@ -79,6 +79,20 @@ export interface RunOptions {
   profile?: AccessProfile | null;
   /** Sem ferramentas (modo escritório só de texto): o plano e o resumo do CEO. */
   toolless?: boolean;
+  /** Modo local só de leitura (revisões independentes): nenhuma escrita, mesmo que o perfil a permita. */
+  readOnly?: boolean;
+}
+
+/**
+ * Sem ferramentas, um modelo às vezes escreve "chamadas a ferramentas" como texto (e até um resultado inventado).
+ * Isso não aconteceu e não pode chegar ao utilizador como se tivesse acontecido.
+ */
+export function stripFakeToolCalls(text: string): string {
+  return text
+    .replace(/<invoke\b[\s\S]*?<\/invoke>/g, "")
+    .replace(/<invoke_result>[\s\S]*?<\/invoke_result>/g, "")
+    .replace(/<\/?(function_calls|parameter|antml:[a-z_]+)[^>]*>/g, "")
+    .trim();
 }
 
 const DEFAULT_LIMITS: HubLimits = { timeoutMs: 600_000, maxConcurrent: 3 };
@@ -104,6 +118,7 @@ interface Running {
   readonly profile: AccessProfile | null;
   readonly sessionId: string;
   readonly steps: Map<string, ToolStep>;
+  readonly toolless: boolean;
   finished: boolean;
 }
 
@@ -205,10 +220,13 @@ export function createHub({
       case "delta":
         if (!r?.silent) emit({ type: "delta", agentId, text: e.text });
         return;
-      case "text":
-        r?.replies.push(e.text);
-        if (!r?.silent) emit({ type: "reply", agentId, text: e.text });
+      case "text": {
+        const text = r.toolless ? stripFakeToolCalls(e.text) : e.text;
+        if (!text) return;
+        r.replies.push(text);
+        if (!r.silent) emit({ type: "reply", agentId, text });
         return emit({ type: "status", agentId, status: "think" });
+      }
       case "tool": {
         emit({ type: "status", agentId, status: "work" });
         const file = WRITE_TOOLS.has(e.name) ? (e.input?.file_path ?? e.input?.notebook_path) : undefined;
@@ -267,6 +285,7 @@ export function createHub({
         profile,
         sessionId: session.id,
         steps: new Map(),
+        toolless: !!opts.toolless && !profile,
         finished: false,
       };
       running.set(agentId, entry);
@@ -278,6 +297,7 @@ export function createHub({
           resume: session.started,
           ...(profile ? { profile } : {}),
           ...(opts.toolless && !profile ? { toolless: true } : {}),
+          ...(opts.readOnly && profile ? { readOnly: true } : {}),
         },
         {
           onEvent: (e) => onEvent(agentId, runId, e),

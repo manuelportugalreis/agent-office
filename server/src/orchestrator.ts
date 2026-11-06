@@ -200,7 +200,8 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void): Orch
             deps.map((d) => ({ agent: d.agent, reply: d.result.reply, steps: d.result.steps })),
           ),
           // A tarefa delegada herda exatamente o acesso da ordem (null = modo escritório), nunca o que o texto pedir.
-          { profile },
+          // A Nina revê: no modo local, só leitura.
+          { profile, ...(t.agent === "nina" ? { readOnly: true } : {}) },
         );
       })();
       runs.set(t.agent, p);
@@ -247,7 +248,8 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void): Orch
             task,
             outcomes.map((o) => ({ agent: o.agent, reply: o.result.reply, steps: o.result.steps })),
           ),
-          { profile },
+          // Revisão independente: só leitura (a Nina aponta, não corrige o trabalho que está a rever).
+          { profile, readOnly: true },
         );
         outcomes.push({ agent: "nina", task, result: review });
         results.push(review);
@@ -266,10 +268,12 @@ export function createOrchestrator(hub: Hub, emit: (m: ServerMsg) => void): Orch
       for (let attempt = 0; attempt < REPORT_ATTEMPTS && !report.ok; attempt++) {
         await waitUntilFree(hub, "ceo");
         // O resumo usa só a evidência recolhida (texto): corre no modo escritório, sem ferramentas.
+        // Sessão isolada: o resumo não herda conversas anteriores (onde o modelo podia ter imitado ferramentas).
         report = await hub.run("ceo", reportPrompt(text, outcomes), {
           label: "Resumo do trabalho da equipa",
           profile: null,
           toolless: true,
+          isolated: true,
         });
         if (!report.ok && !report.error?.includes("ao mesmo tempo")) break;
         if (!report.ok) await new Promise((resolve) => setTimeout(resolve, REPORT_WAIT_MS * 4));

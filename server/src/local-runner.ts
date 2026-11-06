@@ -65,6 +65,12 @@ export function localRules(p: AccessProfile, vaultDir: string = config.vaultDir)
     .join(" ");
 }
 
+/** Ferramentas retiradas pelo perfil (terminal) e pelo modo só de leitura (escrita). */
+const disallowed = (p: AccessProfile, readOnly = false): string[] => [
+  ...(p.bash ? [] : ["Bash", "PowerShell"]),
+  ...(readOnly ? ["Write", "Edit", "MultiEdit", "NotebookEdit"] : []),
+];
+
 export interface LocalArgs {
   readonly args: string[];
   readonly files: string[];
@@ -91,7 +97,8 @@ export function buildLocalArgs(
     JSON.stringify({
       cwd: p.folder,
       read: roots.read,
-      write: roots.write,
+      // Só de leitura (revisões): o guard recusa qualquer escrita.
+      write: req.readOnly ? [] : roots.write,
       vault: p.vault !== "none" ? vaultDir : null,
       officePorts: [config.port],
     }),
@@ -131,7 +138,7 @@ export function buildLocalArgs(
     ...(p.mcp.includes("*") ? [] : ["--strict-mcp-config"]),
     ...extraDirs.flatMap((d) => ["--add-dir", slash(d)]),
     ...(p.vault !== "none" ? ["--allowedTools", VAULT_TOOLS.join(",")] : []),
-    ...(p.bash ? [] : ["--disallowedTools", "Bash,PowerShell"]),
+    ...(disallowed(p, req.readOnly).length ? ["--disallowedTools", disallowed(p, req.readOnly).join(",")] : []),
     "--model",
     req.agent.model,
     "--append-system-prompt",

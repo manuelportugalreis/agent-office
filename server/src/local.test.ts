@@ -395,3 +395,40 @@ describe("corridas sem ferramentas (plano e resumo do Atlas)", () => {
     expect(args[args.indexOf("--append-system-prompt") + 1]).toContain(TOOLLESS_RULE);
   });
 });
+
+describe("revisão só de leitura e respostas sem ferramentas", () => {
+  it("a revisão da Nina corre só de leitura: sem ferramentas de escrita e o guard recusa escritas", async () => {
+    const { args, files } = buildLocalArgs(
+      { agent: findAgent("nina")!, text: "x", sessionId: "s", resume: false, profile: profile(), readOnly: true },
+      vault,
+    );
+    expect(args[args.indexOf("--disallowedTools") + 1]).toContain("Edit");
+    const policy = JSON.parse(readFileSync(files[0], "utf8")) as { write: string[] };
+    expect(policy.write).toEqual([]);
+    for (const f of files) rmSync(f, { force: true, recursive: true });
+  });
+  it("o orquestrador pede a revisão da Nina só de leitura", async () => {
+    const seen: RunRequest[] = [];
+    const run = (req: RunRequest, h: RunHandlers) => {
+      seen.push(req);
+      if (req.agent.id === "ceo" && req.text.includes("responde APENAS"))
+        h.onEvent({ kind: "text", text: JSON.stringify({ summary: "s", tasks: [{ agent: "lena", task: "edita" }] }) });
+      if (req.agent.id === "lena")
+        h.onEvent({ kind: "tool", name: "Write", summary: "x", id: "w", input: { file_path: join(project, "y.md") } });
+      h.onEvent({ kind: "done", ok: true });
+      return { kill: () => undefined };
+    };
+    const hub = createHub({ emit: () => undefined, run });
+    await createOrchestrator(hub, () => undefined).order("faz", profile());
+    expect(seen.find((r) => r.agent.id === "nina")?.readOnly).toBe(true);
+    expect(seen.find((r) => r.agent.id === "lena")?.readOnly).toBeUndefined();
+    const report = seen.filter((r) => r.agent.id === "ceo").at(-1);
+    expect(report?.toolless).toBe(true);
+  });
+  it("tira chamadas a ferramentas escritas como texto numa resposta sem ferramentas", async () => {
+    const { stripFakeToolCalls } = await import("./hub.ts");
+    const fake =
+      '<invoke name="Edit">\n<parameter name="file_path">C:/x/CLAUDE.md</parameter>\n</invoke>\n<invoke_result>\nThe file was edited successfully.\n</invoke_result>\n\n**Feito e verificado**\n- ok';
+    expect(stripFakeToolCalls(fake)).toBe("**Feito e verificado**\n- ok");
+  });
+});
