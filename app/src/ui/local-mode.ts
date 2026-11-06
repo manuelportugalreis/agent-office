@@ -140,7 +140,10 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
   }
 
   function sectionHtml(agentId: string, { real, busy }: { real: boolean; busy: boolean }): string {
-    if (!real || agentId === "dean") return "";
+    if (!real) return "";
+    // O Dean não tem modos: só lê o Canvas no teu Chrome (o hook chrome-guard limita-o a isso).
+    if (agentId === "dean")
+      return `<div class="lbl">Acesso</div><div class="access"><div>No teu Chrome, só o Canvas: abrir separadores, navegar e ler o texto das páginas</div><div>Sem cliques, sem escrita, sem outros sites</div><div>Sem ficheiros, comandos de terminal nem integrações MCP</div></div>`;
     const profile = profileOf(agentId);
     const local = !!profile;
     const options = state.profiles
