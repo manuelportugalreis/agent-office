@@ -43,6 +43,18 @@ reais, vault descartável em `%TEMP%`, base de dados e pastas próprias).
 | Edições conferidas por ti                  | Notas conferidas em disco antes/depois pelo servidor; outros ficheiros pelo rasto das ferramentas | Igual                                             |
 | Continuidade                               | A sessão é retomada; perguntas pendentes perdem-se se o servidor reiniciar                        | Igual                                             |
 
+### Comparação ao vivo (mesma pasta, mesma pergunta)
+
+Pasta de projeto descartável; a pergunta pede, sem usar ferramentas, a pasta, o terminal, as MCP, as skills e se as
+edições precisam de autorização.
+
+- `claude -p` no terminal: a pasta do projeto; PowerShell e Bash; MCP Claude Docs, `vercel` (a pedir autorização) e
+  `voicestudio` (falhou a ligar); skills do utilizador; edições conforme o modo de permissões.
+- Mira em modo local, perfil criado na app com **Acesso amplo**: a mesma pasta e o vault; PowerShell e Bash sujeitos às
+  regras; as mesmas MCP (mais `office-vault`); as skills do utilizador; edições aceites sem perguntar, como o perfil diz.
+- A secção de acesso efetivo mostrou exatamente o perfil; **Retirar acesso** voltou ao modo escritório (sem terminal
+  nem MCP), confirmado no painel.
+
 ## Revisões independentes
 
 - Subagente (Claude Code): nenhum crítico. Médios corrigidos: Esc fechava o painel junto com outras janelas; repetir
