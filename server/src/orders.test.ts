@@ -223,6 +223,21 @@ describe("motor de ordens", () => {
     expect(hub.calls.find((c) => c.agent === "lena")?.text).toContain("achados da Mira");
   });
 
+  it("depois de um passo com ressalvas, o seguinte corre avisado e não aparece como limpo", async () => {
+    const { engine, hub } = setup();
+    const outcomes = await engine.run(
+      "ceo",
+      "x",
+      sequence([
+        { kind: "task", agent: "lena", task: "acrescenta uma linha à nota Planeamento" },
+        { kind: "task", agent: "nina", task: "verifica a nota Planeamento" },
+      ]),
+    );
+    expect(outcomes.map((o) => o.view.state)).toEqual(["partial", "partial"]);
+    expect(outcomes[1].view.detail).toContain("depois de:");
+    expect(hub.calls[1].text).toContain("ficou com ressalvas");
+  });
+
   it("ações recusadas aparecem como ressalva (nunca como sucesso limpo)", async () => {
     const hub = fakeHub(() => ({ steps: [{ tool: "Write", summary: "C:/fora/x.md", file: "C:/fora/x.md", ok: false }] }));
     const { engine } = setup({ hub });

@@ -281,12 +281,26 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
           emit({ type: "log", agentId: owner, text: `${nameOf(s.agent ?? "")} não correu: «${failed.view.label}» não ficou feito.` });
           return { step: s, view: views.get(s.id) as StepView };
         }
+        // Um passo anterior feito com ressalvas (sem toda a evidência) não trava este, mas fica dito: quem trabalha a
+        // seguir é avisado para confirmar, e o resultado deste passo não pode aparecer como limpo.
+        const shaky = deps_.filter((d) => d.view.state === "partial");
+        const caveat = shaky.map((d) => `«${d.view.label}» ficou com ressalvas (${d.view.detail ?? "sem evidência"})`).join("; ");
         set(s, { state: "running" });
-        if (s.kind === "move") return runMove(s);
-        if (s.kind === "open_note") return runOpen(s);
-        return runTask(
+        const out =
+          s.kind === "move"
+            ? await runMove(s)
+            : s.kind === "open_note"
+              ? await runOpen(s)
+              : await runTask(
+                  s,
+                  deps_.filter((d) => d.step.kind === "task" && d.result),
+                  caveat,
+                );
+        if (!caveat || out.view.state === "blocked") return out;
+        return done(
           s,
-          deps_.filter((d) => d.step.kind === "task" && d.result),
+          { state: out.view.state === "done" ? "partial" : out.view.state, detail: `${out.view.detail ?? ""}; depois de: ${caveat}` },
+          out.result,
         );
       }
       const start = (s: ExecStep): Promise<StepOutcome> => {
@@ -339,11 +353,12 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         });
       }
 
-      async function runTask(s: ExecStep, before: readonly StepOutcome[]): Promise<StepOutcome> {
+      async function runTask(s: ExecStep, before: readonly StepOutcome[], caveat = ""): Promise<StepOutcome> {
         const agent = s.agent ?? "";
         if (!findAgent(agent)) return done(s, { state: "blocked", detail: "agente desconhecido" });
         const vault = deps.vaultDir();
         let text = s.task ?? "";
+        if (caveat) text += `\n\nAviso do servidor: ${caveat}. Confirma tu o que precisas desse passo antes de contares com ele.`;
         let note: { note: NoteRef; absolute: string } | null = null;
         /** A nota pedida não existe: a tarefa corre na mesma (o agente procura ou cria), mas fica dito. */
         let missing = "";
