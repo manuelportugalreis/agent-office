@@ -299,7 +299,7 @@ export function createHub({
           resume: session.started,
           ...(profile ? { profile } : {}),
           ...(opts.toolless && !profile ? { toolless: true } : {}),
-          ...(opts.readOnly && profile ? { readOnly: true } : {}),
+          ...(opts.readOnly ? { readOnly: true } : {}),
         },
         {
           onEvent: (e) => onEvent(agentId, runId, e),

@@ -115,7 +115,12 @@ function score(n: NoteRef, q: string): number {
  * ambíguo e devolve as opções para perguntar ao utilizador.
  */
 export function resolveNote(vault: string, raw: string, index: readonly NoteRef[] = indexVault(vault)): NoteMatch {
-  const cleaned = cleanNoteQuery(raw);
+  let cleaned = cleanNoteQuery(raw);
+  // Caminho completo de uma nota dentro do vault: passa a relativo.
+  if (isAbsolute(cleaned)) {
+    const rel = relative(resolve(vault), resolve(cleaned));
+    if (rel && !rel.startsWith("..") && !isAbsolute(rel)) cleaned = rel.replaceAll("\\", "/").replace(/\.md$/i, "");
+  }
   const q = fold(cleaned.replaceAll("/", " "));
   if (!q) return { kind: "none", similar: [] };
   const scored = index

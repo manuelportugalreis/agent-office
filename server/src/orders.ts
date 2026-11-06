@@ -358,7 +358,7 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
             text += `\n\nAviso do servidor: ${found.error}. Procura-a pelo nome; se não existir, diz isso em vez de inventar o conteúdo.`;
           } else if (found) {
             note = found;
-            text += `\n\nNota a que o pedido se refere (resolvida pelo servidor): ${found.note.path} (caminho completo: ${found.absolute}). Usa este ficheiro e cita o caminho na resposta.`;
+            text += `\n\nNota a que o pedido se refere (resolvida pelo servidor): ${found.note.path} (caminho completo: ${found.absolute}). Lê-o agora (pode ter mudado desde a última vez; não respondas de memória), usa este ficheiro e cita o caminho na resposta.`;
           }
         }
         const prior = note && existsSync(note.absolute) ? readFileSync(note.absolute, "utf8") : null;
@@ -379,10 +379,11 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         const result = await waitAndRun(hub, agent, prompt, {
           label: s.task ?? text,
           ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
-          ...(agent === "nina" && opts.profile ? { readOnly: true } : {}),
+          // Quando o Atlas lhe passa uma revisão, a Nina aponta e não corrige (só leitura em qualquer modo).
+          ...(agent === "nina" && opts.delegator ? { readOnly: true } : {}),
         });
         if (!result.ok) return done(s, { state: "blocked", detail: `falhou: ${result.error ?? "erro desconhecido"}` }, result);
-        const v = taskEvidence(s.task ?? "", result, note, prior);
+        const v = taskEvidence(s.task ?? "", result, note, prior, agent === "nina" && !!opts.delegator);
         const evidence = missing ? [missing, ...v.evidence] : v.evidence;
         return done(s, { state: missing ? "partial" : v.state, detail: evidence.join("; ") || "terminou" }, result);
       }
@@ -396,7 +397,8 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
 }
 
 /** Pedidos que mandam alterar (e não só ler): sem o ficheiro mudar, a tarefa não está feita. */
-const EDIT_WORDS = /(?<![\p{L}])(acrescent|adicion|edit|atualiz|alter|escrev|regist|mud|corrig|apag|remov|insere|inser|junta)/iu;
+const EDIT_WORDS =
+  /(?<![\p{L}])(acrescent|adicion|edit|atualiz|alter|escrev|regist|mud|corrig|apag|remov|inser|junt)(a|ar|e|em|es|ando)(?![\p{L}])/iu;
 
 /**
  * O que a tarefa fez de facto, pelo rasto e pelo disco: a nota mudou (e como), foi só lida, ou devia ter mudado e não
@@ -407,6 +409,7 @@ export function taskEvidence(
   result: RunResult,
   note: { note: NoteRef; absolute: string } | null,
   prior: string | null,
+  readOnly = false,
 ): { state: StepView["state"]; evidence: string[] } {
   const evidence: string[] = [];
   let state: StepView["state"] = "done";
@@ -425,7 +428,7 @@ export function taskEvidence(
       );
       evidence.push(read ? `leu ${note.note.path}` : `não há registo de ter lido ${note.note.path}`);
       if (!read) state = "partial";
-      if (EDIT_WORDS.test(task)) {
+      if (!readOnly && EDIT_WORDS.test(task)) {
         evidence.push("pediste uma alteração, mas a nota está igual em disco");
         state = "partial";
       }

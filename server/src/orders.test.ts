@@ -4,8 +4,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "../../shared/protocol.ts";
 import type { Hub, RunResult } from "./hub.ts";
-import { checkNoteEdit, createOrderEngine, pickOption, sequence, summarize } from "./orders.ts";
+import { checkNoteEdit, createOrderEngine, pickOption, sequence, summarize, taskEvidence } from "./orders.ts";
 import { parsePlan, planSteps } from "./orchestrator.ts";
+import { findAgent } from "./agents.ts";
+import { buildArgs } from "./runner.ts";
 import type { SceneBridge } from "./scene-bridge.ts";
 import { findNoteMention, resolveNote, vaultFor } from "./vault.ts";
 
@@ -230,6 +232,32 @@ describe("motor de ordens", () => {
   });
 });
 
+describe("evidência de tarefas", () => {
+  it("só verbos de edição pedem que a nota mude; uma revisão que fala de 'alteração' não", () => {
+    const dir = vault();
+    const abs = join(dir, "Projetos", "Planeamento.md");
+    const note = { note: { path: "Projetos/Planeamento.md", title: "Planeamento", aliases: [] }, absolute: abs };
+    const prior = readFileSync(abs, "utf8");
+    const read = { ok: true, reply: "", steps: [{ tool: "Read", summary: abs, ok: true }] };
+    expect(taskEvidence("Revê a alteração feita à nota", read, note, prior).state).toBe("done");
+    expect(taskEvidence("acrescenta os passos à nota", read, note, prior).state).toBe("partial");
+    expect(taskEvidence("acrescenta os passos à nota", read, note, prior, true).state).toBe("done");
+  });
+});
+
+describe("revisora só de leitura", () => {
+  it("no modo escritório, uma corrida só de leitura não tem Write nem Edit", () => {
+    const nina = findAgent("nina")!;
+    const args = buildArgs({ agent: nina, text: "x", sessionId: "s", resume: false, readOnly: true });
+    const tools = args[args.indexOf("--tools") + 1].split(",");
+    expect(tools).toContain("Read");
+    expect(tools).not.toContain("Edit");
+    expect(tools).not.toContain("Write");
+    const normal = buildArgs({ agent: nina, text: "x", sessionId: "s", resume: false });
+    expect(normal[normal.indexOf("--tools") + 1].split(",")).toContain("Edit");
+  });
+});
+
 describe("notas", () => {
   it("resolve título, alias, link e caminho; ambíguo devolve opções", () => {
     const dir = vault();
@@ -237,6 +265,10 @@ describe("notas", () => {
     expect(resolveNote(dir, "plano do escritório")).toMatchObject({ kind: "one" });
     expect(resolveNote(dir, "[[Projetos/Planeamento|plano]]")).toMatchObject({ kind: "one" });
     expect(resolveNote(dir, "Trabalho/Reunião.md")).toMatchObject({ kind: "one", note: { path: "Trabalho/Reunião.md" } });
+    expect(resolveNote(dir, join(dir, "Projetos", "Planeamento.md"))).toMatchObject({
+      kind: "one",
+      note: { path: "Projetos/Planeamento.md" },
+    });
     expect(resolveNote(dir, "Reunião")).toMatchObject({ kind: "many" });
     expect(resolveNote(dir, "nada disto")).toMatchObject({ kind: "none" });
   });

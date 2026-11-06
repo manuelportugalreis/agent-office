@@ -18,7 +18,7 @@ export interface RunRequest {
   readonly profile?: AccessProfile;
   /** Sem ferramentas nenhumas (o plano e o resumo do CEO: só texto, a partir do que lhe é dado). */
   readonly toolless?: boolean;
-  /** Modo local só de leitura (revisão independente). */
+  /** Só de leitura (revisão independente): no modo local e no modo escritório. */
   readonly readOnly?: boolean;
 }
 
@@ -45,6 +45,7 @@ export interface RunHandle {
 export type Runner = (req: RunRequest, handlers: RunHandlers) => RunHandle;
 
 const STDERR_LIMIT = 2000;
+const WRITE_FILE_TOOLS = new Set(["Write", "Edit"]);
 const slash = (p: string): string => p.replaceAll("\\", "/");
 /** O hook corre com o mesmo Node que está a correr o servidor (caminho absoluto): não depende do PATH do processo do Claude. */
 const nodeCommand = (): string => `"${slash(process.execPath)}"`;
@@ -92,7 +93,9 @@ export function postHooks(agent: RealAgent): Hook[] {
 export function buildArgs(req: RunRequest): string[] {
   if (req.toolless) return toollessArgs(req);
   const { agent } = req;
-  const builtin = [...(agent.files ? FILE_TOOLS : []), ...agent.tools];
+  // Só de leitura (revisões independentes): sem ferramentas que escrevem, também no modo escritório.
+  const files = req.readOnly ? FILE_TOOLS.filter((t) => !WRITE_FILE_TOOLS.has(t)) : FILE_TOOLS;
+  const builtin = [...(agent.files ? files : []), ...agent.tools];
   const allowed = [...builtin, ...(agent.chrome ? CHROME_READ_TOOLS : [])].join(",");
   const hooks = guardHooks(agent);
   const post = postHooks(agent);
