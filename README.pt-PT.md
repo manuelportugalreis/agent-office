@@ -2,7 +2,7 @@
 
 > Um escritório 3D isométrico onde **cada pessoa é um agente [Claude Code](https://docs.claude.com/en/docs/claude-code)**. Clica numa personagem para falar com ela, dá ordens ao CEO e vê a equipa a andar, a sentar-se, a pesquisar e a escrever.
 
-[English](README.md) · **[Demonstração](https://manuelportugalreis.github.io/agent-office/)** (só o escritório e a cidade: os agentes trabalham no teu computador, vê abaixo)
+[English](README.md) · **[Demonstração](https://manuelportugalreis.com/agent-office/)** (só o escritório e a cidade: os agentes trabalham no teu computador, vê abaixo)
 
 ![O escritório](docs/img/office.png)
 

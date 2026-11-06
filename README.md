@@ -2,7 +2,7 @@
 
 > A 3D isometric office where **every person is a [Claude Code](https://docs.claude.com/en/docs/claude-code) agent**. Click a character to chat with it, give orders to the CEO and watch the team walk, sit, research and write.
 
-[Português (pt-PT)](README.pt-PT.md) · **[Live demo](https://manuelportugalreis.github.io/agent-office/)** (the office and the city only: the agents work on your own machine, see below)
+[Português (pt-PT)](README.pt-PT.md) · **[Live demo](https://manuelportugalreis.com/agent-office/)** (the office and the city only: the agents work on your own machine, see below)
 
 ![The office](docs/img/office.png)
 
