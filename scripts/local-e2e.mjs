@@ -165,8 +165,12 @@ if (scenario === "reload") {
   );
   const first = messages.findLast((m) => m.type === "session" && m.agentId === "nina");
   messages.length = 0;
-  await box.fill("Que comando correste há pouco e qual foi o resultado? Responde numa linha.");
-  await page.locator("#chatRoot textarea, #chatRoot [contenteditable=true]").first().press("Enter");
+  // Depois de recarregar, o painel volta fechado: abre de novo o chat da Nina.
+  await openAgent("Nina");
+  await page.locator('.tabs button[data-t="chat"]').click();
+  const again = page.locator("#chatRoot textarea, #chatRoot [contenteditable=true]").first();
+  await again.fill("Que comando correste há pouco e qual foi o resultado? Responde numa linha.");
+  await again.press("Enter");
   await serve(
     () => true,
     () => finished("nina"),
