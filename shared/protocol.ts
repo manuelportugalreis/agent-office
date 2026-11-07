@@ -1,6 +1,7 @@
 /** Protocolo entre o servidor de agentes e a interface 3D (WebSocket + upload por HTTP). */
 
-export type RemoteStatus = "idle" | "think" | "work" | "err";
+/** "appr": à espera de ti (o Claude Code do agente pergunta se pode avançar). */
+export type RemoteStatus = "idle" | "think" | "work" | "err" | "appr";
 
 /**
  * Onde está o dossier de candidatura: com o Atlas a planear, com a Mira a pesquisar, com a Lena a redigir,
@@ -163,6 +164,8 @@ export interface AccessProfile {
   readonly autoEdits: boolean;
   /** Usar as tuas skills do Claude Code (as de ~/.claude/skills e as do projeto). Perfis antigos sem o campo: sim. */
   readonly skills?: boolean;
+  /** Ler o Canvas no teu Chrome (extensão Claude in Chrome), só leitura e só o domínio do Canvas. Perfis antigos: não. */
+  readonly browser?: boolean;
 }
 
 /** O que a interface envia para criar ou alterar um perfil (sem id = novo). */
@@ -246,6 +249,8 @@ export type ServerMsg =
     }
   | { readonly type: "status"; readonly agentId: string; readonly status: RemoteStatus; readonly task?: string }
   | { readonly type: "log"; readonly agentId: string; readonly text: string }
+  /** Uma ordem foi escrita no Claude Code de um agente: a interface abre o terminal dele. */
+  | { readonly type: "terminal-order"; readonly agentId: string; readonly text: string }
   /** Pedaço de texto da resposta em curso (streaming). */
   | { readonly type: "delta"; readonly agentId: string; readonly text: string }
   /** Texto completo de uma resposta (substitui os deltas recebidos até aqui). */
@@ -577,6 +582,7 @@ export function parseProfileInput(v: unknown): ProfileInput | null {
   if (!name || name.length > 60 || !folder || !readDirs || !writeDirs || !vaultFolders || !mcp || !vault) return null;
   if (typeof p.bash !== "boolean" || typeof p.autoEdits !== "boolean") return null;
   if (p.skills !== undefined && typeof p.skills !== "boolean") return null;
+  if (p.browser !== undefined && typeof p.browser !== "boolean") return null;
   if (p.id !== undefined && !Number.isInteger(p.id)) return null;
   return {
     ...(p.id !== undefined ? { id: p.id as number } : {}),
@@ -590,5 +596,6 @@ export function parseProfileInput(v: unknown): ProfileInput | null {
     mcp,
     autoEdits: p.autoEdits,
     skills: p.skills !== false,
+    browser: p.browser === true,
   };
 }

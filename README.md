@@ -117,12 +117,23 @@ cp office.config.example.json office.config.json
 | -------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `userName`     | How agents address you and the chat greeting. Empty means "the user".                                             |
 | `port`         | Server port (default `8787`). Also `AGENT_OFFICE_PORT`.                                                           |
-| `canvasHost`   | The **only** domain the Canvas agent may open in your browser.                                                    |
+| `canvasHost`   | The **only** domain the Canvas readers (Dean, Ada, Turing) may open in your browser.                              |
+| `canvasOrigin` | Tests only: a local test Canvas (`http://127.0.0.1:<port>`, see `scripts/canvas-fixture.mjs`). Leave it out.      |
 | `courses`      | Which agent handles which course (`agent`, `code`, `title`). The code must match what Canvas shows.               |
 | `vaultDir`     | Optional folder (for example an Obsidian vault) where file agents may also read and write. Empty means no access. |
 | `extraOrigins` | Extra origins allowed to talk to the server (for example a reverse proxy). Leave empty normally.                  |
 
 Edit `server/workspaces/_company/perfil.md` (created on first run) to tell every agent about you. Agents can only read it.
+
+### Canvas without the Chrome extension (calendar feed)
+
+If the Claude in Chrome extension is not available (some universities turn it off), connect the Canvas calendar. In Canvas, open **Calendar › Calendar Feed**, copy the link and store it in an environment variable from your own terminal (never in the chat):
+
+```powershell
+setx AGENT_OFFICE_CANVAS_FEED "https://<your canvas>/feeds/calendars/user_....ics"
+```
+
+Restart the office. The server reads the calendar directly, with no browser and no agent: Dean's panel and "Faz-me o trabalho de casa que tenho para entregar hoje" then know each assignment's deadline and description. The calendar has no rubrics, attachments or submission status, so for each assignment due today the office opens its page in your browser plus a folder; you save the page as PDF and the files there and answer «feito» (or «segue» to go ahead with the description only). The link is a secret (it gives your calendar without a login): it must be on your `canvasHost`, never shows up in the chat or logs, and if you reset it in Canvas you just replace the variable. Check your university's rules on data and AI first.
 
 ## Using it
 

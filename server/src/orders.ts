@@ -7,6 +7,7 @@ import { withHistory } from "./chat-context.ts";
 import { groupDestination, type GroupMove } from "./group.ts";
 import { parseOrder, parsePlaceText, type PlaceRef } from "./intent.ts";
 import type { SceneBridge } from "./scene-bridge.ts";
+import { checkSiteWindow, openSite, SITE_NAMES, type SiteId, type SiteOpenResult, type SiteWindow } from "./browser.ts";
 import { findNoteMention, openInObsidian, resolveNote, type NoteMatch, type NoteRef, type OpenResult } from "./vault.ts";
 
 /**
@@ -18,7 +19,9 @@ import { findNoteMention, openInObsidian, resolveNote, type NoteMatch, type Note
 
 export interface ExecStep {
   readonly id: string;
-  readonly kind: "move" | "open_note" | "task";
+  readonly kind: "move" | "open_note" | "open_site" | "task";
+  /** O sítio a abrir no browser (open_site). */
+  readonly site?: SiteId;
   readonly agent?: string;
   /** Destino (move): já resolvido, ou o texto dito ("o meu gabinete"). */
   readonly to?: PlaceRef | string;
@@ -27,6 +30,12 @@ export interface ExecStep {
   readonly task?: string;
   /** Passos que têm de terminar antes (ids). */
   readonly after: readonly string[];
+  /** Corre mesmo que um passo anterior tenha falhado (ex.: rever os ficheiros que existem). */
+  readonly tolerant?: boolean;
+  /** Antes de correr: um motivo para não correr (ex.: "nada para rever"), ou null. */
+  readonly skipIf?: (before: readonly StepOutcome[]) => string | null;
+  /** A resposta é para o servidor (ex.: JSON): não aparece no chat do agente. */
+  readonly silent?: boolean;
 }
 
 export interface StepOutcome {
@@ -55,7 +64,14 @@ export interface OrderEngine {
   cancel(owner: string): void;
   /** O gabinete foi escolhido noutro sítio (o menu do topo): responde às perguntas "qual é o teu gabinete?". */
   officeChosen(place: string): void;
+  /** Faz uma pergunta no chat `owner` e espera pela resposta (null: sem resposta a tempo, ou outro assunto). */
+  ask<T>(owner: string, text: string, parse: (answer: string) => T | undefined): Promise<T | null>;
+  /** Muda quando a conversa é recomeçada (cancelar): quem corre várias fases confirma entre elas que ainda é preciso. */
+  generation(owner: string): number;
 }
+
+/** "Feito", "já entrei": o utilizador terminou o que lhe foi pedido (ex.: o login). */
+export const isDone = (answer: string): true | undefined => (DONE_WORDS.test(fold(answer)) ? true : undefined);
 
 export interface EngineDeps {
   readonly hub: Hub;
@@ -65,6 +81,9 @@ export interface EngineDeps {
   readonly myOffice: () => string | null;
   readonly setMyOffice: (place: string) => void;
   readonly open?: (absolute: string) => Promise<OpenResult>;
+  /** Abrir um sítio numa janela do browser, e ver o que a janela mostra (depois do login). */
+  readonly openSite?: (site: SiteId) => Promise<SiteOpenResult>;
+  readonly checkSite?: (site: SiteId, snapshot?: readonly string[]) => Promise<SiteWindow>;
   /** Quanto tempo uma pergunta espera pela resposta. */
   readonly questionTimeoutMs?: number;
   /** Uma pergunta foi feita / deixou de estar à espera (para as notificações). */
@@ -91,6 +110,8 @@ const SHORT_ANSWER_WORDS = 4;
 const CANCEL = /^(esquece|cancela|deixa|nao interessa|nada|nenhum|nenhuma|para com isso)\b/;
 
 const QUESTION_TIMEOUT_MS = 30 * 60_000;
+/** "Feito", "já entrei", "pronto": o utilizador terminou o login. */
+const DONE_WORDS = /^(feito|ja (esta|entrei|fiz|iniciei)|ja|pronto|entrei|ok|continua|siga|ja podes|podes continuar|done)\b/;
 const nameOf = (id: string): string => findAgent(id)?.name ?? id;
 const names = nameOf;
 const AGENTS = AGENT_NAMES;
@@ -144,6 +165,8 @@ export function checkNoteEdit(before: string, after: string): { ok: boolean; det
 export function createOrderEngine(deps: EngineDeps): OrderEngine {
   const { hub, emit, scene } = deps;
   const open = deps.open ?? ((abs: string) => openInObsidian(abs));
+  const launchSite = deps.openSite ?? ((site: SiteId) => openSite(site));
+  const checkSite = deps.checkSite ?? ((_site: SiteId, snapshot?: readonly string[]) => checkSiteWindow(snapshot));
   /** Perguntas por conversa, em fila: só a primeira está feita; as outras esperam a vez (nunca se cancelam umas às outras). */
   const questions = new Map<string, Question[]>();
   /** "Qual é o teu gabinete?" uma só vez por conversa, mesmo com vários passos a precisar da resposta. */
@@ -247,6 +270,8 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
   }
 
   return {
+    ask: (owner, text, parse) => ask(owner, text, parse),
+    generation: (owner) => generations.get(owner) ?? 0,
     hasQuestion: (owner) => questions.has(owner),
     cancel(owner) {
       // Passos ainda por começar deixam de correr (ex.: a edição que esperava a chegada à sala).
@@ -308,7 +333,9 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         const deps_ = await Promise.all(s.after.flatMap((d) => (byId.has(d) ? [start(byId.get(d) as ExecStep)] : [])));
         if ((generations.get(owner) ?? 0) !== generation)
           return done(s, { state: "skipped", detail: "a conversa foi recomeçada antes deste passo" });
-        const failed = deps_.find((d) => d.view.state === "blocked" || d.view.state === "skipped");
+        const failed = s.tolerant ? undefined : deps_.find((d) => d.view.state === "blocked" || d.view.state === "skipped");
+        const skip = s.skipIf?.(deps_);
+        if (skip) return done(s, { state: "skipped", detail: skip });
         if (failed) {
           set(s, { state: "skipped", detail: `não começou porque «${failed.view.label}» não ficou feito` });
           emit({ type: "log", agentId: owner, text: `${nameOf(s.agent ?? "")} não correu: «${failed.view.label}» não ficou feito.` });
@@ -326,11 +353,13 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
             ? await runMove(s)
             : s.kind === "open_note"
               ? await runOpen(s)
-              : await runTask(
-                  s,
-                  deps_.filter((d) => d.step.kind === "task" && d.result),
-                  caveat,
-                );
+              : s.kind === "open_site"
+                ? await runSite(s)
+                : await runTask(
+                    s,
+                    deps_.filter((d) => d.step.kind === "task" && d.result),
+                    caveat,
+                  );
         if (!caveat || out.view.state === "blocked") return out;
         return done(
           s,
@@ -393,6 +422,48 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         });
       }
 
+      /**
+       * Abre o sítio numa janela do browser. Lançar e ter acesso são coisas diferentes: o título da janela diz se ficou à
+       * vista a página, um login (aí pede-se ao utilizador que entre e espera-se) ou não se sabe. Nunca se autentica.
+       */
+      async function runSite(s: ExecStep): Promise<StepOutcome> {
+        const site = s.site;
+        if (!site || !(site in SITE_NAMES)) return done(s, { state: "blocked", detail: "não sei que sítio abrir" });
+        const name = SITE_NAMES[site];
+        const r = await launchSite(site);
+        // Sem janela, a leitura pela extensão do Chrome ainda pode funcionar: fica com ressalvas, não trava o resto.
+        if (!r.launched)
+          return done(s, {
+            state: "partial",
+            detail: `não consegui abrir uma janela do browser (${r.error ?? "erro desconhecido"}); a leitura pela extensão do Chrome pode funcionar na mesma`,
+          });
+        const where = r.browser === "Chrome" ? "do Chrome" : `do ${r.browser ?? "browser"}`;
+        if (r.access === "ok")
+          return done(s, { state: "done", detail: `abri ${name} numa janela ${where} (a janela mostra «${r.title}»)` });
+        if (r.access === "unknown")
+          return done(s, {
+            state: "partial",
+            detail: r.alreadyShown
+              ? `abri ${name} numa janela ${where}; uma janela mostra «${r.alreadyShown}», mas já o mostrava antes, por isso o título não chega para confirmar; o acesso confirma-se quando a página for lida`
+              : `abri ${name} numa janela ${where}, mas não consegui ver que página ficou à vista${r.title ? ` (título «${r.title}»)` : ""}; o acesso confirma-se quando a página for lida`,
+          });
+        // Login (sessão expirada, MFA): o utilizador entra na janela que abrimos; nós esperamos e voltamos a ver.
+        set(s, { state: "waiting", detail: `pede login (a janela mostra «${r.title}»)` });
+        const ready = await ask(
+          owner,
+          `Abri ${name} numa janela ${where}, mas pede login («${r.title}»). Inicia sessão nessa janela (com o MFA, se aparecer) e responde «feito»; eu continuo a partir daí.`,
+          isDone,
+        );
+        if (!ready) return done(s, { state: "blocked", detail: `${name} ficou à espera do login (não recebi «feito»)` });
+        const now = await checkSite(site, r.snapshot);
+        return now.access === "ok"
+          ? done(s, { state: "done", detail: `sessão iniciada: a janela mostra «${now.title}»` })
+          : done(s, {
+              state: "partial",
+              detail: `disseste que já entraste, mas a janela mostra «${now.title ?? "?"}»; o acesso confirma-se quando a página for lida`,
+            });
+      }
+
       async function runTask(s: ExecStep, before: readonly StepOutcome[], caveat = ""): Promise<StepOutcome> {
         const agent = s.agent ?? "";
         if (!findAgent(agent)) return done(s, { state: "blocked", detail: "agente desconhecido" });
@@ -442,6 +513,7 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
           ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
           // Quando o Atlas lhe passa uma revisão, a Nina aponta e não corrige (só leitura em qualquer modo).
           ...(agent === "nina" && opts.delegator ? { readOnly: true } : {}),
+          ...(s.silent ? { silent: true } : {}),
         });
         if (!result.ok) return done(s, { state: "blocked", detail: `falhou: ${result.error ?? "erro desconhecido"}` }, result);
         const v = taskEvidence(s.task ?? "", result, note, prior, agent === "nina" && !!opts.delegator);
@@ -518,6 +590,7 @@ function labelOf(s: ExecStep): string {
     return `${nameOf(s.agent ?? "")} vai para ${to}`;
   }
   if (s.kind === "open_note") return `Abrir «${s.note ?? ""}» no Obsidian`;
+  if (s.kind === "open_site") return `Abrir ${s.site ? SITE_NAMES[s.site] : "o sítio"} numa janela do browser`;
   const task = (s.task ?? "").replace(/\s+/g, " ");
   return `${nameOf(s.agent ?? "")}: ${task.length > 90 ? `${task.slice(0, 90)}…` : task}`;
 }

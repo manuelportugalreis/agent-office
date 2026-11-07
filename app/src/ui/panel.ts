@@ -2,7 +2,7 @@ import { STATE_INFO } from "../scene/person";
 import { stateOf, type Agent } from "../sim/agent";
 import { byId, escapeHtml, isDark } from "./dom";
 
-export type Tab = "sum" | "log" | "chat" | "instr";
+export type Tab = "sum" | "log" | "chat" | "instr" | "term";
 const LOG_LIMIT = 30;
 
 export interface Panel {
@@ -104,7 +104,8 @@ export function createPanel(deps: PanelDeps): Panel {
     instr.style.display = t === "instr" ? "block" : "none";
     if (sel) deps.onTab?.(sel, t);
     chatBox.style.display = t === "chat" ? "flex" : "none";
-    document.querySelector("main")?.classList.toggle("chat-wide", t === "chat");
+    byId("termbox").style.display = t === "term" ? "flex" : "none";
+    document.querySelector("main")?.classList.toggle("chat-wide", t === "chat" || t === "term");
   };
   document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((b) => {
     b.onclick = () => showTab(b.dataset.t as Tab);

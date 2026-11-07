@@ -13,6 +13,8 @@ export type PlaceRef =
 export type Step =
   | { readonly kind: "move"; readonly agent: string; readonly to: PlaceRef }
   | { readonly kind: "open_note"; readonly note: string }
+  /** Abrir um sítio conhecido numa janela do browser (o endereço vem da configuração). */
+  | { readonly kind: "open_site"; readonly site: "canvas" }
   | {
       readonly kind: "task";
       readonly agent: string;
@@ -108,6 +110,24 @@ const SEQUENCE = [
   "e",
 ];
 const OPEN_VERBS = ["abre me", "abra me", "abre", "abra", "abrir", "mostra me", "mostre me"];
+/** "Abre-me a janela do Canvas": palavras entre o verbo e o nome do sítio. */
+const SITE_FILLERS = ["me", "a", "o", "janela", "separador", "pagina", "site", "do", "da", "de", "meu", "minha", "la", "agora", "ja"];
+/** "…numa janela", "…no Chrome": o resto da mesma ação. */
+const SITE_TAILS = [
+  "numa janela nova",
+  "numa nova janela",
+  "numa janela",
+  "num separador novo",
+  "num separador",
+  "no browser",
+  "no navegador",
+  "no chrome",
+  "no meu browser",
+  "no meu chrome",
+  "para mim",
+  "pra mim",
+  "por favor",
+];
 /** Pedidos a um colega dentro de uma ordem ("pede-lhe para ler..."): o resto é a tarefa. */
 const ASK_PREFIX = ["pede lhe para", "pede lhe que", "diz lhe para", "diz lhe que", "pedir lhe para", "pede para", "pede que"];
 const SEND_VERBS = ["manda", "mande", "envia", "envie", "leva", "pede", "peca", "diz"];
@@ -236,6 +256,18 @@ function noteEnds(ts: readonly Tok[], at: number): boolean {
 }
 
 /** Lê "abre (a nota) X (no Obsidian)" até ao fim da oração. Devolve a referência à nota. */
+/** "Abre o Canvas", "abre-me a janela do Canvas numa janela nova": abrir o sítio no browser (não é uma nota). */
+function siteAt(ts: readonly Tok[]): { site: "canvas"; used: number } | null {
+  const verb = phraseAt(ts, 0, OPEN_VERBS);
+  if (!verb) return null;
+  let at = verb + phraseAt(ts, verb, ["outra vez", "de novo", "novamente"]);
+  while (SITE_FILLERS.includes(ts[at]?.f ?? "")) at++;
+  if (ts[at]?.f !== "canvas") return null;
+  at++;
+  for (let tail = phraseAt(ts, at, SITE_TAILS); tail; tail = phraseAt(ts, at, SITE_TAILS)) at += tail;
+  return { site: "canvas", used: at };
+}
+
 function openAt(ts: readonly Tok[]): { note: string; used: number } | null {
   const verb = phraseAt(ts, 0, OPEN_VERBS);
   if (!verb) return null;
@@ -433,6 +465,13 @@ export function parseOrder(text: string, agents: readonly AgentName[], self: str
       if (!endsClause(i + move.used)) return null;
       steps.push({ kind: "move", agent: mover, to: move.to });
       i += move.used;
+      continue;
+    }
+    const site = siteAt(ts.slice(i));
+    if (site) {
+      if (!endsClause(i + site.used)) return null;
+      steps.push({ kind: "open_site", site: site.site });
+      i += site.used;
       continue;
     }
     const open = openAt(ts.slice(i));

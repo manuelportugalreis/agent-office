@@ -56,11 +56,11 @@ The order engine runs the steps with their dependencies and reports each one (`o
 
 ### Guards
 
-| Hook               | Applies to                    | Rule                                                                                          |
-| ------------------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `fs-guard.mjs`     | Read, Write, Edit, Glob, Grep | Own folder only (read-only shared folder), real paths, no `..`, no absolute or network paths. |
-| `web-guard.mjs`    | WebFetch, WebSearch           | No local/private hosts, credentials, collector domains or exfiltration-shaped URLs.           |
-| `chrome-guard.mjs` | Claude in Chrome tools        | Only tabs, navigate and read text; only `https`; only the configured host.                    |
+| Hook               | Applies to                    | Rule                                                                                                                                                   |
+| ------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fs-guard.mjs`     | Read, Write, Edit, Glob, Grep | Own folder only (read-only shared folder), real paths, no `..`, no absolute or network paths.                                                          |
+| `web-guard.mjs`    | WebFetch, WebSearch           | No local/private hosts, credentials, collector domains or exfiltration-shaped URLs.                                                                    |
+| `chrome-guard.mjs` | Claude in Chrome tools        | Only tabs, navigate and read text; only `https`; only the configured host (or the exact loopback test origin); no logout, external tools or downloads. |
 
 Each guard exits with code 2 to block the call. They are plain Node scripts with their own tests.
 

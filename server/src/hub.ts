@@ -314,6 +314,7 @@ export function createHub({
           ...(profile ? { profile } : {}),
           ...(opts.toolless && !profile ? { toolless: true } : {}),
           ...(opts.readOnly ? { readOnly: true } : {}),
+          ...(isolated ? { oneShot: true } : {}),
         },
         {
           onEvent: (e) => onEvent(agentId, runId, e),

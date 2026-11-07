@@ -7,6 +7,7 @@ import type { Hub } from "./hub.ts";
 import { parseOrder } from "./intent.ts";
 import { groupSteps, sequence, summarize, type ExecStep, type OrderEngine } from "./orders.ts";
 import { parseGroupMove } from "./group.ts";
+import { isHomeworkOrder } from "./homework.ts";
 import { findNoteMention } from "./vault.ts";
 import type { Store } from "./store.ts";
 import { inboxDir } from "./workspace.ts";
@@ -44,6 +45,8 @@ export interface ChatOrders {
   readonly vaultDir: () => string;
   /** Perfil atual do agente (modo local) ou null: a ordem fica com este acesso até ao fim, mesmo que o modo mude. */
   readonly profileOf?: (agentId: string) => AccessProfile | null;
+  /** "Faz-me o trabalho de casa de hoje" em qualquer chat: devolve true se tratou a mensagem. */
+  readonly homework?: (owner: string, text: string, profile: AccessProfile | null) => boolean;
 }
 
 /** Conversas com os agentes: guarda o histórico, trata anexos e ordens, e implementa editar, regenerar e nova conversa. */
@@ -62,6 +65,12 @@ export function createChatService(hub: Hub, store: Store, emit: (m: ServerMsg) =
     if (orders.engine.answer(agentId, text)) {
       record();
       return true;
+    }
+    if (orders.homework && isHomeworkOrder(text)) {
+      if (hub.isRunning(agentId)) return (error(agentId, "O agente ainda está a trabalhar.", "send"), true);
+      record();
+      const current = orders.profileOf?.(agentId) ?? null;
+      return orders.homework(agentId, text, current ? (Object.freeze(structuredClone(current)) as AccessProfile) : null);
     }
     const steps = orderSteps(agentId, text);
     if (!steps) return false;

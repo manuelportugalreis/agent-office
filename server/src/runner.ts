@@ -1,9 +1,8 @@
-import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { CHROME_READ_TOOLS, FILE_TOOLS, WEB_TOOLS, type RealAgent } from "./agents.ts";
 import { config } from "./config.ts";
-import { parseLine, type AgentEvent } from "./events.ts";
+import type { AgentEvent } from "./events.ts";
+import { createWarmPool } from "./warm-pool.ts";
 import type { AccessProfile } from "../../shared/protocol.ts";
 import { localRun } from "./local-runner.ts";
 import { ensureWorkspace, WORKSPACES_DIR, workspaceDir } from "./workspace.ts";
@@ -20,6 +19,8 @@ export interface RunRequest {
   readonly toolless?: boolean;
   /** Só de leitura (revisão independente): no modo local e no modo escritório. */
   readonly readOnly?: boolean;
+  /** Sessão que nunca se retoma (corridas isoladas): o processo fecha no fim em vez de ficar à espera. */
+  readonly oneShot?: boolean;
 }
 
 /** Uma pergunta de permissão de uma sessão local (o que no terminal te apareceria para confirmar). */
@@ -44,7 +45,6 @@ export interface RunHandle {
 
 export type Runner = (req: RunRequest, handlers: RunHandlers) => RunHandle;
 
-const STDERR_LIMIT = 2000;
 const WRITE_FILE_TOOLS = new Set(["Write", "Edit"]);
 const slash = (p: string): string => p.replaceAll("\\", "/");
 /** O hook corre com o mesmo Node que está a correr o servidor (caminho absoluto): não depende do PATH do processo do Claude. */
@@ -89,6 +89,14 @@ export function postHooks(agent: RealAgent): Hook[] {
   ];
 }
 
+/** Ferramenta de leitura do Canvas de ensaio (servidor MCP office-canvas). */
+export const CANVAS_FIXTURE_TOOL = "mcp__office-canvas__canvas_read";
+
+/** MCP que lê o Canvas de ensaio local pelo servidor (o próprio MCP recusa qualquer origem que não seja 127.0.0.1/localhost). */
+export const canvasFixtureMcp = (origin: string): { mcpServers: Record<string, unknown> } => ({
+  mcpServers: { "office-canvas": { type: "stdio", command: process.execPath, args: [hookPath("canvas-mcp.mjs"), origin] } },
+});
+
 /** Argumentos do `claude -p`: isolado das tuas definições, sem MCP, só com as ferramentas do agente e com os hooks de segurança. */
 export function buildArgs(req: RunRequest): string[] {
   if (req.toolless) return toollessArgs(req);
@@ -96,7 +104,9 @@ export function buildArgs(req: RunRequest): string[] {
   // Só de leitura (revisões independentes): sem ferramentas que escrevem, também no modo escritório.
   const files = req.readOnly ? FILE_TOOLS.filter((t) => !WRITE_FILE_TOOLS.has(t)) : FILE_TOOLS;
   const builtin = [...(agent.files ? files : []), ...agent.tools];
-  const allowed = [...builtin, ...(agent.chrome ? CHROME_READ_TOOLS : [])].join(",");
+  // Canvas de ensaio local: quem lê o Canvas também o pode ler pelo servidor (sem a extensão do Chrome). Nunca o real.
+  const fixture = agent.chrome && config.canvasOrigin ? canvasFixtureMcp(config.canvasOrigin) : null;
+  const allowed = [...builtin, ...(agent.chrome ? CHROME_READ_TOOLS : []), ...(fixture ? [CANVAS_FIXTURE_TOOL] : [])].join(",");
   const hooks = guardHooks(agent);
   const post = postHooks(agent);
   return [
@@ -109,6 +119,7 @@ export function buildArgs(req: RunRequest): string[] {
     "--setting-sources",
     "local,project",
     "--strict-mcp-config",
+    ...(fixture ? ["--mcp-config", JSON.stringify(fixture)] : []),
     ...(agent.chrome ? ["--chrome"] : []),
     ...(hooks.length
       ? ["--settings", JSON.stringify({ hooks: { PreToolUse: hooks, ...(post.length ? { PostToolUse: post } : {}) } })]
@@ -156,26 +167,21 @@ function toollessArgs(req: RunRequest): string[] {
 export const TOOLLESS_RULE =
   "Nesta resposta não tens ferramentas nenhumas: responde só com texto, nunca escrevas chamadas a ferramentas, não atualizes o teu CLAUDE.md nem outros ficheiros e nunca digas que gravaste ou registaste alguma coisa.";
 
-/** Lança o `claude` num processo próprio. O texto do utilizador vai por stdin, nunca como argumento. */
+/** Processos do Claude Code que ficam abertos entre mensagens da mesma sessão (ver warm-pool.ts). */
+export const warmPool = createWarmPool();
+
+/**
+ * Chave do processo: a pasta, os argumentos (sem o par --session-id/--resume, que muda da 1.ª para a 2.ª mensagem) e o
+ * id da sessão. Outra sessão, outro acesso ou outro papel dão sempre outro processo.
+ */
+export function warmKey(args: readonly string[], cwd: string, sessionId: string): string {
+  return JSON.stringify([cwd, sessionId, ...args.slice(0, -2)]);
+}
+
+/** Lança (ou reaproveita) o `claude` da sessão. O texto do utilizador vai por stdin, nunca como argumento. */
 export const claudeRunner: Runner = (req, handlers) => {
   if (req.profile) return localRun({ ...req, profile: req.profile }, handlers);
   const cwd = ensureWorkspace(req.agent);
-  const child = spawn("claude", buildArgs(req), { cwd, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
-
-  let stderr = "";
-  child.stderr.on("data", (chunk: Buffer) => {
-    if (stderr.length < STDERR_LIMIT) stderr += chunk.toString();
-  });
-  createInterface({ input: child.stdout }).on("line", (line) => {
-    for (const event of parseLine(line)) handlers.onEvent(event);
-  });
-  child.on("error", (err) => handlers.onExit(null, `Não consegui lançar o claude: ${err.message}`));
-  child.on("close", (code) => handlers.onExit(code, stderr));
-  child.stdin.on("error", () => undefined);
-  child.stdin.end(req.text);
-  return {
-    kill: () => {
-      child.kill();
-    },
-  };
+  const args = buildArgs(req);
+  return warmPool.run({ key: warmKey(args, cwd, req.sessionId), args, cwd, text: req.text, oneShot: !!req.oneShot }, handlers);
 };

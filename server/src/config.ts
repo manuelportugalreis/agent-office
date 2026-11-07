@@ -15,9 +15,16 @@ export interface OfficeConfig {
   readonly port: number;
   /** Único domínio que o Dean pode abrir no teu Chrome para ler as entregas. */
   readonly canvasHost: string;
+  /**
+   * Só para ensaios com um Canvas de teste nesta máquina: http(s)://127.0.0.1:porta ou http(s)://localhost:porta.
+   * Vazio (o normal) = https://canvasHost. Nunca aceita outro endereço.
+   */
+  readonly canvasOrigin: string;
   readonly courses: readonly Course[];
   /** Pasta (vault do Obsidian) onde os agentes com ficheiros podem ler, criar e editar notas. Vazio = sem acesso. */
   readonly vaultDir: string;
+  /** Pasta onde abre o Claude Code de cada agente (separador «Claude Code»). Vazio = a tua pasta pessoal. */
+  readonly workDir: string;
   /** Origens extra aceites pelo servidor (além de 127.0.0.1 e localhost na porta do servidor e do Vite). */
   readonly extraOrigins: readonly string[];
 }
@@ -29,15 +36,19 @@ export const DEFAULTS: OfficeConfig = {
   userName: "",
   port: DEFAULT_PORT,
   canvasHost: "canvas.instructure.com",
+  canvasOrigin: "",
   courses: [
     { agent: "ada", code: "COURSE 101", title: "Primeira disciplina" },
     { agent: "turing", code: "COURSE 102", title: "Segunda disciplina" },
   ],
   vaultDir: "",
+  workDir: "",
   extraOrigins: [],
 };
 
 const HOSTNAME = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/i;
+/** Canvas de ensaio: só nesta máquina, com porta explícita. */
+const LOOPBACK_ORIGIN = /^https?:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
 const ORIGIN = /^https?:\/\/[a-z0-9.[\]:-]{1,255}$/i;
 
 export class ConfigError extends Error {}
@@ -69,6 +80,16 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
   if (typeof canvasHost !== "string" || !HOSTNAME.test(canvasHost) || !canvasHost.includes("."))
     throw new ConfigError("canvasHost tem de ser um domínio, sem https:// nem caminhos");
 
+  const canvasOrigin = f.canvasOrigin ?? DEFAULTS.canvasOrigin;
+  if (typeof canvasOrigin !== "string" || (canvasOrigin !== "" && !LOOPBACK_ORIGIN.test(canvasOrigin)))
+    throw new ConfigError("canvasOrigin só serve para um Canvas de ensaio nesta máquina (ex.: http://127.0.0.1:8899)");
+  // Porta normal (1024-65535, sem zeros à esquerda) e nunca a do próprio escritório nem a do Vite.
+  const originPort = canvasOrigin ? (/:(\d+)$/.exec(canvasOrigin)?.[1] ?? "") : "";
+  if (canvasOrigin && (originPort.startsWith("0") || Number(originPort) < 1024 || Number(originPort) > 65535))
+    throw new ConfigError("canvasOrigin: a porta tem de ser um número entre 1024 e 65535");
+  if (canvasOrigin && (Number(originPort) === port || Number(originPort) === DEV_UI_PORT))
+    throw new ConfigError("canvasOrigin não pode apontar para o próprio Agent Office");
+
   const courses = f.courses === undefined ? DEFAULTS.courses : Array.isArray(f.courses) ? f.courses.map(parseCourse) : null;
   if (!courses) throw new ConfigError("courses tem de ser uma lista");
   if (new Set(courses.map((c) => c.agent)).size !== courses.length)
@@ -78,6 +99,10 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
   if (typeof vaultDir !== "string" || vaultDir.length > 500 || /[\r\n]/.test(vaultDir))
     throw new ConfigError("vaultDir tem de ser um caminho (texto numa linha)");
 
+  const workDir = f.workDir ?? DEFAULTS.workDir;
+  if (typeof workDir !== "string" || workDir.length > 500 || /[\r\n]/.test(workDir))
+    throw new ConfigError("workDir tem de ser um caminho (texto numa linha)");
+
   const extraOrigins = f.extraOrigins ?? [];
   if (!Array.isArray(extraOrigins) || !extraOrigins.every((o) => typeof o === "string" && ORIGIN.test(o)))
     throw new ConfigError("extraOrigins tem de ser uma lista de origens (ex.: http://127.0.0.1:3000)");
@@ -86,8 +111,10 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
     userName: userName.trim(),
     port,
     canvasHost: canvasHost.toLowerCase(),
+    canvasOrigin,
     courses,
     vaultDir: vaultDir.trim(),
+    workDir: workDir.trim(),
     extraOrigins: extraOrigins as string[],
   };
 }
@@ -124,5 +151,11 @@ export function allowedOrigins(config: OfficeConfig): readonly string[] {
 export function isAllowedHost(host: string | undefined, config: OfficeConfig): boolean {
   return host === `127.0.0.1:${config.port}` || host === `localhost:${config.port}`;
 }
+
+/** Página inicial do Canvas (o endereço vem sempre da configuração, nunca do texto de uma ordem). */
+export const canvasUrl = (c: OfficeConfig): string => (c.canvasOrigin ? `${c.canvasOrigin}/` : `https://${c.canvasHost}/`);
+
+/** O que o guarda do Chrome aceita: o domínio do Canvas, ou a origem exata do Canvas de ensaio local. */
+export const canvasAllow = (c: OfficeConfig): string => c.canvasOrigin || c.canvasHost;
 
 export const config: OfficeConfig = loadConfig();

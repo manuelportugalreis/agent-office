@@ -9,13 +9,16 @@ import { createDossierService } from "./dossier.ts";
 import { COMPANY_DIR } from "./workspace.ts";
 import { runGuardSelfTest } from "./selftest.ts";
 import { saveApprovedDraft } from "./vaultNotes.ts";
-import { canvasContext, createCanvasSync } from "./canvas.ts";
+import { canvasContext, createCanvasSync, nowContext } from "./canvas.ts";
 import { createChatService } from "./chat.ts";
 import { allowedOrigins, bindHost, config, isAllowedHost } from "./config.ts";
 import { createHub } from "./hub.ts";
 import { createRequestHandler } from "./http.ts";
 import { log } from "./log.ts";
-import { createOrchestrator } from "./orchestrator.ts";
+import { createOrchestrator, withHandoff } from "./orchestrator.ts";
+import { createHomework } from "./homework.ts";
+import { createPtyHub } from "./pty.ts";
+import { warmPool } from "./runner.ts";
 import { parsePlaceText } from "./intent.ts";
 import { createOrderEngine } from "./orders.ts";
 import { InstructionsError, readInstructions, saveInstructions, userInstructions } from "./instructions.ts";
@@ -147,7 +150,10 @@ const hub = createHub({
   // as tuas instruções para o agente, as regras da equipa e, para as disciplinas, as entregas do Canvas.
   context: (agentId) => {
     const course = findAgent(agentId)?.course;
-    return [userInstructions(agentId), course ? canvasContext(store.canvas()?.items, course) : ""].filter(Boolean).join("\n\n");
+    // A data, a hora e o fuso deste computador: "para hoje" e "até às 23:59" dependem disto.
+    return [userInstructions(agentId), nowContext(), course ? canvasContext(store.canvas()?.items, course) : ""]
+      .filter(Boolean)
+      .join("\n\n");
   },
   onComplete: (agentId, result) => {
     if (result.ok && result.reply && findAgent(agentId)?.needsApproval)
@@ -179,12 +185,39 @@ function setMyOffice(place: string): boolean {
   orders.officeChosen(ref.id);
   return true;
 }
-const orchestrator = createOrchestrator(hub, broadcast, orders, {
-  get: () => store.getSetting("lastOrderResults") ?? "",
-  set: (text) => store.setSetting("lastOrderResults", text),
+// O trabalho de casa: um só serviço para o chat de cada agente e a barra do Atlas (uma ordem de cada vez por conversa).
+const homework = createHomework({ engine: orders, emit: broadcast, handoff: withHandoff });
+// O Claude Code de cada agente (terminal dentro do painel): /pty?agent=ada&cols=..&rows=.. (mesmas regras de Origin/Host).
+const ptys = createPtyHub({
+  // A personagem mostra o que o Claude Code dela está a fazer: a trabalhar, à espera de ti (balão «!») ou parada.
+  onActivity: (agentId, activity) => {
+    broadcast({ type: "status", agentId, status: activity, ...(activity === "work" ? { task: "No Claude Code (terminal)" } : {}) });
+    if (activity === "appr")
+      broadcast({ type: "log", agentId, text: "O Claude Code está à espera da tua autorização (separador Claude Code)." });
+  },
 });
+const orchestrator = createOrchestrator(
+  hub,
+  broadcast,
+  orders,
+  {
+    get: () => store.getSetting("lastOrderResults") ?? "",
+    set: (text) => store.setSetting("lastOrderResults", text),
+  },
+  homework,
+  (o) => {
+    if (!ptys.type(o.agent, o.task)) return false;
+    broadcast({ type: "terminal-order", agentId: o.agent, text: o.task });
+    return true;
+  },
+);
 const canvas = createCanvasSync(hub, broadcast);
-const chat = createChatService(hub, store, broadcast, { engine: orders, vaultDir: () => config.vaultDir, profileOf });
+const chat = createChatService(hub, store, broadcast, {
+  engine: orders,
+  vaultDir: () => config.vaultDir,
+  profileOf,
+  homework: (owner, text, profile) => homework.handle(owner, text, profile),
+});
 /** Ideias da equipa por iniciativa própria (vão para as notificações; avançar põe o Atlas a organizar). */
 const initiative = createInitiative({
   hub,
@@ -326,7 +359,10 @@ const wss = new WebSocketServer({
     origins.includes(info.origin) && isAllowedHost(info.req.headers.host, config),
 });
 
-wss.on("connection", (ws) => {
+wss.on("connection", (ws, req) => {
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
+  if (url.pathname === "/pty")
+    return ptys.attach(ws, url.searchParams.get("agent") ?? "", Number(url.searchParams.get("cols")), Number(url.searchParams.get("rows")));
   clients.add(ws);
   log.info(`interface ligada (${clients.size})`);
   const allow = createRateLimiter(RATE_MAX, RATE_WINDOW_MS);
@@ -460,6 +496,8 @@ server.listen(config.port, bindHost(), () => {
 
 const stop = (code = 0): void => {
   hub.shutdown();
+  ptys.shutdown();
+  warmPool.shutdown();
   wss.close();
   server.close();
   store.close();

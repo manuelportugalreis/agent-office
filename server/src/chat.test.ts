@@ -184,8 +184,8 @@ describe("serviço de chat", () => {
 });
 
 describe("ferramentas e modelos dos agentes", () => {
-  it("só o CEO usa Opus; ninguém tem Bash", () => {
-    expect(REAL_AGENTS.filter((a) => a.model === "opus").map((a) => a.id)).toEqual(["ceo"]);
+  it("todos usam Sonnet (o plano do Atlas também, para ser rápido); ninguém tem Bash", () => {
+    expect(REAL_AGENTS.filter((a) => a.model !== "sonnet").map((a) => a.id)).toEqual([]);
     for (const a of REAL_AGENTS) expect([...a.tools, ...(a.files ? FILE_TOOLS : [])]).not.toContain("Bash");
   });
   it("agentes com ficheiros levam o guard de ficheiros e a pasta partilhada só de leitura", () => {

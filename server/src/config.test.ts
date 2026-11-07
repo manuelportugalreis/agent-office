@@ -24,7 +24,7 @@ describe("configuração", () => {
     const c = parseConfig(undefined, {});
     expect(c).toEqual(DEFAULTS);
     expect(c.userName).toBe("");
-    expect(JSON.stringify(c)).not.toMatch(/asu\.edu|@/i);
+    expect(JSON.stringify(c)).not.toMatch(/\.edu\b|@/i);
   });
   it("lê o ficheiro e as variáveis de ambiente (que têm prioridade)", () => {
     const file = {

@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { AccessProfile } from "../../shared/protocol.ts";
-import { config } from "./config.ts";
+import { CHROME_READ_TOOLS } from "./agents.ts";
+import { canvasAllow, config } from "./config.ts";
 import { parseLine } from "./events.ts";
 import { userInstructions } from "./instructions.ts";
 import { describeProfile, mcpCatalog, profileRoots } from "./profiles.ts";
@@ -72,7 +73,31 @@ const disallowed = (p: AccessProfile, readOnly = false): string[] => [
   ...(p.bash && !readOnly ? [] : ["Bash", "PowerShell"]),
   ...(readOnly ? ["Write", "Edit", "MultiEdit", "NotebookEdit"] : []),
   ...(p.skills === false ? ["Skill"] : []),
+  // Com o Chrome no perfil, as ferramentas que clicam, escrevem ou correm código ficam proibidas mesmo que o guarda
+  // falhe (as tuas definições do terminal contam aqui, por isso não basta não as permitir).
+  ...(p.browser ? CHROME_WRITE_TOOLS : []),
 ];
+
+/** Ferramentas do Chrome que não são de leitura. */
+const CHROME_WRITE_TOOLS = [
+  "computer",
+  "form_input",
+  "javascript_tool",
+  "find",
+  "read_page",
+  "file_upload",
+  "upload_image",
+  "gif_creator",
+  "shortcuts_execute",
+  "shortcuts_list",
+  "tabs_close_mcp",
+  "resize_window",
+  "switch_browser",
+  "select_browser",
+  "read_console_messages",
+  "read_network_requests",
+  "browser_batch",
+].map((t) => `mcp__claude-in-chrome__${t}`);
 
 export interface LocalArgs {
   readonly args: string[];
@@ -113,13 +138,24 @@ export function buildLocalArgs(
   if (p.vault !== "none" && vaultDir)
     servers[VAULT_MCP] = { type: "stdio", command: process.execPath, args: [hookPath("vault-mcp.mjs"), vaultDir] };
   writeFileSync(files.mcp, JSON.stringify({ mcpServers: servers }), { mode: 0o600 });
+  // Chrome no perfil: só ler o Canvas (o mesmo guarda do modo escritório: abrir, navegar e ler; só o domínio do Canvas).
+  const chrome = `${node()} "${hookPath("chrome-guard.mjs")}"`;
+  const canvas = canvasAllow(config);
   const hooks = {
     PreToolUse: [
       {
         matcher: GUARD_MATCHER,
         hooks: [{ type: "command", command: `${node()} "${hookPath("local-guard.mjs")}" "${slash(files.policy)}"` }],
       },
+      ...(p.browser ? [{ matcher: "mcp__claude-in-chrome__.*", hooks: [{ type: "command", command: `${chrome} ${canvas}` }] }] : []),
     ],
+    ...(p.browser
+      ? {
+          PostToolUse: [
+            { matcher: "mcp__claude-in-chrome__navigate", hooks: [{ type: "command", command: `${chrome} --post ${canvas}` }] },
+          ],
+        }
+      : {}),
   };
   const extraDirs = roots.read.filter((d) => d !== p.folder);
   // No terminal (continuar a sessão) as perguntas aparecem lá; aqui chegam por stdio à app.
@@ -140,7 +176,10 @@ export function buildLocalArgs(
     slash(files.mcp),
     ...(p.mcp.includes("*") ? [] : ["--strict-mcp-config"]),
     ...extraDirs.flatMap((d) => ["--add-dir", slash(d)]),
-    ...(p.vault !== "none" ? ["--allowedTools", VAULT_TOOLS.join(",")] : []),
+    ...(p.browser ? ["--chrome"] : []),
+    ...(p.vault !== "none" || p.browser
+      ? ["--allowedTools", [...(p.vault !== "none" ? VAULT_TOOLS : []), ...(p.browser ? CHROME_READ_TOOLS : [])].join(",")]
+      : []),
     ...(disallowed(p, req.readOnly).length ? ["--disallowedTools", disallowed(p, req.readOnly).join(",")] : []),
     "--model",
     req.agent.model,

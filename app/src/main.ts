@@ -54,6 +54,7 @@ import { byId, isDark, toast } from "./ui/dom";
 import { createApprovals } from "./ui/approvals";
 import { createPanel, type Tab } from "./ui/panel";
 import { createLocalMode, type LocalMode } from "./ui/local-mode";
+import { createAgentTerminal } from "./ui/terminal";
 
 const SCREEN_REFRESH_S = 0.25;
 const ARRIVAL_LOOK_MS = 6000;
@@ -102,9 +103,16 @@ let online = false;
 const busy = new Set<string>();
 /** Modo "Claude Code local" (criado depois da ligação ao servidor; o painel usa-o quando já existe). */
 let localMode: LocalMode | null = null;
+/** O Claude Code verdadeiro de cada agente (separador «Claude Code» do painel). */
+const agentTerminal = createAgentTerminal(byId("termHost"));
+/** Ao abrir um agente: o Claude Code dele quando o servidor está ligado e ele é real; senão o chat (simulado). */
+const agentTab = (a: { def: { id: string } }): Tab => (online && realAgents.has(a.def.id) ? "term" : "chat");
+byId("termRestart").onclick = () => agentTerminal.restart();
 const panel = createPanel({
   onTab: (a, t) => {
     if (t === "instr") instructionsUi.load(a.def.id, online && realAgents.has(a.def.id));
+    if (t === "term") agentTerminal.show(a.def.id);
+    else agentTerminal.hide();
   },
   extra: (a) => localMode?.sectionHtml(a.def.id, { real: realAgents.has(a.def.id), busy: busy.has(a.def.id) }) ?? "",
   bindExtra: (a) => localMode?.bind(a.def.id),
@@ -120,7 +128,10 @@ const panel = createPanel({
     setWalkMode(true);
     walkTo(a);
   },
-  onClose: () => byId("stage").focus({ preventScroll: true }),
+  onClose: () => {
+    agentTerminal.hide();
+    byId("stage").focus({ preventScroll: true });
+  },
   sync: () => {
     if (realAgents.has("dean") && client.send({ type: "sync" })) toast("A sincronizar o Canvas (o Dean vai ler o teu Chrome)…");
     else toast("Servidor offline: a sincronização só funciona com o servidor ligado.");
@@ -149,7 +160,7 @@ const stage = createStage(
     if (editor.active()) return;
     const a = pickAt(e);
     if (walk.on) return clickInWalkMode(e, a);
-    if (a) panel.open(a, "chat");
+    if (a) panel.open(a, agentTab(a));
   },
   (e) => {
     hovered = pickAt(e);
@@ -260,7 +271,7 @@ function handleArrival(now: number): void {
   worker.lookAt = { x: player.x, z: player.z, until: now + ARRIVAL_LOOK_MS };
   walkTarget = null;
   walkStatus.arrived(worker.def.name);
-  panel.open(worker, "chat");
+  panel.open(worker, agentTab(worker));
 }
 
 /** Teclas de andar: setas e WASD (em relação ao ecrã, não ao mundo). */
@@ -485,6 +496,13 @@ function applySnapshot(s: Snapshot): void {
 }
 
 function onServerMsg(m: ServerMsg): void {
+  if (m.type === "terminal-order") {
+    const a = byAgentId.get(m.agentId);
+    if (!a) return;
+    panel.open(a, "term");
+    toast(`Ordem escrita no Claude Code de ${a.def.name}`);
+    return;
+  }
   if (
     m.type === "profiles" ||
     m.type === "modes" ||
@@ -916,7 +934,7 @@ const palette = createPalette(
   () => agents.map((a) => ({ id: a.def.id, name: a.def.name, role: a.role, emoji: a.def.emoji, state: STATE_INFO[stateOf(a)].label })),
   (id) => {
     const a = byAgentId.get(id);
-    if (a) panel.open(a, "chat");
+    if (a) panel.open(a, agentTab(a));
   },
 );
 byId("palBtn").onclick = () => palette.open();
@@ -932,7 +950,7 @@ installResizer(byId("main"), byId("resizer"));
 function openFromHash(): void {
   const [agentId, tab] = location.hash.slice(1).split("/");
   const agent = byAgentId.get(agentId ?? "");
-  if (agent) panel.open(agent, (["sum", "log", "chat", "instr"] as const).find((t): t is Tab => t === tab) ?? "sum");
+  if (agent) panel.open(agent, (["sum", "log", "chat", "instr", "term"] as Tab[]).find((t) => t === tab) ?? agentTab(agent));
 }
 openFromHash();
 addEventListener("hashchange", openFromHash);

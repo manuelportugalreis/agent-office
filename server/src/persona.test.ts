@@ -29,7 +29,7 @@ describe("vozes dos agentes", () => {
   it("o CEO conversa normalmente: o formato JSON só é pedido no pedido de plano", () => {
     const ceo = REAL_AGENTS.find((a) => a.id === "ceo")!;
     expect(ceo.systemPrompt).not.toContain("APENAS com um objeto JSON");
-    expect(ceo.model).toBe("opus");
+    expect(ceo.model).toBe("sonnet");
   });
   it("@menções por id ou por nome, sem distinguir maiúsculas", () => {
     expect(findAgentByMention("lena")?.id).toBe("lena");
@@ -99,7 +99,8 @@ describe("web-guard.mjs", () => {
   });
   it("só os agentes com web levam o guard da web", () => {
     const withWeb = REAL_AGENTS.filter((a) => a.tools.some((t) => WEB_TOOLS.includes(t))).map((a) => a.id);
-    expect([...withWeb].sort()).toEqual(["mira", "rhea", "scout", "vera"]);
+    // Ada e Turing abrem os materiais públicos ligados às entregas (com o guard da web, como os outros).
+    expect([...withWeb].sort()).toEqual(["ada", "mira", "rhea", "scout", "turing", "vera"]);
     for (const a of REAL_AGENTS) {
       const has = guardHooks(a).some((h) => h.hooks[0].command.includes("web-guard.mjs"));
       expect(has, a.id).toBe(withWeb.includes(a.id));

@@ -93,11 +93,22 @@ cp office.config.example.json office.config.json
 | `userName`     | Como os agentes te tratam e a saudação do chat. Vazio significa "o utilizador".                                           |
 | `port`         | Porta do servidor (predefinição `8787`). Também `AGENT_OFFICE_PORT`.                                                      |
 | `vaultDir`     | Pasta opcional (ex.: um vault do Obsidian) onde os agentes com ficheiros também podem ler e escrever. Vazio = sem acesso. |
-| `canvasHost`   | O **único** domínio que o agente do Canvas pode abrir no teu browser.                                                     |
+| `canvasHost`   | O **único** domínio que quem lê o Canvas (Dean, Ada, Turing) pode abrir no teu browser.                                   |
+| `canvasOrigin` | Só para testes: um Canvas de ensaio local (`http://127.0.0.1:<porta>`, ver `scripts/canvas-fixture.mjs`). Não o ponhas.   |
 | `courses`      | Que agente trata de que disciplina (`agent`, `code`, `title`). O código tem de coincidir com o Canvas.                    |
 | `extraOrigins` | Origens extra aceites pelo servidor (por exemplo, um proxy). Normalmente fica vazio.                                      |
 
 Edita `server/workspaces/_company/perfil.md` (criado à primeira execução) para dizer a todos os agentes quem és. Os agentes só o leem.
+
+### Canvas sem a extensão do Chrome (calendário)
+
+Se a extensão Claude in Chrome não está disponível (há universidades que a desligam), liga o calendário do Canvas. No Canvas, abre **Calendar › Calendar Feed**, copia o link e guarda-o numa variável de ambiente, no teu terminal (nunca no chat):
+
+```powershell
+setx AGENT_OFFICE_CANVAS_FEED "https://<o teu canvas>/feeds/calendars/user_....ics"
+```
+
+Reinicia o escritório. O servidor lê o calendário diretamente, sem browser nem agentes: o painel do Dean e «Faz-me o trabalho de casa que tenho para entregar hoje» passam a saber os prazos e a descrição de cada entrega. O calendário não traz rubricas, anexos nem o que já submeteste. Por isso, para cada entrega de hoje o escritório abre a página no teu browser e uma pasta; guardas lá a página em PDF e os ficheiros e respondes «feito» (ou «segue», para avançar só com a descrição). O link é um segredo (dá o teu calendário sem login): tem de ser do teu `canvasHost`, nunca aparece no chat nem nos registos e, se o renovares no Canvas, basta trocar a variável. Antes, confirma as regras da tua universidade sobre dados e IA.
 
 ## Usar
 

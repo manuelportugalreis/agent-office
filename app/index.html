@@ -89,6 +89,10 @@
         <label class="chk"
           ><input type="checkbox" id="pfSkills" /> As minhas skills do Claude Code (~/.claude/skills e as do projeto)</label
         >
+        <label class="chk"
+          ><input type="checkbox" id="pfBrowser" /> Ler o Canvas no meu Chrome, com a minha sessão (só leitura; precisa da extensão Claude
+          in Chrome)</label
+        >
         <div class="lbl">Integrações MCP</div>
         <div id="pfMcp" class="pf-mcp"></div>
         <div class="pf-bt">
@@ -141,13 +145,22 @@
             </button>
           </div>
           <div class="tabs">
-            <button data-t="sum" class="on">Resumo</button><button data-t="log">Log</button><button data-t="chat">Chat</button
+            <button data-t="term" title="O Claude Code verdadeiro deste agente, como no teu terminal">Claude Code</button
+            ><button data-t="sum" class="on">Resumo</button><button data-t="log">Log</button
+            ><button data-t="chat" title="O chat antigo do escritório (ordens e rascunhos)">Chat</button
             ><button data-t="instr">Instruções</button>
           </div>
           <div class="tc" id="tSum"></div>
           <div class="tc" id="tLog" style="display: none"></div>
           <div class="tc" id="tInstr" style="display: none"></div>
           <div id="chatbox"><div id="chatRoot"></div></div>
+          <div id="termbox" style="display: none">
+            <div class="term-bar">
+              <span>Claude Code deste agente: o mesmo do teu terminal, com acesso a tudo o que tu tens. Pergunta antes de agir.</span>
+              <button id="termRestart" type="button">Nova sessão</button>
+            </div>
+            <div id="termHost"></div>
+          </div>
         </div>
       </aside>
     </main>

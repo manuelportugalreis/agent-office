@@ -43,7 +43,9 @@ export interface LocalMode {
 }
 
 /** Agentes com pesquisa web no modo escritório (o servidor dá-lhes WebSearch/WebFetch, vigiados pelo web-guard). */
-const WEB_AGENTS = new Set(["rhea", "mira", "vera", "scout"]);
+const WEB_AGENTS = new Set(["rhea", "mira", "vera", "scout", "ada", "turing"]);
+/** Agentes que leem o Canvas no teu Chrome no modo escritório (o servidor dá-lhes as ferramentas de leitura do Chrome). */
+const CANVAS_AGENTS = new Set(["ada", "turing"]);
 
 const lines = (v: string): string[] =>
   v
@@ -167,6 +169,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
           ? [`O vault do Obsidian (${state.vaultDir}): ler, criar e editar notas`]
           : ["Sem vault do Obsidian configurado"]),
         ...(WEB_AGENTS.has(agentId) ? ["Pesquisa e leitura de páginas web (sem endereços locais nem credenciais)"] : []),
+        ...(CANVAS_AGENTS.has(agentId) ? ["O Canvas no teu Chrome, com a tua sessão: só abrir e ler (sem cliques nem submissões)"] : []),
         "Sem comandos de terminal nem integrações MCP",
       ];
       h += `<div class="access">${access.map((l) => `<div>${escapeHtml(l)}</div>`).join("")}<div class="mode-note">${
@@ -247,6 +250,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
     f("pfBash").checked = p?.bash ?? true;
     f("pfAuto").checked = p?.autoEdits ?? false;
     f("pfSkills").checked = p?.skills !== false;
+    f("pfBrowser").checked = p?.browser === true;
     const chosen = new Set(p?.mcp ?? []);
     byId("pfMcp").innerHTML =
       `<label><input type="checkbox" value="*"${chosen.has("*") ? " checked" : ""}> Todas as que uso no terminal</label>` +
@@ -285,7 +289,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
   byId("pfBroad").onclick = () => {
     if (state.vaultDir) byId<HTMLSelectElement>("pfVault").value = "write";
     byId<HTMLTextAreaElement>("pfVaultFolders").value = "";
-    for (const id of ["pfBash", "pfAuto", "pfSkills"]) byId<HTMLInputElement>(id).checked = true;
+    for (const id of ["pfBash", "pfAuto", "pfSkills", "pfBrowser"]) byId<HTMLInputElement>(id).checked = true;
     byId("pfMcp")
       .querySelectorAll<HTMLInputElement>("input")
       .forEach((i) => (i.checked = i.value === "*"));
@@ -310,6 +314,7 @@ export function createLocalMode(deps: LocalModeDeps): LocalMode {
       bash: byId<HTMLInputElement>("pfBash").checked,
       autoEdits: byId<HTMLInputElement>("pfAuto").checked,
       skills: byId<HTMLInputElement>("pfSkills").checked,
+      browser: byId<HTMLInputElement>("pfBrowser").checked,
       mcp: [...byId("pfMcp").querySelectorAll<HTMLInputElement>("input:checked")].map((i) => i.value),
     };
     if (!profile.name || !profile.folder) return toast("Dá um nome ao perfil e escolhe a pasta de trabalho.");

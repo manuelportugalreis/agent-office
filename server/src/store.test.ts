@@ -153,8 +153,10 @@ describe("equipa", () => {
     expect(plan).not.toContain("dean (");
     expect(plan).toContain("Ordem do utilizador: faz isto");
   });
-  it("só o Dean tem Chrome, e nenhum agente web tem ferramentas de escrita", () => {
-    expect(REAL_AGENTS.filter((a) => a.chrome).map((a) => a.id)).toEqual(["dean"]);
+  it("só quem trata do Canvas (Dean e as disciplinas) tem o Chrome, e só no domínio do Canvas; nenhum agente tem terminal", () => {
+    const readers = REAL_AGENTS.filter((a) => a.chrome);
+    expect(readers.map((a) => a.id)).toEqual(["dean", "ada", "turing"]);
+    for (const a of readers) expect(a.chrome?.hosts).toEqual(["canvas.instructure.com"]);
     for (const a of REAL_AGENTS) expect(a.tools.every((t) => t === "WebSearch" || t === "WebFetch")).toBe(true);
   });
 });

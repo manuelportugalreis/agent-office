@@ -121,11 +121,23 @@ function checkRead(sessionId, tabId) {
     block("só podes ler separadores onde navegaste com sucesso (usa o tabId no navigate e no get_page_text) para um domínio permitido");
 }
 
-/** URL permitido (https e domínio da lista), sem bloquear: usado no pós-execução. */
+/** Caminhos do Canvas com efeitos ao abrir: sair, ferramentas externas (LTI), descargas, OAuth. */
+const SIDE_EFFECT_PATH = /(^|\/)(logout|external_tools|download|login\/oauth2|oauth2)(\/|$)/i;
+
+/** Origem de ensaio local (só 127.0.0.1/localhost com porta): a única forma de a lista aceitar http. */
+const LOOPBACK_ORIGIN = /^https?:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
+
+/** Um URL está na lista: domínio exato em https, ou a origem exata (esquema, endereço e porta) de um Canvas de ensaio local. */
+function matches(url) {
+  return allowedHosts.some((entry) =>
+    entry.includes("://") ? LOOPBACK_ORIGIN.test(entry) && url.origin === entry : url.protocol === "https:" && url.hostname === entry,
+  );
+}
+
+/** URL permitido, sem bloquear: usado no pós-execução. */
 function isAllowedUrl(raw) {
   try {
-    const url = new URL(String(raw).includes("://") ? String(raw) : `https://${raw}`);
-    return url.protocol === "https:" && allowedHosts.includes(url.hostname);
+    return matches(new URL(String(raw).includes("://") ? String(raw) : `https://${raw}`));
   } catch {
     return false;
   }
@@ -168,8 +180,16 @@ function checkUrl(raw) {
   } catch {
     return block("URL inválido");
   }
-  if (url.protocol !== "https:") block("só https é permitido");
-  if (!allowedHosts.includes(url.hostname)) block(`o domínio ${url.hostname} não está na lista permitida`);
+  // Utilizador ou palavra-passe no endereço autenticam por HTTP Basic: nunca (nenhum agente autentica).
+  if (url.username || url.password) block("endereços com utilizador ou palavra-passe não são permitidos");
+  if (!matches(url)) {
+    if (url.protocol !== "https:") block("só https é permitido");
+    block(`o domínio ${url.hostname} não está na lista permitida`);
+  }
+  // Mesmo no Canvas, há endereços que fazem coisas ao abrir (sair da sessão, lançar ferramentas externas com a tua
+  // identidade, descarregar ficheiros para o disco): ler não precisa deles.
+  if (SIDE_EFFECT_PATH.test(url.pathname) || /(^|&)download_frd=1/.test(url.search.slice(1)))
+    block(`o caminho ${url.pathname} não é de leitura (sair, ferramentas externas ou descargas)`);
 }
 
 let input = "";

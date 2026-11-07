@@ -15,7 +15,8 @@ const PLAN = JSON.stringify({
 const ok = (reply: string): RunResult => ({ ok: true, reply });
 const fail = (error: string): RunResult => ({ ok: false, reply: "", error });
 const LISTING = "https://acme.com/careers/ba";
-const PROFILE = "Mestrando em AI in Business na ASU. Contribuí para a migração do ERP de uma empresa. Domino SQL e Power BI.";
+const PROFILE =
+  "Mestrando em AI in Business numa universidade americana. Contribuí para a migração do ERP de uma empresa. Domino SQL e Power BI.";
 
 const research = (patch: Record<string, unknown> = {}): RunResult =>
   ok(

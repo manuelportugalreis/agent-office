@@ -113,6 +113,19 @@ describe("argumentos do Claude Code local", () => {
     expect(parseProfileInput({ ...profile(), skills: "sim" })).toBeNull();
     for (const f of [...withSkills.files, ...without.files]) rmSync(f, { force: true, recursive: true });
   });
+  it("o Chrome no perfil dá só as ferramentas de leitura, com o guarda do Canvas; sem ele, nada de Chrome", () => {
+    const on = buildLocalArgs(req(profile({ browser: true })), vault);
+    const at = (flag: string): string => on.args[on.args.indexOf(flag) + 1];
+    expect(on.args).toContain("--chrome");
+    expect(at("--allowedTools")).toContain("mcp__claude-in-chrome__get_page_text");
+    expect(at("--allowedTools")).not.toContain("computer");
+    expect(at("--settings")).toContain("chrome-guard.mjs");
+    const off = buildLocalArgs(req(profile()), vault);
+    expect(off.args).not.toContain("--chrome");
+    expect(off.args.join(" ")).not.toContain("chrome-guard");
+    expect(parseProfileInput({ ...profile(), browser: undefined })?.browser).toBe(false);
+    for (const f of [...on.files, ...off.files]) rmSync(f, { force: true, recursive: true });
+  });
   it("retomar uma sessão usa o mesmo perfil (mesmas pastas e regras) e o id guardado", () => {
     const p = profile({ writeDirs: [other], autoEdits: true, mcp: ["*"] });
     const { args, files } = buildLocalArgs(req(p, true), vault);

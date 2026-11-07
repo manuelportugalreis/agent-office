@@ -1,11 +1,11 @@
 /* Chat dos agentes: o aspeto do Claude (fundo creme, resposta em serifa, composer arredondado, destaque laranja). */
+@import "@fontsource-variable/source-serif-4";
+
 /* As ordens ao CEO não se editam nem regeneram (cada ordem é uma nova). */
 .chat-thread[data-agent="ceo"] .chat-icon-btn[aria-label="Editar"],
 .chat-thread[data-agent="ceo"] .chat-icon-btn[aria-label="Regenerar"] {
   display: none;
 }
-
-@import "@fontsource-variable/source-serif-4";
 
 #chatRoot {
   display: flex;
