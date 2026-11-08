@@ -441,6 +441,8 @@ export function createOrchestrator(
       ? `\n${review.result.ok ? "✓" : "✗"} Nina reviu os ficheiros alterados${review.result.ok ? " (o veredicto está no separador Tarefas dela)" : `: ${review.result.error ?? "falhou"}`}`
       : "";
     emit({ type: "reply", agentId: "ceo", text: summarize(outcomes) + reviewLine });
+    const runs = [...outcomes.flatMap((o) => (o.result ? [o.result] : [])), ...(review ? [review.result] : [])];
+    if (runs.length) log(costLine(runs));
   }
 
   return {
@@ -572,8 +574,15 @@ export function createOrchestrator(
         if (!report.ok) await new Promise((resolve) => setTimeout(resolve, REPORT_WAIT_MS * 4));
       }
       if (!report.ok) log(`Não consegui escrever o resumo: ${report.error ?? "erro desconhecido"}`);
+      log(costLine([result, ...results, report]));
     },
   };
+}
+
+/** Quanto custou uma ordem (equivalente em dólares, como o Claude Code o reporta), somando todas as corridas. */
+export function costLine(runs: ReadonlyArray<{ readonly costUsd?: number }>): string {
+  const total = runs.reduce((sum, r) => sum + (r.costUsd ?? 0), 0);
+  return `Custo equivalente desta ordem: $${total.toFixed(2)} (${runs.length} ${runs.length === 1 ? "corrida" : "corridas"} do Claude Code).`;
 }
 
 /** Pedido de revisão independente à Nina: o pedido original e os ficheiros que mudaram (lê-os em disco). */

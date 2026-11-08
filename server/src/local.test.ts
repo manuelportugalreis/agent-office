@@ -8,7 +8,7 @@ import type { AccessProfile, ServerMsg } from "../../shared/protocol.ts";
 import { parseClientMsg, parseProfileInput } from "../../shared/protocol.ts";
 import { createHub } from "./hub.ts";
 import { buildLocalArgs, describeAsk, lineDiff, VAULT_TOOLS } from "./local-runner.ts";
-import { changedFiles, createOrchestrator, traceText } from "./orchestrator.ts";
+import { changedFiles, costLine, createOrchestrator, traceText } from "./orchestrator.ts";
 import {
   DEFAULT_PROFILE_ID,
   defaultProfile,
@@ -276,6 +276,12 @@ describe("delegação do Atlas com o acesso da ordem", () => {
     ];
     expect(changedFiles(steps)).toEqual(["C:/p/a.md"]);
     expect(traceText(steps)).toContain("npm test (falhou/recusado)");
+  });
+  it("o custo de uma ordem soma todas as corridas (as que não reportam custo contam zero)", () => {
+    expect(costLine([{ costUsd: 0.05 }, { costUsd: 0.4 }, {}, { costUsd: 0.012 }])).toBe(
+      "Custo equivalente desta ordem: $0.46 (4 corridas do Claude Code).",
+    );
+    expect(costLine([{ costUsd: 0.1 }])).toContain("1 corrida do");
   });
   it("o rasto também mostra leituras e pesquisas (sem elas, o Atlas dizia que alguém não pesquisou)", () => {
     const steps = [
