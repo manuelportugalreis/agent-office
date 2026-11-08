@@ -138,6 +138,8 @@ export interface DossierService {
   approve(id: number): void;
   /** Volta a tentar o passo que ficou bloqueado. */
   retry(id: number): Promise<void>;
+  /** Fecha o dossier sem o aprovar (nada é enviado). */
+  archive(id: number): void;
   current(): Dossier | null;
 }
 
@@ -469,7 +471,7 @@ export function createDossierService({ hub, store, approvals, emit, readProfile 
     current: () => current,
 
     async start(request, materials) {
-      if (busy || (current && current.stage !== "approved" && !current.blocked)) {
+      if (busy || (current && current.stage !== "approved" && current.stage !== "archived" && !current.blocked)) {
         return complain("Já há um dossier em curso. Aprova-o ou resolve o bloqueio antes de abrir outro.");
       }
       if (current?.blocked) return complain("O dossier atual está bloqueado. Tenta outra vez esse passo antes de abrir outro.");
@@ -549,6 +551,18 @@ export function createDossierService({ hub, store, approvals, emit, readProfile 
       commit(
         { stage: "approved", holder: "user", approvalId: undefined, reviews: [...d.reviews, review].slice(-MAX_REVIEWS) },
         `Aprovaste o rascunho v${d.draftVersion}. Nada foi enviado.`,
+      );
+    },
+
+    /** Fecha o dossier sem o aprovar (já não interessa ou ficou parado): nada é enviado e pode abrir-se outro. */
+    archive(id) {
+      const d = find(id);
+      if (!d || busy || d.stage === "approved" || d.stage === "archived")
+        return complain("Este dossier não se pode arquivar agora (está a meio de um passo ou já está fechado).");
+      if (d.approvalId !== undefined) approvals.decide(d.approvalId, false);
+      commit(
+        { stage: "archived", holder: "user", blocked: undefined, clarification: undefined, approvalId: undefined },
+        "Arquivaste o dossier. Nada foi enviado.",
       );
     },
 

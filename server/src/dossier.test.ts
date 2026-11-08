@@ -439,6 +439,26 @@ describe("dossier: falhas e retoma", () => {
     expect(t.service.current()).toMatchObject({ stage: "review", check: { passed: true } });
   });
 
+  it("arquivar: fecha um dossier à tua espera sem o aprovar (nada é enviado) e deixa abrir outro", async () => {
+    const t = setup({
+      ceo: [ok(PLAN), ok(PLAN)],
+      mira: [research(), research()],
+      lena: [draft("Carta"), draft("Carta 2")],
+      nina: [check(), check()],
+    });
+    await t.service.start("ACME");
+    const d = t.service.current() as Dossier;
+    expect(d.stage).toBe("review");
+    t.service.archive(d.id);
+    expect(t.service.current()).toMatchObject({ stage: "archived", holder: "user", approvalId: undefined });
+    expect(t.service.current()?.history.at(-1)?.text).toContain("Nada foi enviado");
+    // Já fechado: arquivar outra vez não faz nada.
+    t.service.archive(d.id);
+    expect(t.service.current()?.stage).toBe("archived");
+    await t.service.start("Beta");
+    expect(t.service.current()).toMatchObject({ id: d.id + 1, stage: "review" });
+  });
+
   it("pesquisa falhada: fica na Mira e tentar outra vez continua o fluxo", async () => {
     const t = setup({ ceo: [ok(PLAN)], mira: [fail("Tempo máximo excedido."), research()], lena: [draft("Carta")], nina: [check()] });
     await t.service.start("ACME");

@@ -43,6 +43,8 @@ export function statusOf(d: Dossier): DossierStatus {
     };
   }
   switch (d.stage) {
+    case "archived":
+      return { tone: "done", headline: "Arquivado", next: "Nada foi enviado. Podes começar outro dossier." };
     case "atlas":
       return { tone: "work", headline: "Com o Atlas, a planear", next: "A seguir: a Mira pesquisa." };
     case "research":
@@ -80,7 +82,7 @@ export interface TimelineStep {
 }
 
 const ORDER: readonly DossierHolder[] = ["ceo", "mira", "lena", "nina", "user"];
-const STAGE_INDEX = { atlas: 0, research: 1, drafting: 2, checking: 3, review: 4, approved: 5 } as const;
+const STAGE_INDEX = { atlas: 0, research: 1, drafting: 2, checking: 3, review: 4, approved: 5, archived: 5 } as const;
 
 /** Atlas, Mira, Lena, Nina e tu: quem já fez a sua parte, quem tem o dossier agora e quem ainda não pegou nele. */
 export function timelineOf(d: Dossier): TimelineStep[] {
@@ -229,6 +231,9 @@ export function boardView(d: Dossier | null): BoardView {
   if (d.stage === "approved") {
     return { tone: "done", headline: "Aprovado", title, lines: ["Nada foi enviado"], hint: "Abre o cartão ou começa outro dossier" };
   }
+  if (d.stage === "archived") {
+    return { tone: "done", headline: "Arquivado", title, lines: ["Nada foi enviado"], hint: "Começa outro dossier" };
+  }
   if (d.stage === "drafting" && d.pendingCorrections?.length) {
     return { tone: "work", headline: `Com ${NAMES[d.holder]}`, title, lines: ["A corrigir com as indicações da Nina"], hint: "Em curso" };
   }
@@ -280,6 +285,14 @@ export function nextActionOf(d: Dossier | null): NextAction {
           };
     case "approved":
       return { tone: "done", title: "Dossier aprovado", sub: "Nada foi enviado.", cta: "Novo dossier", view: "new" };
+    case "archived":
+      return {
+        tone: "done",
+        title: "Sem dossier ativo",
+        sub: "O último foi arquivado; nada foi enviado.",
+        cta: "Novo dossier",
+        view: "new",
+      };
     default: {
       const doing = d.stage === "drafting" && d.pendingNote !== undefined ? "A rever com a tua nota" : DOING[d.stage];
       return {

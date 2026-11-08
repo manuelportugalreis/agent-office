@@ -820,6 +820,7 @@ const dossierUi = createDossierUi(
     returnDraft: (id, note) => sendDossier({ type: "dossier-return", id, note }),
     approve: (id) => sendDossier({ type: "dossier-approve", id }),
     retry: (id) => sendDossier({ type: "dossier-retry", id }),
+    archive: (id) => sendDossier({ type: "dossier-archive", id }),
   },
   IS_DEMO ? { setupUrl: SETUP_URL } : undefined,
 );

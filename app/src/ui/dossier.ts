@@ -21,6 +21,7 @@ export interface DossierActions {
   answer(id: number, answer: string, companyOnly: boolean): boolean;
   approve(id: number): boolean;
   retry(id: number): boolean;
+  archive(id: number): boolean;
 }
 
 export interface DossierUi {
@@ -188,7 +189,12 @@ function cardHtml(d: Dossier, note: string, answer: string, tab: DossierTab): st
         <div class="dz-actions">${problems ? "" : `<button class="primary" data-act="approve">Aprovar</button>`}<button ${problems ? 'class="primary"' : ""} data-act="return" ${note.trim() ? "" : "disabled"}>Devolver à Lena</button></div>
         <small>${problems ? "A Nina ainda vê problemas: não se pode aprovar assim. Devolve à Lena (podes dar-lhe o facto que falta)." : "Aprovar regista a decisão. Nada é enviado nem submetido."}</small></div>`
       : "";
-  const fresh = d.stage === "approved" ? newForm("Abrir outro dossier") : "";
+  const closed = d.stage === "approved" || d.stage === "archived";
+  const fresh = closed ? newForm("Abrir outro dossier") : "";
+  // Já não interessa ou ficou parado: fecha-se sem aprovar (nada é enviado) e pode abrir-se outro.
+  const archive = closed
+    ? ""
+    : `<div class="dz-archive"><button data-act="archive" title="Fecha este dossier sem o aprovar. Nada é enviado.">Arquivar dossier</button></div>`;
   const research = d.research
     ? `<section><div class="lbl">Pesquisa da Mira</div>${researchHtml(d.research)}<details><summary>Ver o texto completo</summary><pre class="dz-pre">${escapeHtml(d.findings ?? "")}</pre></details></section>`
     : d.findings
@@ -216,7 +222,7 @@ function cardHtml(d: Dossier, note: string, answer: string, tab: DossierTab): st
     <div class="dz-banner tone-${status.tone}"><b>${escapeHtml(status.headline)}</b><small>${escapeHtml(status.next)}</small></div>
     <ol class="dz-steps" aria-label="Percurso do dossier">${steps}</ol>
     <div class="dz-tabs" role="tablist" aria-label="Secções do dossier">${tabBtns}</div>
-    <div class="dz-body" id="dzPanel" role="tabpanel" aria-labelledby="dzt-${tab}">${panes[tab]}${fresh}</div>
+    <div class="dz-body" id="dzPanel" role="tabpanel" aria-labelledby="dzt-${tab}">${panes[tab]}${fresh}${archive}</div>
     ${decision ? `<div class="dz-decision">${decision}</div>` : ""}`;
 }
 
@@ -376,6 +382,7 @@ export function createDossierUi(actions: DossierActions, demo?: DossierDemo): Do
     else if (act === "answer" && answer.trim() && actions.answer(id, answer.trim(), false)) answer = "";
     else if (act === "companyOnly" && actions.answer(id, answer.trim(), true)) answer = "";
     else if (act === "retry") actions.retry(id);
+    else if (act === "archive") actions.archive(id);
     else if (act === "start" && request.trim() && actions.start(request.trim(), materials.trim())) {
       request = "";
       materials = "";

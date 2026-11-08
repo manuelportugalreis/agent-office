@@ -7,7 +7,8 @@ export type RemoteStatus = "idle" | "think" | "work" | "err" | "appr";
  * Onde está o dossier de candidatura: com o Atlas a planear, com a Mira a pesquisar, com a Lena a redigir,
  * com a Nina a verificar o rascunho, ou à espera de ti. (`checking` só existe em dossiers criados depois da Nina entrar no fluxo.)
  */
-export type DossierStage = "atlas" | "research" | "drafting" | "checking" | "review" | "approved";
+/** "archived": arquivado por ti (fechado sem aprovar; nada foi enviado). */
+export type DossierStage = "atlas" | "research" | "drafting" | "checking" | "review" | "approved" | "archived";
 export type DossierHolder = "ceo" | "mira" | "lena" | "nina" | "user";
 
 /** O que a Mira apurou sobre a vaga: anúncio verificado, só a empresa, vaga ambígua ou não encontrada. */
@@ -385,7 +386,8 @@ export type ClientMsg =
   | { readonly type: "dossier-answer"; readonly id: number; readonly answer: string; readonly companyOnly?: boolean }
   | { readonly type: "dossier-return"; readonly id: number; readonly note: string }
   | { readonly type: "dossier-approve"; readonly id: number }
-  | { readonly type: "dossier-retry"; readonly id: number };
+  | { readonly type: "dossier-retry"; readonly id: number }
+  | { readonly type: "dossier-archive"; readonly id: number };
 
 export const MAX_TEXT_LENGTH = 8000;
 /** Instruções de um agente (o CLAUDE.md dele) ou as regras da equipa. */
@@ -511,6 +513,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return Number.isInteger(m.id) ? { type: "dossier-approve", id: m.id as number } : null;
     case "dossier-retry":
       return Number.isInteger(m.id) ? { type: "dossier-retry", id: m.id as number } : null;
+    case "dossier-archive":
+      return Number.isInteger(m.id) ? { type: "dossier-archive", id: m.id as number } : null;
     case "decide":
       return Number.isInteger(m.id) && typeof m.approved === "boolean"
         ? { type: "decide", id: m.id as number, approved: m.approved }

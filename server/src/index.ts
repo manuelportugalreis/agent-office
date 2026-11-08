@@ -478,6 +478,8 @@ wss.on("connection", (ws, req) => {
         return dossier.approve(msg.id);
       case "dossier-retry":
         return background(dossier.retry(msg.id), "dossier");
+      case "dossier-archive":
+        return dossier.archive(msg.id);
       case "decide":
         return approvals.decide(msg.id, msg.approved);
       case "sync":
