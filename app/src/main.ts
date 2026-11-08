@@ -50,13 +50,15 @@ interface LogEvent {
 }
 import { deadlinesFor } from "./sim/canvas";
 import { buildLocations } from "./sim/locations";
-import { byId, isDark, toast } from "./ui/dom";
+import { byId, escapeHtml, isDark, toast } from "./ui/dom";
 import { createApprovals } from "./ui/approvals";
 import { createPanel, type Tab } from "./ui/panel";
+import { createTeamBar } from "./ui/team";
 import { createLocalMode, type LocalMode } from "./ui/local-mode";
 import { createAgentTerminal } from "./ui/terminal";
 
 const SCREEN_REFRESH_S = 0.25;
+const TEAM_REFRESH_MS = 1000;
 const ARRIVAL_LOOK_MS = 6000;
 const WALK_ZOOM = 2;
 const MAX_LOG = 200;
@@ -797,8 +799,8 @@ localMode = createLocalMode({
 function updateOrderHint(): void {
   const profile = localMode?.profileOf("ceo");
   byId<HTMLInputElement>("cmdIn").placeholder = profile
-    ? `Ordem ao Atlas (Claude Code local, perfil ${profile.name})…`
-    : "Dá uma ordem ao CEO…  ex: encontra 10 vagas de Business Analyst";
+    ? `Ordem ao Atlas (Claude Code local, perfil ${profile.name})…  Com "Mira, …" vai direto para ela`
+    : "Mira, lê o meu CV…  (com um nome vai direto; sem nome, o Atlas organiza a equipa)";
 }
 
 const sendDossier = (msg: ClientMsg): boolean => {
@@ -834,7 +836,8 @@ byId<HTMLFormElement>("cmd").onsubmit = (e) => {
   if (realAgents.has("ceo") && client.send({ type: "order", text, ...(orderProfile ? { profileId: orderProfile.id } : {}) })) {
     input.value = "";
     chatStore.addUser("ceo", text);
-    toast("Ordem enviada ao CEO");
+    toast("Ordem enviada");
+    showOrderTarget();
     return;
   }
   toast("Servidor offline: as ordens ao CEO só funcionam com o servidor ligado.");
@@ -943,6 +946,37 @@ const palette = createPalette(
   },
 );
 byId("palBtn").onclick = () => palette.open();
+
+// ---- equipa num relance (canto do escritório) e a caixa de ordens que ensina o atalho "Nome, …"
+const teamBar = createTeamBar(
+  byId("team"),
+  () =>
+    agents.map((a) => ({
+      id: a.def.id,
+      name: a.def.name,
+      emoji: a.def.emoji,
+      role: a.role.split("·")[0]?.trim() ?? "",
+      state: stateOf(a),
+      real: online && realAgents.has(a.def.id),
+    })),
+  (id) => {
+    const a = byAgentId.get(id);
+    if (a) panel.open(a, agentTab(a));
+  },
+);
+teamBar.refresh();
+setInterval(() => teamBar.refresh(), TEAM_REFRESH_MS);
+byId("cmdNames").innerHTML = agents.map((a) => `<option value="${escapeHtml(`${a.def.name}, `)}"></option>`).join("");
+const cmdIn = byId<HTMLInputElement>("cmdIn");
+const cmdSend = byId("cmdSend");
+/** O botão diz para onde vai a ordem: "Mira, …" vai direta para ela; sem nome vai ao Atlas. */
+const showOrderTarget = (): void => {
+  const m = /^\s*@?([\p{L}-]+)\s*[,:]/u.exec(cmdIn.value);
+  const name = m?.[1]?.toLowerCase();
+  const target = name ? agents.find((a) => a.def.name.toLowerCase() === name || a.def.id === name) : undefined;
+  cmdSend.textContent = target && target.def.id !== "ceo" ? `Enviar → ${target.def.name}` : "Enviar ao Atlas";
+};
+cmdIn.addEventListener("input", showOrderTarget);
 byId("pClose").onclick = () => panel.close();
 // O menu Vista fecha-se ao clicar fora dele.
 document.addEventListener("pointerdown", (e) => {

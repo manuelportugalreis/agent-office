@@ -9,8 +9,8 @@ export type { TimeMode } from "./lighting";
 
 const ELEVATION = 0.62;
 const MIN_ZOOM = 0.4;
-/** Zoom por defeito: mostra o prédio inteiro, com a rua e os vizinhos. */
-export const DEFAULT_ZOOM = 0.95;
+/** Abre já sobre o escritório (os agentes são o que interessa), não sobre a cidade toda. */
+export const DEFAULT_ZOOM = 1.35;
 const MAX_ZOOM = 3.5;
 const DRAG_THRESHOLD_PX = 4;
 const FOLLOW_RATE = 3;

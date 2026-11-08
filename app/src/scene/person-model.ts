@@ -9,7 +9,7 @@ export const STATE_INFO: Record<DisplayState, { icon: string; label: string; col
   idle: { icon: "·", label: "Livre", color: "#64748b" },
   work: { icon: "⌨", label: "A trabalhar", color: "#2563eb" },
   think: { icon: "…", label: "A pensar", color: "#f59e0b" },
-  appr: { icon: "!", label: "Aguarda aprovação", color: "#ef4444" },
+  appr: { icon: "!", label: "À espera de ti", color: "#ef4444" },
   err: { icon: "✕", label: "Erro", color: "#dc2626" },
   rest: { icon: "z", label: "Descanso", color: "#94a3b8" },
   meet: { icon: "♦", label: "Em reunião", color: "#8b5cf6" },

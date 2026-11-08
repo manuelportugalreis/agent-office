@@ -114,6 +114,7 @@
     <main id="main" class="no-sel">
       <section id="stage" tabindex="-1" aria-label="Escritório">
         <div id="tag"></div>
+        <nav id="team" aria-label="Equipa"></nav>
         <div id="walkStatus" class="walk-status" role="status" aria-live="polite" hidden></div>
         <button id="dossierChip" class="dossier-chip" hidden tabindex="-1" aria-hidden="true"></button>
         <div id="editBar" hidden>
@@ -125,11 +126,14 @@
         <div id="orders" aria-live="polite" aria-label="Ordens em curso" hidden></div>
         <div id="hint">Arrastar: mover · Roda: zoom · Botão direito ou Q/E: rodar · Clica numa pessoa</div>
         <form id="cmd">
-          <input id="cmdIn" placeholder="Dá uma ordem ao CEO…  ex: encontra 10 vagas de Business Analyst" autocomplete="off" /><button
-            class="primary"
-          >
-            Enviar ao CEO
-          </button>
+          <input
+            id="cmdIn"
+            list="cmdNames"
+            placeholder="Mira, lê o meu CV…  (com um nome vai direto; sem nome, o Atlas organiza a equipa)"
+            aria-describedby="cmdHelp"
+            autocomplete="off"
+          /><datalist id="cmdNames"></datalist><button id="cmdSend" class="primary">Enviar ao Atlas</button>
+          <span id="cmdHelp" class="sr-only">Começa por um nome e uma vírgula para dar a ordem diretamente a esse agente.</span>
         </form>
       </section>
       <section id="dossierCard" class="dossier-card" role="complementary" aria-label="Dossier de candidatura" hidden></section>
