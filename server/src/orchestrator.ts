@@ -421,7 +421,7 @@ export function createOrchestrator(
         outcomes.map((o) => ({ agent: o.agent, reply: o.result.reply, steps: o.result.steps })),
       ),
       // Revisão independente: só leitura (a Nina aponta, não corrige o trabalho que está a rever).
-      { profile, readOnly: true },
+      { profile, readOnly: true, isolated: true },
     );
     return { agent: "nina", task, result };
   }
@@ -573,7 +573,19 @@ export function createOrchestrator(
         if (!report.ok && !report.error?.includes("ao mesmo tempo")) break;
         if (!report.ok) await new Promise((resolve) => setTimeout(resolve, REPORT_WAIT_MS * 4));
       }
-      if (!report.ok) log(`Não consegui escrever o resumo: ${report.error ?? "erro desconhecido"}`);
+      if (!report.ok) {
+        const why = report.error ?? "erro desconhecido";
+        log(`Não consegui escrever o resumo: ${why}`);
+        const delivered = outcomes
+          .filter((o) => o.result.ok && o.result.reply.trim())
+          .map((o) => `[${nameOf(o.agent)}] ${o.result.reply.slice(0, 1500)}`);
+        if (review && !review.result.ok) delivered.push(`✗ Nina: ${review.result.error ?? "revisão falhou"}`);
+        emit({
+          type: "reply",
+          agentId: "ceo",
+          text: `Não consegui escrever o resumo (${why}).\n\n${[summarize(stepOutcomes), ...delivered].join("\n\n")}`,
+        });
+      }
       log(costLine([result, ...results, report]));
     },
   };
