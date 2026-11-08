@@ -4,6 +4,7 @@ import { box, canvas2d, canvasTexture, cyl, group, mat, rnd, sphere, wrapText } 
 import { scene } from "./world";
 import { upgradeWithModel } from "./models";
 import { makeEditable } from "./editable";
+import { buildPortugueseTouches } from "./portugal";
 import type { ScreenHandle } from "./screens";
 
 // ---------- cadeiras e secretárias ----------
@@ -342,6 +343,7 @@ function buildMeetingAndRest(): void {
   sofa(15, 11.3, 3.2, "#b97086");
   table(14.8, 9.6, 1.2, 0.6, 0.4, "#d9bd94", "modern_coffee_table_01");
   coffeeStation(13.2, 7.55);
+  buildPortugueseTouches();
   plant(17.3, 11.5, 1.2, true);
   plant(12.6, 11.6, 0.9);
 }
