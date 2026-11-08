@@ -3,6 +3,7 @@ import { shortcutAllowed } from "../ui/keys";
 import { scene } from "./world";
 import { applyLighting, initLights, setShadowQuality, type TimeMode } from "./lighting";
 import { createPost, loadQuality, saveQuality, softwareRenderer, type Quality } from "./post";
+import { createGovernor } from "./governor";
 
 export type { TimeMode } from "./lighting";
 
@@ -33,6 +34,8 @@ export interface Stage {
   /** Qualidade gráfica: "alta" (oclusão ambiente, brilho, reflexos) ou "normal". */
   setQuality(q: Quality): void;
   readonly quality: () => Quality;
+  /** Avisa quando o palco aliviou a cena sozinho por estar lenta (para mostrar ao utilizador). */
+  onAutoAdjust(listener: (message: string) => void): void;
   /** Ângulo da câmara à volta do escritório (radianos), para andar relativamente ao ecrã. */
   azimuth(): number;
   /** Converte uma posição do mundo em pixels dentro do contentor. */
@@ -50,9 +53,29 @@ export interface Stage {
   setFollow(getPoint: (() => { x: number; z: number }) | null, onBreak?: () => void): void;
 }
 
+const MANUAL_KEY = "agent-office-quality-manual";
+
+function loadSetting<T>(key: string, parse: (v: string | null) => T | null): T | null {
+  try {
+    return parse(localStorage.getItem(key));
+  } catch {
+    return null;
+  }
+}
+
+function saveSetting(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* sem armazenamento: vale só nesta sessão */
+  }
+}
+
 export function createStage(container: HTMLElement, onClick: (e: PointerEvent) => void, onHover: (e: PointerEvent) => void): Stage {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  const basePixelRatio = Math.min(devicePixelRatio || 1, 2);
+  let scale = 1;
+  renderer.setPixelRatio(basePixelRatio * scale);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -73,6 +96,10 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
   let quality: Quality = loadQuality(software ? "normal" : "alta");
   initLights(quality, software);
   const post = createPost(renderer, scene, cam, quality);
+  // Escolheste a qualidade à mão no menu Vista: o regulador não mexe mais.
+  let governor = loadSetting(MANUAL_KEY, (v) => (v === "1" ? true : null)) ? null : createGovernor();
+  let adjustListener: ((message: string) => void) | null = null;
+  let lastReal = performance.now();
 
   let night = 0;
   let follow: (() => { x: number; z: number }) | null = null;
@@ -90,6 +117,12 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
     cam.zoom = zoom;
     cam.updateProjectionMatrix();
   };
+  function applyQuality(q: Quality, save = true): void {
+    quality = q;
+    if (save) saveQuality(q);
+    post.setQuality(q);
+    setShadowQuality(q);
+  }
   const resize = (): void => {
     const w = container.clientWidth;
     const h = container.clientHeight;
@@ -142,6 +175,21 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
       timeMode = m;
     },
     update: (dt) => {
+      // O regulador mede tempo real: o dt do ciclo é limitado (para as animações não saltarem) e esconderia a lentidão.
+      const realNow = performance.now();
+      const realDt = (realNow - lastReal) / 1000;
+      lastReal = realNow;
+      const action = governor?.frame(realDt, { highQuality: quality === "alta", scale });
+      // As decisões automáticas valem só nesta sessão: não ficam gravadas como se fossem escolha tua.
+      if (action?.kind === "quality") {
+        applyQuality("normal", false);
+        adjustListener?.("A cena estava lenta: passei a qualidade para Normal (podes voltar a Alta em ⚙ Vista).");
+      } else if (action?.kind === "scale") {
+        scale = action.scale;
+        renderer.setPixelRatio(basePixelRatio * scale);
+        resize();
+        adjustListener?.(`A cena estava lenta: baixei a resolução para ${Math.round(scale * 100)}%.`);
+      }
       night = applyLighting(dt, night, timeMode, quality);
       if (follow) {
         const p = follow();
@@ -168,10 +216,18 @@ export function createStage(container: HTMLElement, onClick: (e: PointerEvent) =
     },
     render: () => post.render(),
     setQuality: (q) => {
-      quality = q;
-      saveQuality(q);
-      post.setQuality(q);
-      setShadowQuality(q);
+      // Escolha tua: o regulador para e a resolução volta a 100%.
+      governor = null;
+      saveSetting(MANUAL_KEY, "1");
+      if (scale !== 1) {
+        scale = 1;
+        renderer.setPixelRatio(basePixelRatio);
+        resize();
+      }
+      applyQuality(q);
+    },
+    onAutoAdjust: (listener) => {
+      adjustListener = listener;
     },
     quality: () => quality,
     azimuth: () => azimuth,

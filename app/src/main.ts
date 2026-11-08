@@ -859,6 +859,11 @@ byId("qualBtn").onclick = () => {
   showQuality();
 };
 showQuality();
+// A cena estava lenta e o palco aliviou-a sozinho: diz-se o que mudou (e o botão mostra a qualidade atual).
+stage.onAutoAdjust((message) => {
+  showQuality();
+  toast(message);
+});
 byId("timeBtn").onclick = () => {
   timeMode = TIME_CYCLE[timeMode].next;
   stage.setTimeMode(timeMode);

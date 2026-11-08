@@ -43,6 +43,8 @@ const PROMPT_MARK = "❯";
 const READY_TIMEOUT_MS = 20_000;
 /** O Enter vai à parte: escrito junto com o texto, o Claude Code trata-o como colagem e não envia. */
 const SUBMIT_DELAY_MS = 300;
+const PASTE_START = "\x1b[200~";
+const PASTE_END = "\x1b[201~";
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 40;
 
@@ -207,10 +209,13 @@ export function createPtyHub(deps: PtyDeps = {}) {
     s.screen.resize(cols, rows);
   }
 
-  /** Escreve uma mensagem e carrega em Enter, como se fosse escrita à mão. */
+  /**
+   * Escreve uma mensagem e carrega em Enter. O texto vai como colagem delimitada (bracketed paste): sem isso, o Claude
+   * Code trata um texto longo como colagem em curso e o Enter seguinte vira uma linha nova em vez de enviar.
+   */
   function submit(s: PtySession, text: string): void {
     if (s.exited) return;
-    s.proc.write(text.replace(/\r?\n/g, " "));
+    s.proc.write(`${PASTE_START}${text.replace(/\r?\n/g, " ")}${PASTE_END}`);
     const enter = setTimeout(() => {
       if (!s.exited) s.proc.write("\r");
     }, SUBMIT_DELAY_MS);

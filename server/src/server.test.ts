@@ -279,7 +279,8 @@ describe("parsePlan", () => {
     expect(plan?.tasks[0]).toMatchObject({ agent: "mira", go: "o meu gabinete", note: "Planeamento" });
     expect(planSteps(plan!)).toEqual([
       { id: "mira:go", kind: "move", agent: "mira", to: "o meu gabinete", after: [] },
-      { id: "mira", kind: "task", agent: "mira", task: "lê Planeamento e propõe 3 passos", note: "Planeamento", after: ["mira:go"] },
+      // A tarefa não espera pela animação: anda e trabalha ao mesmo tempo.
+      { id: "mira", kind: "task", agent: "mira", task: "lê Planeamento e propõe 3 passos", note: "Planeamento", after: [] },
     ]);
     // Só andar (sem tarefa) e só abrir uma nota também são planos válidos.
     const walk = parsePlan(

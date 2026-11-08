@@ -7,6 +7,8 @@ import type { WebSocket } from "ws";
 import { findAgent } from "./agents.ts";
 import { createPtyHub, ptyArgs, ptyCwd, ptyRole, screenActivity } from "./pty.ts";
 
+const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`;
+
 /** Um terminal falso: guarda o que se escreve e deixa emitir saída e o fim. */
 function fakePty() {
   const data: Array<(d: string) => void> = [];
@@ -101,14 +103,15 @@ describe("Claude Code de cada agente (terminal na app)", () => {
       // Ainda a arrancar: nada é escrito.
       expect(made[0]?.written).toEqual([]);
       made[0]?.emit("╭ ❯ ");
-      expect(made[0]?.written).toEqual(["pesquisa a Acme"]);
+      // Colagem delimitada: um texto longo não fica "a colar" e o Enter envia.
+      expect(made[0]?.written).toEqual([paste("pesquisa a Acme")]);
       vi.advanceTimersByTime(400);
-      expect(made[0]?.written).toEqual(["pesquisa a Acme", "\r"]);
+      expect(made[0]?.written).toEqual([paste("pesquisa a Acme"), "\r"]);
       // Já pronto: a ordem seguinte vai logo, no mesmo terminal; quebras de linha não enviam a meio.
       expect(hub.type("mira", "linha 1\nlinha 2")).toBe(true);
       vi.advanceTimersByTime(400);
       expect(made).toHaveLength(1);
-      expect(made[0]?.written.slice(2)).toEqual(["linha 1 linha 2", "\r"]);
+      expect(made[0]?.written.slice(2)).toEqual([paste("linha 1 linha 2"), "\r"]);
       hub.shutdown();
     } finally {
       vi.useRealTimers();
@@ -124,7 +127,7 @@ describe("Claude Code de cada agente (terminal na app)", () => {
       expect(hub.type("lena", "   ")).toBe(false);
       expect(hub.type("lena", "escreve a carta")).toBe(true);
       vi.advanceTimersByTime(21_000);
-      expect(p.written).toEqual(["escreve a carta", "\r"]);
+      expect(p.written).toEqual([paste("escreve a carta"), "\r"]);
       hub.shutdown();
     } finally {
       vi.useRealTimers();

@@ -395,7 +395,11 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
         const r = await scene.move(agent, dest.place);
         if (!r.ok) {
           const why = r.error ?? "não chegou";
-          const hint = /aberto|tempo/.test(why) ? " Tenta outra vez com a app aberta." : "";
+          const hint = /aberto/.test(why)
+            ? " Tenta outra vez com a app aberta."
+            : /tempo/.test(why)
+              ? " A cena está lenta neste computador (baixa a qualidade em ⚙ Vista); o trabalho não esperou por ela."
+              : "";
           return done(s, { state: "blocked", detail: `${why}.${hint}` });
         }
         emit({ type: "log", agentId: agent, text: `Cheguei ${toPlace(where)}.` });
@@ -619,7 +623,15 @@ export function groupSteps(move: GroupMove): ExecStep[] {
 
 /** Converte os passos lidos de uma ordem (intent) em passos executáveis, em sequência. */
 export function sequence(steps: ReadonlyArray<Omit<ExecStep, "id" | "after">>): ExecStep[] {
-  return steps.map((s, i) => ({ ...s, id: `s${i + 1}`, after: i ? [`s${i}`] : [] }));
+  const out: ExecStep[] = [];
+  steps.forEach((s, i) => {
+    const prev = out[i - 1];
+    // "Mira, vai ao gabinete e lê X": a tarefa dela não espera pela animação (anda e trabalha ao mesmo tempo); espera
+    // pelo que a deslocação esperava. Os passos seguintes esperam pela tarefa.
+    const ownMove = prev && prev.kind === "move" && s.kind === "task" && prev.agent === s.agent;
+    out.push({ ...s, id: `s${i + 1}`, after: !prev ? [] : ownMove ? [...prev.after] : [prev.id] });
+  });
+  return out;
 }
 
 /** Texto final de uma ordem: cada passo com o resultado (✓ feito, ~ com ressalvas, ✗ bloqueado, – não começou). */

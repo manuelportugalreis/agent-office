@@ -126,7 +126,7 @@ describe("motor de ordens", () => {
     expect(o.view.detail).toContain("«cozinha» não existe");
   });
 
-  it("sem a app aberta, o movimento fica bloqueado e a tarefa seguinte não começa", async () => {
+  it("sem a app aberta, o movimento fica bloqueado mas a tarefa do mesmo agente corre (não espera pela animação)", async () => {
     const { engine, hub } = setup({ office: "gestao", arrive: false });
     const outcomes = await engine.run(
       "mira",
@@ -136,9 +136,17 @@ describe("motor de ordens", () => {
         { kind: "task", agent: "mira", task: "faz" },
       ]),
     );
-    expect(outcomes.map((o) => o.view.state)).toEqual(["blocked", "skipped"]);
-    expect(hub.calls).toEqual([]);
+    expect(outcomes.map((o) => o.view.state)).toEqual(["blocked", "done"]);
+    expect(hub.calls).toHaveLength(1);
     expect(summarize(outcomes)).toContain("✗");
+  });
+
+  it("um colega que vem depois de uma deslocação continua à espera dela", () => {
+    const steps = sequence([
+      { kind: "move", agent: "mira", to: { kind: "mine" } },
+      { kind: "task", agent: "lena", task: "escreve" },
+    ]);
+    expect(steps[1]?.after).toEqual(["s1"]);
   });
 
   it("abrir uma nota ambígua pergunta qual e abre a escolhida", async () => {
@@ -324,7 +332,7 @@ describe("motor de ordens", () => {
       "x",
       sequence([
         { kind: "move", agent: "lena", to: { kind: "mine" } },
-        { kind: "task", agent: "lena", task: "edita a nota" },
+        { kind: "task", agent: "nina", task: "revê a nota" },
       ]),
     );
     await tick();

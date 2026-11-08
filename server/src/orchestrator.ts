@@ -18,7 +18,7 @@ export interface Task {
   readonly task: string;
   /** Agentes do mesmo plano cujo resultado esta tarefa precisa. */
   readonly after: readonly string[];
-  /** Antes de trabalhar, o agente vai a este sítio ("o meu gabinete", "sala de reuniões") e só começa quando chegar. */
+  /** Sítio para onde o agente anda ("o meu gabinete", "sala de reuniões"); com tarefa, não a atrasa. */
   readonly go?: string;
   /** A nota do Obsidian a que a tarefa se refere (o servidor resolve-a e pergunta se houver várias). */
   readonly note?: string;
@@ -172,9 +172,11 @@ export function planSteps(plan: Plan): ExecStep[] {
   );
   for (const t of plan.tasks) {
     const deps = t.after.map(last);
+    // A deslocação corre ao mesmo tempo que a tarefa: o trabalho nunca espera por uma animação (a cena pode estar lenta
+    // ou fechada). Só quem depende de uma deslocação sem tarefa ("Mira, vai à copa" e depois a Lena…) espera por ela.
     if (t.go) steps.push({ id: `${t.agent}:go`, kind: "move", agent: t.agent, to: t.go, after: deps });
     // Quem anda num movimento de grupo só começa a tarefa quando chegar ("toda a gente à sala e depois a Mira…").
-    const arrive = t.go ? `${t.agent}:go` : groupMove.get(t.agent);
+    const arrive = groupMove.get(t.agent);
     if (t.task)
       steps.push({
         id: t.agent,
@@ -286,7 +288,7 @@ export function planPrompt(order: string, profile?: AccessProfile | null, previo
     `"open_site":"canvas": o servidor abre o Canvas numa janela do browser do utilizador (com a sessão dele) e confirma o que a janela mostra; usa-o só quando o utilizador pede para abrir ou mostrar o Canvas. Abrir não é ler: para ler o Canvas (entregas, prazos, enunciados), dá a tarefa a quem tem acesso de leitura ao Canvas: ${browserAgents(profile)}. Mais ninguém consegue ler o Canvas.`,
     "No máximo 3 tarefas, uma por agente, cada uma com menos de 3000 caracteres. Cada tarefa tem de se perceber sozinha: inclui nela os dados concretos de que precisa (por exemplo, os passos a acrescentar, copiados do resultado anterior).",
     '"after" é opcional: lista os agentes cujo resultado esta tarefa precisa; esses resultados são-lhe entregues automaticamente (ex.: a lena escreve o email depois de a mira pesquisar a empresa: {"agent":"lena","after":["mira"]}). Sem "after", corre logo.',
-    `"go" faz o agente andar até um sítio do escritório antes de começar a tarefa; a tarefa só começa quando a cena confirmar que chegou. Sítios: ${places}. Usa as palavras do utilizador (ex.: "o meu gabinete"). Para mandar alguém só andar, põe "go" e deixa "task" vazio.`,
+    `"go" faz o agente andar até um sítio do escritório. Usa-o SÓ quando o utilizador pede que alguém vá a um sítio; nunca o acrescentes por tua iniciativa (o trabalho não precisa de deslocações). Sítios: ${places}. Usa as palavras do utilizador (ex.: "o meu gabinete"). Para mandar alguém só andar, põe "go" e deixa "task" vazio.`,
     `"moves" (opcional) desloca várias pessoas sem contar para o limite de tarefas: [{"agents":"todos"|"chefes"|["id",...],"go":"sítio"}]. Ids: ${AGENT_NAMES.map((a) => a.id).join(", ")}. Usa-o quando o utilizador manda várias pessoas ou toda a equipa a um sítio.`,
     '"note": o título, alias, [[link]] ou caminho da nota do Obsidian que a tarefa lê ou edita (o servidor encontra o ficheiro e pergunta ao utilizador se houver várias). "open_note": só quando o utilizador pede explicitamente para abrir ou mostrar a nota no Obsidian dele (abrir não é ler nem editar: para ler, responder ou alterar, é uma tarefa).',
     "Quem altera uma nota ou ficheiro mantém o frontmatter, os links e o conteúdo que não faz parte do pedido; se pedirem verificação, a nina revê depois (after) o ficheiro real em disco.",
