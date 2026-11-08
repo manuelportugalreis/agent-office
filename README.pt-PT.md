@@ -1,5 +1,11 @@
 # Agent Office
 
+[![CI](https://github.com/manuelportugalreis/agent-office/actions/workflows/ci.yml/badge.svg)](https://github.com/manuelportugalreis/agent-office/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-3D-000000?logo=threedotjs&logoColor=white)
+![Node 24](https://img.shields.io/badge/Node-24-5fa04e?logo=nodedotjs&logoColor=white)
+
 > Um escritório 3D isométrico onde **cada pessoa é um agente [Claude Code](https://docs.claude.com/en/docs/claude-code)**. Clica numa personagem para falar com ela, dá ordens ao CEO e vê a equipa a andar, a sentar-se, a pesquisar e a escrever.
 
 [English](README.md) · **[Demonstração](https://manuelportugalreis.com/agent-office/)** (só o escritório e a cidade: os agentes trabalham no teu computador, vê abaixo)
@@ -9,6 +15,8 @@
 O Agent Office transforma uma equipa de agentes de IA em algo que se vê. Onze agentes, cada um com função, personalidade, pasta e memória próprias, trabalham num pequeno escritório. Falas com eles num chat que parece o do Claude, ou dás uma só ordem ao CEO, que planeia o trabalho e o distribui.
 
 Tudo corre **no teu computador**, através da ferramenta `claude` e do teu próprio login do Claude. Não há serviço na nuvem, nem chave de API para colar, nem conta para criar.
+
+**Feito com** TypeScript (strict) de ponta a ponta: Three.js e Vite na cena, um servidor Node 24 (WebSocket, `node:sqlite`), node-pty e xterm.js para os terminais dentro da app, e mais de 500 testes Vitest que a CI corre em cada push, além de testes de browser com Playwright.
 
 > **Estado:** inicial (0.x). Foi pensado para procura de emprego e estudo, mas o escritório são só dados e prompts: faz um fork e muda a equipa.
 
@@ -26,6 +34,8 @@ Tudo corre **no teu computador**, através da ferramenta `claude` e do teu próp
 - **Anda pelo escritório.** Carrega em `W` (ou no botão 🚶) para teres o teu avatar: setas ao longo do corredor, clica no chão ou numa pessoa para ires à secretária dela (a conversa abre quando chegas) e `F` liga ou desliga a câmara que te segue.
 - **Chat como o do Claude.** Respostas em streaming, Markdown, editar e regenerar a última mensagem, parar, anexos (`.md`, PDF, imagens, `.docx`), conversa nova quando quiseres, `Ctrl+K` para ir ter com qualquer um e `@nome` para passar a conversa a outro agente.
 - **Agentes a sério.** Cada um é um processo do Claude Code com prompt, ferramentas, pasta e memória (`CLAUDE.md`) próprios.
+- **O Claude Code verdadeiro em cada painel.** O separador «Claude Code» de cada agente é a própria CLI interativa (node-pty e xterm.js), com as teclas que já conheces: Shift+Enter para mudar de linha, copiar e colar, colar uma imagem ou largar um ficheiro para lho passar, links clicáveis e ecrã inteiro. A conversa sobrevive a um reinício do servidor, e uma ordem do CEO espera enquanto tens uma mensagem por enviar na caixa.
+- **Qualidade dos agentes que se mede.** `npm run eval` dá tarefas fixas aos agentes reais e avalia as respostas e os ficheiros em disco: fontes citadas, nada inventado sobre ti, uma nota editada sem estragos, quem escreve depois de quem pesquisa. Cada agente tem um playbook com a definição de concluído. O motivo que dás ao rejeitar um rascunho passa a lição que o agente lê na tarefa seguinte. A pesquisa que segue para um colega tem de terminar com o que ficou por confirmar e as fontes. As revisões independentes da Nina correm num modelo diferente do de quem escreveu.
 - **Um CEO que delega.** Uma ordem vira um plano validado de até três tarefas (mais deslocações da equipa toda), com dependências: quem tem de ir a algum lado só começa quando chega, e quem escreve espera pela investigadora e recebe o resultado dela. No fim, o CEO resume o que a equipa fez de facto.
 - **Tu decides.** Os rascunhos vão para uma fila de aprovações. Nada é enviado sem ti. Com `vaultDir` definido e a pasta `01 Candidaturas/00 Aprovações` presente, aprovar um rascunho guarda-o também aí como nota (`enviado: não`); o servidor nunca cria pastas no teu vault.
 - **Persistente.** Conversas, registos, aprovações e sessões sobrevivem a reinícios (SQLite).

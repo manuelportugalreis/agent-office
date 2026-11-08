@@ -1,6 +1,6 @@
 {
   "name": "agent-office",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "A 3D isometric office where every person is a Claude Code agent. Click a character to chat with it, give orders to the CEO and watch the team work.",
   "license": "MIT",

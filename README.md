@@ -1,5 +1,11 @@
 # Agent Office
 
+[![CI](https://github.com/manuelportugalreis/agent-office/actions/workflows/ci.yml/badge.svg)](https://github.com/manuelportugalreis/agent-office/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-3D-000000?logo=threedotjs&logoColor=white)
+![Node 24](https://img.shields.io/badge/Node-24-5fa04e?logo=nodedotjs&logoColor=white)
+
 > A 3D isometric office where **every person is a [Claude Code](https://docs.claude.com/en/docs/claude-code) agent**. Click a character to chat with it, give orders to the CEO and watch the team walk, sit, research and write.
 
 [Português (pt-PT)](README.pt-PT.md) · **[Live demo](https://manuelportugalreis.com/agent-office/)** (the office and the city only: the agents work on your own machine, see below)
@@ -9,6 +15,8 @@
 Agent Office turns a team of AI agents into something you can actually see. Eleven agents with their own roles, personalities, folders and memory work in a small office. You talk to them in a chat that looks and feels like Claude, or you give one order to the CEO and it plans the work and hands it out.
 
 Everything runs **on your machine**, through the `claude` command-line tool and your own Claude login. There is no cloud service, no API key to paste and no account to create.
+
+**Built with** TypeScript (strict) end to end: Three.js and Vite for the scene, a Node 24 server (WebSocket, `node:sqlite`), node-pty and xterm.js for the in-app terminals, and 500+ Vitest tests run by CI on every push, plus Playwright browser tests.
 
 > **Status:** early (0.x). It is built around a job-search and study workflow, but the office is just data and prompts: fork it and change the team.
 
@@ -26,6 +34,8 @@ Everything runs **on your machine**, through the `claude` command-line tool and 
 - **Walk around.** Press `W` (or the 🚶 button) to get your own avatar: arrow keys along the corridor, click the floor or a person to walk to their desk (their chat opens when you arrive), `F` toggles the follow camera.
 - **Chat that feels like Claude.** Streaming answers, Markdown, edit and regenerate the last message, stop, file attachments (`.md`, PDF, images, `.docx`), a new conversation at any time, `Ctrl+K` to jump to anyone and `@name` to hand a conversation to another agent.
 - **Real agents, not mock-ups.** Each one is a separate Claude Code process with its own system prompt, tools, folder and memory (`CLAUDE.md`).
+- **The real Claude Code in every panel.** Each agent's «Claude Code» tab is the interactive CLI itself (node-pty and xterm.js), with the keys you know: Shift+Enter for a new line, copy and paste, paste an image or drop a file to hand it over, clickable links and full screen. The conversation survives a server restart, and an order from the CEO waits while you still have an unsent message in the box.
+- **Agent quality you can measure.** `npm run eval` runs fixed tasks through the real agents and grades the replies and the files on disk: sources cited, nothing invented about you, a note edited without damage, the writer chained after the researcher. Every agent has a playbook with a definition of done. The reason you give when you reject a draft becomes a lesson the agent reads on its next task. Research handed to a colleague must end with what is still unconfirmed and the sources. Nina's independent reviews run on a different model from the writers.
 - **A CEO that delegates.** One order becomes a validated plan of up to three tasks (plus moves for the whole team), with dependencies: whoever has to walk somewhere starts only after arriving, and the writer waits for the researcher and receives her result. When the team finishes, the CEO summarises what was actually done.
 - **Human in the loop.** Drafts land in an approval queue. Nothing is ever sent without you. With `vaultDir` set and the folder `01 Candidaturas/00 Aprovações` present, approving a draft also saves it there as a note (`enviado: não`); the server never creates folders in your vault.
 - **Persistent.** Chats, logs, approvals and sessions survive restarts (SQLite).
