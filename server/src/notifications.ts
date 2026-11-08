@@ -25,13 +25,13 @@ export interface Notifications {
 
 const SETTING = "notifications";
 /** O que se pode dar como visto (as outras fecham quando a coisa é decidida). */
-const DISMISSABLE: ReadonlySet<NotificationKind> = new Set(["blocked", "dossier", "idea"]);
+const DISMISSABLE: ReadonlySet<NotificationKind> = new Set(["blocked", "dossier", "idea", "done"]);
 /** Fechadas que ainda se mostram (o histórico recente). */
 const KEEP_CLOSED = 30;
 const TEXT_MAX = 600;
 /** Ideias e bloqueios antigos deixam de ser "precisa de ti": fecham sozinhos ao fim de um dia. */
 const EXPIRE_MS = 24 * 60 * 60_000;
-const EXPIRES: ReadonlySet<NotificationKind> = new Set(["idea", "blocked"]);
+const EXPIRES: ReadonlySet<NotificationKind> = new Set(["idea", "blocked", "done"]);
 
 export function createNotifications(store: NotificationStore, emit: (m: ServerMsg) => void, now: () => number = Date.now): Notifications {
   let items: AppNotification[] = [];

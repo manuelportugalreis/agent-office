@@ -14,6 +14,10 @@ export interface NotificationsDeps {
   openChat(agentId: string): void;
   openApprovals(): void;
   openDossier(): void;
+  /** Abre o Claude Code (terminal) de um agente. */
+  openTerminal(agentId: string): void;
+  /** Estás a ver o terminal deste agente (não é preciso avisar que acabou). */
+  isViewing(agentId: string): boolean;
 }
 
 export interface NotificationsUi {
@@ -28,6 +32,7 @@ const KIND: Record<NotificationKind, { label: string; icon: string }> = {
   blocked: { label: "Bloqueado", icon: "✗" },
   dossier: { label: "Dossier", icon: "📁" },
   idea: { label: "Ideia", icon: "💡" },
+  done: { label: "Acabou", icon: "✓" },
 };
 const EVERY = [15, 30, 60, 120, 240];
 const ago = (ts: number): string => {
@@ -61,6 +66,8 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
         return `${b("accept", "Avançar", true)}${b("chat", "Falar")}${b("reject", "Dispensar")}`;
       case "blocked":
         return `${b("chat", "Ver")}${b("dismiss", "Visto")}`;
+      case "done":
+        return `${b("term", "Ver", true)}${b("dismiss", "Visto")}`;
     }
   };
 
@@ -68,7 +75,7 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
     const open = items.filter((n) => n.open);
     // O número conta só o que espera mesmo por ti (perguntas, autorizações, aprovações, bloqueios, dossier); as ideias
     // aparecem na lista mas não acendem o botão.
-    const urgent = open.filter((n) => n.kind !== "idea").length;
+    const urgent = open.filter((n) => n.kind !== "idea" && n.kind !== "done").length;
     count.textContent = String(urgent);
     count.style.display = urgent ? "" : "none";
     btn.classList.toggle("attn", urgent > 0);
@@ -108,7 +115,10 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
     if (!n) return;
     const act = t.dataset.act;
     if (act === "chat") deps.openChat(n.agentId);
-    else if (act === "approvals") deps.openApprovals();
+    else if (act === "term") {
+      deps.openTerminal(n.agentId);
+      deps.send({ type: "notification-dismiss", id: n.id });
+    } else if (act === "approvals") deps.openApprovals();
     else if (act === "dossier") {
       deps.openDossier();
       deps.send({ type: "notification-dismiss", id: n.id });
@@ -157,8 +167,15 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
     set(next) {
       // Uma notificação nova (não as que já estavam ao abrir a app) aparece também como aviso rápido.
       if (loaded)
-        for (const n of next)
-          if (n.open && !items.some((x) => x.id === n.id)) toast(`🔔 ${deps.nameOf(n.agentId)}: ${n.text.slice(0, 90)}`);
+        for (const n of next) {
+          if (!n.open || items.some((x) => x.id === n.id)) continue;
+          // Acabou no terminal que estás a ver: já o viste, não há nada a avisar.
+          if (n.kind === "done" && deps.isViewing(n.agentId)) {
+            deps.send({ type: "notification-dismiss", id: n.id });
+            continue;
+          }
+          toast(n.kind === "done" ? `✓ ${n.text.slice(0, 120)}` : `🔔 ${deps.nameOf(n.agentId)}: ${n.text.slice(0, 90)}`);
+        }
       loaded = true;
       items = next;
       render();

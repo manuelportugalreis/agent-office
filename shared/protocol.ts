@@ -201,7 +201,8 @@ export interface ToolStep {
 }
 
 /** De onde vem uma notificação (o que precisa de ti). */
-export type NotificationKind = "question" | "permission" | "approval" | "blocked" | "dossier" | "idea";
+/** "done": um agente acabou um trabalho no terminal (aviso, não pede decisão). */
+export type NotificationKind = "question" | "permission" | "approval" | "blocked" | "dossier" | "idea" | "done";
 
 /** Uma notificação: algo que precisa de ti (ou uma ideia da equipa). */
 export interface AppNotification {

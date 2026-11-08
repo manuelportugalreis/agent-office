@@ -5,7 +5,7 @@ import type { IPty } from "@lydell/node-pty";
 import { describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
 import { findAgent } from "./agents.ts";
-import { createPtyHub, ptyArgs, ptyCwd, ptyRole, screenActivity } from "./pty.ts";
+import { createPtyHub, ptyArgs, ptyCwd, ptyRole, screenActivity, lastAnswer } from "./pty.ts";
 
 const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`;
 
@@ -172,6 +172,72 @@ describe("Claude Code de cada agente (terminal na app)", () => {
     t = 7000;
     hub.poll();
     expect(seen.at(-1)).toBe("mira:idle");
+    hub.shutdown();
+  });
+
+  it("lê a última resposta do ecrã (o bloco com ●), sem a linha de estado nem a caixa de escrita", () => {
+    const screen = [
+      "❯ conta os ficheiros",
+      "  Searched for 1 pattern",
+      "● 6 ficheiros: 3 na raiz e",
+      "  3 em docs/reviews.",
+      "✻ Worked for 11s",
+      "❯ ",
+    ].join("\n");
+    expect(lastAnswer(screen)).toBe("6 ficheiros: 3 na raiz e 3 em docs/reviews.");
+    expect(lastAnswer("❯ olá")).toBe("");
+    expect(lastAnswer(`● ${"a".repeat(400)}`).length).toBeLessThanOrEqual(280);
+  });
+
+  it("avisa quando o agente acaba (de a trabalhar para parado), com o começo da resposta", async () => {
+    let t = 0;
+    const done: string[] = [];
+    const p = fakePty();
+    const hub = createPtyHub({ spawnPty: () => p as unknown as IPty, now: () => t, onDone: (id, answer) => done.push(`${id}:${answer}`) });
+    const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 30));
+    hub.attach(fakeWs() as unknown as WebSocket, "mira", 80, 24);
+    p.emit("\x1b[2J\x1b[1;1H❯ pesquisa\x1b[3;1H✻ Working… (esc to interrupt)");
+    await settle();
+    hub.poll();
+    p.emit("\x1b[2J\x1b[1;1H● A Acme tem 3 vagas abertas.\x1b[2;1H✻ Worked for 9s\x1b[3;1H❯ ");
+    await settle();
+    t = 5000;
+    hub.poll();
+    expect(done).toEqual(["mira:A Acme tem 3 vagas abertas."]);
+    hub.shutdown();
+  });
+
+  it("fecha um terminal parado e sem ninguém a ver; ao voltar retoma a mesma conversa; «Nova sessão» começa outra", () => {
+    let t = 0;
+    const made: Array<{ args: string[]; p: ReturnType<typeof fakePty> }> = [];
+    let n = 0;
+    const hub = createPtyHub({
+      spawnPty: (_f, args) => {
+        const p = fakePty();
+        made.push({ args, p });
+        return p as unknown as IPty;
+      },
+      now: () => t,
+      newId: () => `conv-${++n}`,
+    });
+    const ws = fakeWs();
+    hub.attach(ws as unknown as WebSocket, "lena", 80, 24);
+    expect(made[0]?.args.slice(-2)).toEqual(["--session-id", "conv-1"]);
+    ws.emit("message", JSON.stringify({ t: "in", d: "escreve a carta\r" }));
+    // Alguém a ver: não fecha, por mais tempo que passe.
+    t = 60 * 60_000;
+    hub.poll();
+    expect(made[0]?.p.killed).toBe(false);
+    ws.emit("close");
+    t = 2 * 60 * 60_000;
+    hub.poll();
+    expect(made[0]?.p.killed).toBe(true);
+    expect(hub.open()).toEqual([]);
+    const back = fakeWs();
+    hub.attach(back as unknown as WebSocket, "lena", 80, 24);
+    expect(made[1]?.args.slice(-2)).toEqual(["--resume", "conv-1"]);
+    back.emit("message", JSON.stringify({ t: "restart" }));
+    expect(made[2]?.args.slice(-2)).toEqual(["--session-id", "conv-2"]);
     hub.shutdown();
   });
 

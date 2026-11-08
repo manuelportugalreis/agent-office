@@ -198,6 +198,13 @@ const ptys = createPtyHub({
     if (activity === "appr")
       broadcast({ type: "log", agentId, text: "O Claude Code está à espera da tua autorização (separador Claude Code)." });
   },
+  // Acabou um trabalho no terminal: um aviso com o começo da resposta (só o mais recente de cada agente fica aberto).
+  onDone: (agentId, answer) => {
+    const name = findAgent(agentId)?.name ?? agentId;
+    notifications.resolvePrefix(`done-${agentId}-`);
+    notifications.open(`done-${agentId}-${Date.now()}`, agentId, "done", answer ? `${name} acabou: ${answer}` : `${name} acabou.`);
+    broadcast({ type: "log", agentId, text: answer ? `Acabou no terminal: ${answer}` : "Acabou no terminal." });
+  },
 });
 const orchestrator = createOrchestrator(
   hub,

@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { spawn, type IPty } from "@lydell/node-pty";
@@ -35,6 +36,43 @@ export interface PtySession {
   lastWork: number;
   /** Cópia do ecrã (terminal sem janela): o Claude Code só redesenha o que muda, por isso lê-se o ecrã, não a saída. */
   readonly screen: InstanceType<typeof xtermHeadless.Terminal>;
+  /** Última vez que alguém escreveu ou o agente trabalhou (para fechar terminais parados). */
+  lastActive: number;
+}
+
+/** Id da conversa do Claude Code de cada agente: ao reabrir um terminal fechado, a conversa continua (--resume). */
+interface ConversationId {
+  readonly id: string;
+  /** Já houve uma mensagem (só então o Claude Code guardou a conversa e o --resume funciona). */
+  started: boolean;
+}
+
+/** Um terminal sem ninguém a ver e parado há este tempo fecha (cada um é um processo do Claude Code em memória). */
+const IDLE_CLOSE_MS = 30 * 60_000;
+/** Tamanho máximo do excerto da resposta no aviso "acabou". */
+const ANSWER_MAX = 280;
+
+/**
+ * A última resposta no ecrã: o último bloco que começa por "●" (texto do Claude Code), até à linha de estado ("✻ …")
+ * ou à caixa de escrita. Sem resposta visível, "".
+ */
+export function lastAnswer(screenText: string): string {
+  const lines = screenText.split("\n");
+  let start = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^\s*●/.test(lines[i] ?? "")) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return "";
+  const out: string[] = [];
+  for (const line of lines.slice(start)) {
+    if (out.length && /^\s*(✻|✶|✳|✢|·|\*|❯|─|╭|╰|⏵)/.test(line)) break;
+    out.push(line.replace(/^\s*●\s*/, "").trim());
+  }
+  const text = out.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return text.length > ANSWER_MAX ? `${text.slice(0, ANSWER_MAX - 1)}…` : text;
 }
 
 /** Sinal de que o Claude Code interativo está pronto a receber texto (a seta da caixa de escrita). */
@@ -118,7 +156,10 @@ export interface PtyDeps {
   readonly spawnPty?: (file: string, args: string[], cwd: string, cols: number, rows: number) => IPty;
   /** O agente mudou de atividade no terminal (para a cena: a trabalhar, à espera de ti, parado). */
   readonly onActivity?: (agentId: string, activity: TermActivity) => void;
+  /** O agente acabou um trabalho no terminal (passou de "a trabalhar" a parado), com o começo da resposta. */
+  readonly onDone?: (agentId: string, answer: string) => void;
   readonly now?: () => number;
+  readonly newId?: () => string;
 }
 
 export function createPtyHub(deps: PtyDeps = {}) {
@@ -138,20 +179,29 @@ export function createPtyHub(deps: PtyDeps = {}) {
     });
 
   const now = deps.now ?? Date.now;
+  const newId = deps.newId ?? randomUUID;
+  const conversations = new Map<string, ConversationId>();
 
   function setActivity(s: PtySession, activity: TermActivity): void {
     if (s.activity === activity) return;
+    const was = s.activity;
     s.activity = activity;
     deps.onActivity?.(s.agent, activity);
+    if (was === "work" && activity === "idle" && !s.exited) deps.onDone?.(s.agent, lastAnswer(visibleText(s.screen)));
   }
 
-  /** Lê o ecrã de cada terminal e atualiza a personagem. */
+  /** Lê o ecrã de cada terminal, atualiza a personagem e fecha os terminais parados há muito sem ninguém a ver. */
   function poll(): void {
     for (const s of sessions.values()) {
       if (s.exited) continue;
       const seen = screenActivity(visibleText(s.screen));
-      if (seen === "work") s.lastWork = now();
+      if (seen === "work") s.lastWork = s.lastActive = now();
       setActivity(s, seen === "idle" && now() - s.lastWork < IDLE_AFTER_MS ? "work" : seen);
+      if (s.sockets.size === 0 && s.activity === "idle" && !s.queue.length && now() - s.lastActive > IDLE_CLOSE_MS) {
+        // A conversa fica guardada pelo Claude Code: ao voltar, abre-se com --resume e continua onde estava.
+        sessions.delete(s.agent);
+        s.proc.kill();
+      }
     }
   }
   const ticker = setInterval(poll, ACTIVITY_TICK_MS);
@@ -163,7 +213,13 @@ export function createPtyHub(deps: PtyDeps = {}) {
 
   function start(agent: RealAgent, cols: number, rows: number): PtySession {
     exe ??= claudePath();
-    const proc = launch(exe, ptyArgs(agent), ptyCwd(agent), cols, rows);
+    let convo = conversations.get(agent.id);
+    if (!convo) {
+      convo = { id: newId(), started: false };
+      conversations.set(agent.id, convo);
+    }
+    const session = convo.started ? ["--resume", convo.id] : ["--session-id", convo.id];
+    const proc = launch(exe, [...ptyArgs(agent), ...session], ptyCwd(agent), cols, rows);
     const s: PtySession = {
       agent: agent.id,
       proc,
@@ -175,6 +231,7 @@ export function createPtyHub(deps: PtyDeps = {}) {
       activity: "idle",
       lastWork: 0,
       screen: new xtermHeadless.Terminal({ cols, rows, allowProposedApi: true, scrollback: 0 }),
+      lastActive: now(),
     };
     const flush = (): void => {
       if (s.ready) return;
@@ -203,6 +260,13 @@ export function createPtyHub(deps: PtyDeps = {}) {
     return s;
   }
 
+  /** Houve escrita: o terminal não está parado, e a conversa já existe no Claude Code (pode retomar-se). */
+  function touched(s: PtySession): void {
+    s.lastActive = now();
+    const convo = conversations.get(s.agent);
+    if (convo) convo.started = true;
+  }
+
   /** O terminal e a cópia do ecrã mudam de tamanho juntos (senão a cópia deixa de corresponder ao que se vê). */
   function resize(s: PtySession, cols: number, rows: number): void {
     s.proc.resize(cols, rows);
@@ -215,6 +279,7 @@ export function createPtyHub(deps: PtyDeps = {}) {
    */
   function submit(s: PtySession, text: string): void {
     if (s.exited) return;
+    touched(s);
     s.proc.write(`${PASTE_START}${text.replace(/\r?\n/g, " ")}${PASTE_END}`);
     const enter = setTimeout(() => {
       if (!s.exited) s.proc.write("\r");
@@ -257,12 +322,15 @@ export function createPtyHub(deps: PtyDeps = {}) {
           return;
         }
         const live = sessions.get(agent.id);
-        if (m.t === "in" && typeof m.d === "string" && live && !live.exited) live.proc.write(m.d);
-        else if (m.t === "resize" && live && !live.exited) resize(live, size(m.cols, cols, 500), size(m.rows, rows, 200));
+        if (m.t === "in" && typeof m.d === "string" && live && !live.exited) {
+          live.proc.write(m.d);
+          if (m.d.includes("\r")) touched(live);
+        } else if (m.t === "resize" && live && !live.exited) resize(live, size(m.cols, cols, 500), size(m.rows, rows, 200));
         else if (m.t === "restart") {
           // Uma sessão nova do Claude Code para este agente (a anterior fecha; as janelas abertas passam para a nova).
           const old = sessions.get(agent.id);
           const watchers = old ? [...old.sockets] : [ws];
+          conversations.set(agent.id, { id: newId(), started: false });
           if (old) {
             sessions.delete(agent.id);
             old.sockets.clear();

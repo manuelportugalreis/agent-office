@@ -694,6 +694,11 @@ const notificationsUi = createNotificationsUi({
   },
   openApprovals: () => byId("apBtn").click(),
   openDossier: () => dossierUi.open(),
+  openTerminal: (id) => {
+    const a = byAgentId.get(id);
+    if (a) panel.open(a, "term");
+  },
+  isViewing: (id) => panel.selected?.def.id === id && panel.tab === "term",
 });
 
 // ---- instruções de cada agente (separador do painel)
