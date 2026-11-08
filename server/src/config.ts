@@ -33,6 +33,11 @@ export interface OfficeConfig {
   readonly access: "total" | "escritorio";
   /** Origens extra aceites pelo servidor (além de 127.0.0.1 e localhost na porta do servidor e do Vite). */
   readonly extraOrigins: readonly string[];
+  /**
+   * Modelo do Claude Code (separador «Claude Code») de cada agente, ex.: { "mira": "opus", "*": "sonnet" }. "*" vale
+   * para todos os que não estão na lista. Sem nada, cada agente usa o modelo dele (Sonnet): poupa a quota do teu plano.
+   */
+  readonly terminalModels: Readonly<Record<string, string>>;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -51,11 +56,14 @@ export const DEFAULTS: OfficeConfig = {
   workDir: "",
   access: "total",
   extraOrigins: [],
+  terminalModels: {},
 };
 
 const HOSTNAME = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/i;
 /** Canvas de ensaio: só nesta máquina, com porta explícita. */
 const LOOPBACK_ORIGIN = /^https?:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/;
+/** Nome de um modelo do Claude Code (sonnet, opus, haiku ou um id como claude-sonnet-5-5). */
+const MODEL = /^[a-z0-9][a-z0-9.\-[\]]{1,60}$/i;
 const ORIGIN = /^https?:\/\/[a-z0-9.[\]:-]{1,255}$/i;
 
 export class ConfigError extends Error {}
@@ -117,6 +125,15 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
   if (!Array.isArray(extraOrigins) || !extraOrigins.every((o) => typeof o === "string" && ORIGIN.test(o)))
     throw new ConfigError("extraOrigins tem de ser uma lista de origens (ex.: http://127.0.0.1:3000)");
 
+  const terminalModels = f.terminalModels ?? {};
+  if (
+    typeof terminalModels !== "object" ||
+    terminalModels === null ||
+    Array.isArray(terminalModels) ||
+    !Object.entries(terminalModels).every(([k, v]) => /^(\*|[a-z]{2,20})$/.test(k) && typeof v === "string" && MODEL.test(v))
+  )
+    throw new ConfigError('terminalModels tem de ser { "agente": "modelo" } (ex.: { "mira": "opus", "*": "sonnet" })');
+
   return {
     userName: userName.trim(),
     port,
@@ -127,6 +144,7 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
     workDir: workDir.trim(),
     access,
     extraOrigins: extraOrigins as string[],
+    terminalModels: terminalModels as Record<string, string>,
   };
 }
 

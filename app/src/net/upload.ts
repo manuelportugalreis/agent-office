@@ -5,6 +5,8 @@ export interface UploadResult {
   readonly name: string;
   readonly bytes: number;
   readonly note?: string;
+  /** Caminho completo do ficheiro no PC (para o colar no terminal). */
+  readonly path?: string;
 }
 
 export const uploadUrl = (agentId: string, fileName: string): string =>
@@ -21,5 +23,5 @@ export async function uploadFile(agentId: string, file: File): Promise<UploadRes
   }
   const body = (await response.json().catch(() => ({}))) as Partial<UploadResult> & { error?: string };
   if (!response.ok || !body.name) throw new Error(body.error ?? `Falhou o envio (${response.status}).`);
-  return { name: body.name, bytes: body.bytes ?? file.size, note: body.note };
+  return { name: body.name, bytes: body.bytes ?? file.size, note: body.note, path: body.path };
 }

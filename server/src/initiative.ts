@@ -15,6 +15,8 @@ export const DEFAULT_INITIATIVE: InitiativeSettings = { enabled: false, everyMin
 /** Quem propõe, à vez (o Atlas coordena; o Dean só lê o Canvas). */
 export const PROPOSERS = ["rhea", "vera", "nina", "mira", "lena", "scout", "theo", "ada", "turing"];
 const MAX_PER_DAY = 3;
+/** Ideias apanhadas no fim das respostas: no máximo uma por resposta e estas por dia (não enchem o «Precisa de ti»). */
+export const MAX_REPLY_IDEAS_PER_DAY = 3;
 const SETTINGS_KEY = "initiative";
 const TURN_KEY = "initiativeTurn";
 const IDEA_MAX = 500;
@@ -92,9 +94,9 @@ export function createInitiative(deps: {
       return DEFAULT_INITIATIVE;
     }
   };
-  const counter = (): { day: string; n: number } => {
+  const counter = (name = `${SETTINGS_KEY}Count`): { day: string; n: number } => {
     try {
-      const c = JSON.parse(store.getSetting(`${SETTINGS_KEY}Count`) ?? "{}") as { day?: string; n?: number };
+      const c = JSON.parse(store.getSetting(name) ?? "{}") as { day?: string; n?: number };
       return c.day === today() ? { day: c.day, n: c.n ?? 0 } : { day: today(), n: 0 };
     } catch {
       return { day: today(), n: 0 };
@@ -114,12 +116,13 @@ export function createInitiative(deps: {
       return [];
     }
   };
-  const addIdea = (agentId: string, idea: string, why = "", firstStep = ""): void => {
+  const addIdea = (agentId: string, idea: string, why = "", firstStep = ""): boolean => {
     const k = key(idea);
-    if (seen().includes(k) || notifications.list().some((n) => n.key === k)) return;
+    if (seen().includes(k) || notifications.list().some((n) => n.key === k)) return false;
     store.setSetting(SEEN_KEY, JSON.stringify([...seen(), k].slice(-SEEN_MAX)));
     notifications.open(k, agentId, "idea", idea, { ...(why ? { why } : {}), ...(firstStep ? { firstStep } : {}) });
     deps.log(agentId, `Ideia para ti: ${idea}`);
+    return true;
   };
   let thinking = false;
 
@@ -166,7 +169,11 @@ export function createInitiative(deps: {
     },
     now,
     fromReply(agentId, reply) {
-      for (const idea of ideasInReply(reply)) addIdea(agentId, idea);
+      const idea = ideasInReply(reply)[0];
+      const name = `${SETTINGS_KEY}ReplyCount`;
+      const c = counter(name);
+      if (!idea || c.n >= MAX_REPLY_IDEAS_PER_DAY) return;
+      if (addIdea(agentId, idea)) store.setSetting(name, JSON.stringify({ day: c.day, n: c.n + 1 }));
     },
     start(viewers) {
       viewersOf = viewers;

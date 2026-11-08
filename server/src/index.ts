@@ -82,7 +82,8 @@ function notifyFrom(m: ServerMsg): void {
   else if (m.type === "approval") notifications.open(`appr-${m.id}`, m.agentId, "approval", `Para aprovares: ${m.title}`);
   else if (m.type === "approval-resolved") notifications.resolve(`appr-${m.id}`);
   else if (m.type === "order-steps" && m.finished)
-    for (const s of m.steps.filter((x) => x.state === "blocked"))
+    // Uma animação que não confirmou a chegada não precisa de ti (fica no registo da ordem).
+    for (const s of m.steps.filter((x) => x.state === "blocked" && !x.sceneOnly))
       notifications.open(`order-${m.id}-${s.id}`, m.owner, "blocked", `${s.label}: ${s.detail ?? "bloqueado"}`);
   else if (m.type === "dossier") {
     const d = m.dossier;
@@ -192,6 +193,18 @@ function setMyOffice(place: string): boolean {
 const homework = createHomework({ engine: orders, emit: broadcast, handoff: withHandoff });
 // O Claude Code de cada agente (terminal dentro do painel): /pty?agent=ada&cols=..&rows=.. (mesmas regras de Origin/Host).
 const ptys = createPtyHub({
+  // A conversa de cada terminal fica guardada: depois de reiniciar o servidor, o agente continua onde estava (--resume).
+  conversations: {
+    load: (agentId) => {
+      try {
+        const c = JSON.parse(store.getSetting(`pty:${agentId}`) ?? "null") as { id?: unknown; started?: unknown } | null;
+        return c && typeof c.id === "string" ? { id: c.id, started: c.started === true } : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    save: (agentId, convo) => store.setSetting(`pty:${agentId}`, JSON.stringify(convo)),
+  },
   // A personagem mostra o que o Claude Code dela está a fazer: a trabalhar, à espera de ti (balão «!») ou parada.
   onActivity: (agentId, activity) => {
     broadcast({ type: "status", agentId, status: activity, ...(activity === "work" ? { task: "No Claude Code (terminal)" } : {}) });

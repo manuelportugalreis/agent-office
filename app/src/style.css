@@ -1673,3 +1673,23 @@ header h1 {
   border-radius: 8px;
   padding: 4px 6px;
 }
+
+/* Terminal em ecrã inteiro (botão «Ecrã inteiro» ou Ctrl+Shift+F): o painel ocupa a janela toda. */
+body.term-max main aside,
+body.term-max main.chat-wide aside {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  z-index: 60;
+  border-left: none;
+}
+body.term-max #resizer {
+  display: none;
+}
+.nt-sub {
+  margin: 10px 2px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}

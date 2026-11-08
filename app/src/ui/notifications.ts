@@ -75,25 +75,30 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
     const open = items.filter((n) => n.open);
     // O número conta só o que espera mesmo por ti (perguntas, autorizações, aprovações, bloqueios, dossier); as ideias
     // aparecem na lista mas não acendem o botão.
-    const urgent = open.filter((n) => n.kind !== "idea" && n.kind !== "done").length;
+    const isUrgent = (n: (typeof items)[number]): boolean => n.kind !== "idea" && n.kind !== "done";
+    const urgent = open.filter(isUrgent).length;
     count.textContent = String(urgent);
     count.style.display = urgent ? "" : "none";
     btn.classList.toggle("attn", urgent > 0);
     const shown = showClosed ? [...items].reverse() : [...open].reverse();
-    const rows = shown
-      .map((n) => {
-        const k = KIND[n.kind];
-        const extra =
-          n.kind === "idea" && (n.data?.why || n.data?.firstStep)
-            ? `<small>${n.data?.why ? `Porquê: ${escapeHtml(n.data.why)}` : ""}${n.data?.firstStep ? `<br>Primeiro passo: ${escapeHtml(n.data.firstStep)}` : ""}</small>`
-            : "";
-        return `<li class="nt nt-${n.kind}${n.open ? "" : " closed"}">
+    const row = (n: (typeof items)[number]): string => {
+      const k = KIND[n.kind];
+      const extra =
+        n.kind === "idea" && (n.data?.why || n.data?.firstStep)
+          ? `<small>${n.data?.why ? `Porquê: ${escapeHtml(n.data.why)}` : ""}${n.data?.firstStep ? `<br>Primeiro passo: ${escapeHtml(n.data.firstStep)}` : ""}</small>`
+          : "";
+      return `<li class="nt nt-${n.kind}${n.open ? "" : " closed"}">
           <span class="nt-icon" aria-hidden="true">${k.icon}</span>
           <div class="nt-body"><div class="nt-head"><b>${escapeHtml(deps.emojiOf(n.agentId))} ${escapeHtml(deps.nameOf(n.agentId))}</b> · ${k.label} · <small>${ago(n.ts)}</small></div>
           <div class="nt-text">${escapeHtml(n.text)}</div>${extra}
           <div class="nt-actions">${actions(n)}</div></div></li>`;
-      })
-      .join("");
+    };
+    // Primeiro o que espera por ti (é o que o número conta); as ideias e os avisos de «acabou» ficam à parte, por baixo.
+    const rows = shown.filter(isUrgent).map(row).join("");
+    const others = shown.filter((n) => !isUrgent(n));
+    const otherRows = others.length
+      ? `<div class="nt-sub">Ideias e avisos (${others.length})</div><ul class="nt-list">${others.map(row).join("")}</ul>`
+      : "";
     const every = EVERY.map(
       (m) =>
         `<option value="${m}"${initiative.everyMin === m && initiative.enabled ? " selected" : ""}>a cada ${m < 60 ? `${m} min` : `${m / 60} h`}</option>`,
@@ -101,7 +106,7 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
     panel.innerHTML = `
       <div class="nt-top"><b>O que precisa de ti</b>
         <label class="nt-toggle">Ver as resolvidas <input type="checkbox" id="ntClosed"${showClosed ? " checked" : ""}></label></div>
-      <ul class="nt-list">${rows || `<li class="nt-empty">Nada à tua espera.</li>`}</ul>
+      <ul class="nt-list">${rows || `<li class="nt-empty">Nada à tua espera.</li>`}</ul>${otherRows}
       <div class="nt-ideas"><span>💡 Ideias da equipa</span>
         <select id="ntEvery" aria-label="Frequência das ideias da equipa"><option value="off"${initiative.enabled ? "" : " selected"}>desligadas</option>${every}</select>
         <button type="button" id="ntNow">Pedir uma ideia agora</button></div>

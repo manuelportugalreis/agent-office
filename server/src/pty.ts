@@ -38,10 +38,12 @@ export interface PtySession {
   readonly screen: InstanceType<typeof xtermHeadless.Terminal>;
   /** Última vez que alguém escreveu ou o agente trabalhou (para fechar terminais parados). */
   lastActive: number;
+  /** Quando escreveste na caixa sem enviar (0 = nada por enviar): as ordens do Atlas esperam para não se misturarem. */
+  draftAt: number;
 }
 
 /** Id da conversa do Claude Code de cada agente: ao reabrir um terminal fechado, a conversa continua (--resume). */
-interface ConversationId {
+export interface ConversationId {
   readonly id: string;
   /** Já houve uma mensagem (só então o Claude Code guardou a conversa e o --resume funciona). */
   started: boolean;
@@ -49,6 +51,8 @@ interface ConversationId {
 
 /** Um terminal sem ninguém a ver e parado há este tempo fecha (cada um é um processo do Claude Code em memória). */
 const IDLE_CLOSE_MS = 30 * 60_000;
+/** Uma ordem espera no máximo este tempo por uma frase que estás a escrever no terminal (e que não enviaste). */
+const DRAFT_HOLD_MS = 60_000;
 /** Tamanho máximo do excerto da resposta no aviso "acabou". */
 const ANSWER_MAX = 280;
 
@@ -107,9 +111,17 @@ export function ptyRole(agent: RealAgent, userName: string = config.userName): s
   return `No Agent Office de ${who} és ${agent.name}: ${agent.blurb}. Trabalhas como o Claude Code normal, com acesso às ferramentas, pastas e integrações de ${who}, e respondes de forma direta, sem personagem.`;
 }
 
-/** Argumentos do `claude` interativo de um agente: o papel dele e, se houver, o vault do Obsidian. */
-export function ptyArgs(agent: RealAgent, vaultDir: string = config.vaultDir): string[] {
-  return ["--append-system-prompt", ptyRole(agent), ...(vaultDir ? ["--add-dir", vaultDir] : [])];
+/**
+ * O modelo do Claude Code de um agente: o de terminalModels na configuração (o do agente, ou "*"), senão o do agente.
+ * Sem isto, todos usavam o modelo das tuas definições (ex.: Opus) e a quota do plano ia-se depressa.
+ */
+export function terminalModel(agent: RealAgent, models: Readonly<Record<string, string>> = config.terminalModels): string {
+  return models[agent.id] ?? models["*"] ?? agent.model;
+}
+
+/** Argumentos do `claude` interativo de um agente: o modelo, o papel dele e, se houver, o vault do Obsidian. */
+export function ptyArgs(agent: RealAgent, vaultDir: string = config.vaultDir, model: string = terminalModel(agent)): string[] {
+  return ["--model", model, "--append-system-prompt", ptyRole(agent), ...(vaultDir ? ["--add-dir", vaultDir] : [])];
 }
 
 /** Onde abre o Claude Code dos agentes: `workDir` da configuração ou a pasta pessoal; se não existir, a pasta do agente. */
@@ -160,6 +172,28 @@ export interface PtyDeps {
   readonly onDone?: (agentId: string, answer: string) => void;
   readonly now?: () => number;
   readonly newId?: () => string;
+  /** Onde se guarda o id da conversa de cada agente (sobrevive a reiniciar o servidor). Sem isto, só em memória. */
+  readonly conversations?: ConversationStore;
+}
+
+export interface ConversationStore {
+  load(agentId: string): ConversationId | undefined;
+  save(agentId: string, convo: ConversationId): void;
+}
+
+/**
+ * O que uma tecla (ou colagem) no terminal faz à caixa de escrita: "send" (Enter envia), "clear" (Ctrl+C limpa),
+ * "draft" (texto, colagem ou nova linha: fica uma frase a meio) ou "other" (setas e outras teclas de controlo).
+ */
+export function inputKind(d: string): "send" | "clear" | "draft" | "other" {
+  if (d.includes("\x03")) return "clear";
+  // O texto colado (entre os marcadores) pode ter Enters, que não enviam; Esc+Enter é nova linha.
+  // eslint-disable-next-line no-control-regex
+  const rest = d.replace(/\x1b\[200~[\s\S]*?\x1b\[201~/g, "P").replace(/\x1b\r/g, "N");
+  if (rest.includes("\r")) return "send";
+  if (rest !== d) return "draft";
+  // eslint-disable-next-line no-control-regex
+  return !d.startsWith("\x1b") && /[^\x00-\x1f\x7f]/.test(d) ? "draft" : "other";
 }
 
 export function createPtyHub(deps: PtyDeps = {}) {
@@ -180,7 +214,18 @@ export function createPtyHub(deps: PtyDeps = {}) {
 
   const now = deps.now ?? Date.now;
   const newId = deps.newId ?? randomUUID;
-  const conversations = new Map<string, ConversationId>();
+  const memory = new Map<string, ConversationId>();
+  const conversations: ConversationStore = deps.conversations ?? {
+    load: (id) => memory.get(id),
+    save: (id, c) => void memory.set(id, c),
+  };
+  const drafting = (s: PtySession): boolean => s.draftAt > 0 && now() - s.draftAt < DRAFT_HOLD_MS;
+  /** Envia as ordens à espera quando o Claude Code está pronto e não tens uma frase a meio na caixa. */
+  function pump(s: PtySession): void {
+    if (!s.ready || s.exited || drafting(s)) return;
+    s.draftAt = 0;
+    for (const text of s.queue.splice(0)) submit(s, text);
+  }
 
   function setActivity(s: PtySession, activity: TermActivity): void {
     if (s.activity === activity) return;
@@ -197,6 +242,7 @@ export function createPtyHub(deps: PtyDeps = {}) {
       const seen = screenActivity(visibleText(s.screen));
       if (seen === "work") s.lastWork = s.lastActive = now();
       setActivity(s, seen === "idle" && now() - s.lastWork < IDLE_AFTER_MS ? "work" : seen);
+      if (s.queue.length) pump(s);
       if (s.sockets.size === 0 && s.activity === "idle" && !s.queue.length && now() - s.lastActive > IDLE_CLOSE_MS) {
         // A conversa fica guardada pelo Claude Code: ao voltar, abre-se com --resume e continua onde estava.
         sessions.delete(s.agent);
@@ -213,10 +259,10 @@ export function createPtyHub(deps: PtyDeps = {}) {
 
   function start(agent: RealAgent, cols: number, rows: number): PtySession {
     exe ??= claudePath();
-    let convo = conversations.get(agent.id);
+    let convo = conversations.load(agent.id);
     if (!convo) {
       convo = { id: newId(), started: false };
-      conversations.set(agent.id, convo);
+      conversations.save(agent.id, convo);
     }
     const session = convo.started ? ["--resume", convo.id] : ["--session-id", convo.id];
     const proc = launch(exe, [...ptyArgs(agent), ...session], ptyCwd(agent), cols, rows);
@@ -232,11 +278,12 @@ export function createPtyHub(deps: PtyDeps = {}) {
       lastWork: 0,
       screen: new xtermHeadless.Terminal({ cols, rows, allowProposedApi: true, scrollback: 0 }),
       lastActive: now(),
+      draftAt: 0,
     };
     const flush = (): void => {
       if (s.ready) return;
       s.ready = true;
-      for (const text of s.queue.splice(0)) submit(s, text);
+      pump(s);
     };
     const fallback = setTimeout(flush, READY_TIMEOUT_MS);
     fallback.unref?.();
@@ -263,8 +310,8 @@ export function createPtyHub(deps: PtyDeps = {}) {
   /** Houve escrita: o terminal não está parado, e a conversa já existe no Claude Code (pode retomar-se). */
   function touched(s: PtySession): void {
     s.lastActive = now();
-    const convo = conversations.get(s.agent);
-    if (convo) convo.started = true;
+    const convo = conversations.load(s.agent);
+    if (convo && !convo.started) conversations.save(s.agent, { id: convo.id, started: true });
   }
 
   /** O terminal e a cópia do ecrã mudam de tamanho juntos (senão a cópia deixa de corresponder ao que se vê). */
@@ -324,13 +371,19 @@ export function createPtyHub(deps: PtyDeps = {}) {
         const live = sessions.get(agent.id);
         if (m.t === "in" && typeof m.d === "string" && live && !live.exited) {
           live.proc.write(m.d);
-          if (m.d.includes("\r")) touched(live);
+          // Enter envia a tua frase; Ctrl+C limpa-a. Depois disso, as ordens à espera podem seguir.
+          const kind = inputKind(m.d);
+          if (kind === "send" || kind === "clear") {
+            if (kind === "send") touched(live);
+            live.draftAt = 0;
+            pump(live);
+          } else if (kind === "draft") live.draftAt = now();
         } else if (m.t === "resize" && live && !live.exited) resize(live, size(m.cols, cols, 500), size(m.rows, rows, 200));
         else if (m.t === "restart") {
           // Uma sessão nova do Claude Code para este agente (a anterior fecha; as janelas abertas passam para a nova).
           const old = sessions.get(agent.id);
           const watchers = old ? [...old.sockets] : [ws];
-          conversations.set(agent.id, { id: newId(), started: false });
+          conversations.save(agent.id, { id: newId(), started: false });
           if (old) {
             sessions.delete(agent.id);
             old.sockets.clear();
@@ -360,8 +413,8 @@ export function createPtyHub(deps: PtyDeps = {}) {
       } catch {
         return false;
       }
-      if (s.ready) submit(s, text);
-      else s.queue.push(text);
+      s.queue.push(text);
+      pump(s);
       return true;
     },
     /** Agentes com o Claude Code aberto. */

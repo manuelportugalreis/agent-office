@@ -5,7 +5,17 @@ import type { IPty } from "@lydell/node-pty";
 import { describe, expect, it, vi } from "vitest";
 import type { WebSocket } from "ws";
 import { findAgent } from "./agents.ts";
-import { createPtyHub, ptyArgs, ptyCwd, ptyRole, screenActivity, lastAnswer } from "./pty.ts";
+import {
+  createPtyHub,
+  inputKind,
+  ptyArgs,
+  ptyCwd,
+  ptyRole,
+  screenActivity,
+  lastAnswer,
+  terminalModel,
+  type ConversationId,
+} from "./pty.ts";
 
 const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`;
 
@@ -57,7 +67,7 @@ describe("Claude Code de cada agente (terminal na app)", () => {
     hub.attach(a as unknown as WebSocket, "ada", 120, 40);
     expect(made).toHaveLength(1);
     expect(made[0]?.cwd).toBeTruthy();
-    expect(made[0]?.args[0]).toBe("--append-system-prompt");
+    expect(made[0]?.args.slice(0, 3)).toEqual(["--model", "sonnet", "--append-system-prompt"]);
     made[0]?.p.emit("olá do claude");
     expect(a.sent).toContainEqual({ t: "out", d: "olá do claude" });
     a.emit("message", JSON.stringify({ t: "in", d: "faz x\r" }));
@@ -241,11 +251,84 @@ describe("Claude Code de cada agente (terminal na app)", () => {
     hub.shutdown();
   });
 
-  it("junta o vault do Obsidian quando está configurado", () => {
+  it("junta o modelo do agente e o vault do Obsidian quando está configurado", () => {
     const ada = findAgent("ada");
     if (!ada) throw new Error("sem a Ada");
-    expect(ptyArgs(ada, "C:/vault")).toEqual(["--append-system-prompt", ptyRole(ada), "--add-dir", "C:/vault"]);
-    expect(ptyArgs(ada, "")).toHaveLength(2);
+    expect(ptyArgs(ada, "C:/vault", "sonnet")).toEqual([
+      "--model",
+      "sonnet",
+      "--append-system-prompt",
+      ptyRole(ada),
+      "--add-dir",
+      "C:/vault",
+    ]);
+    expect(ptyArgs(ada, "", "sonnet")).toHaveLength(4);
+  });
+
+  it("o modelo do terminal: o do agente na configuração, senão o de «*», senão o do agente (Sonnet)", () => {
+    const mira = findAgent("mira");
+    if (!mira) throw new Error("sem a Mira");
+    expect(terminalModel(mira, {})).toBe("sonnet");
+    expect(terminalModel(mira, { "*": "haiku" })).toBe("haiku");
+    expect(terminalModel(mira, { mira: "opus", "*": "haiku" })).toBe("opus");
+  });
+
+  it("distingue enviar, limpar, frase a meio e teclas de controlo", () => {
+    expect(inputKind("\r")).toBe("send");
+    expect(inputKind("ok\r")).toBe("send");
+    expect(inputKind("\x03")).toBe("clear");
+    expect(inputKind("a")).toBe("draft");
+    expect(inputKind("\x1b\r")).toBe("draft");
+    expect(inputKind(paste("linha 1\rlinha 2"))).toBe("draft");
+    expect(inputKind("\x1b[A")).toBe("other");
+    expect(inputKind("\x7f")).toBe("other");
+  });
+
+  it("uma ordem do Atlas espera enquanto tens uma frase a meio no terminal (até a enviares, ou 60 s)", () => {
+    vi.useFakeTimers();
+    try {
+      let t = 1000;
+      const p = fakePty();
+      const hub = createPtyHub({ spawnPty: () => p as unknown as IPty, now: () => t });
+      const ws = fakeWs();
+      hub.attach(ws as unknown as WebSocket, "mira", 80, 24);
+      p.emit("❯ ");
+      ws.emit("message", JSON.stringify({ t: "in", d: "estou a escr" }));
+      p.written.length = 0;
+      expect(hub.type("mira", "pesquisa a Acme")).toBe(true);
+      expect(p.written).toEqual([]);
+      // Enviaste a tua frase: a ordem segue logo a seguir.
+      ws.emit("message", JSON.stringify({ t: "in", d: "\r" }));
+      expect(p.written).toEqual(["\r", paste("pesquisa a Acme")]);
+      // Uma frase esquecida na caixa não prende a ordem para sempre.
+      ws.emit("message", JSON.stringify({ t: "in", d: "x" }));
+      p.written.length = 0;
+      hub.type("mira", "outra ordem");
+      hub.poll();
+      expect(p.written).toEqual([]);
+      t = 62_000;
+      hub.poll();
+      expect(p.written).toEqual([paste("outra ordem")]);
+      hub.shutdown();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("guarda o id da conversa fora da memória: um servidor novo retoma a mesma conversa", () => {
+    const saved = new Map<string, ConversationId>();
+    const conversations = { load: (id: string) => saved.get(id), save: (id: string, c: ConversationId) => void saved.set(id, c) };
+    const args: string[][] = [];
+    const spawnPty = (_f: string, a: string[]) => (args.push(a), fakePty() as unknown as IPty);
+    const first = createPtyHub({ spawnPty, conversations, newId: () => "conv-a" });
+    const ws = fakeWs();
+    first.attach(ws as unknown as WebSocket, "lena", 80, 24);
+    ws.emit("message", JSON.stringify({ t: "in", d: "olá\r" }));
+    first.shutdown();
+    const second = createPtyHub({ spawnPty, conversations, newId: () => "conv-b" });
+    second.attach(fakeWs() as unknown as WebSocket, "lena", 80, 24);
+    expect(args[1]?.slice(-2)).toEqual(["--resume", "conv-a"]);
+    second.shutdown();
   });
 
   it("o papel é uma linha curta, sem a personagem nem as regras do escritório", () => {

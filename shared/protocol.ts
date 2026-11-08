@@ -238,6 +238,8 @@ export interface StepView {
   readonly state: StepState;
   /** Evidência ou motivo (ex.: "chegou, confirmado pela cena", "o Obsidian confirmou", "recusado: fora do vault"). */
   readonly detail?: string;
+  /** Só a cena 3D falhou (a animação não confirmou a chegada): fica no registo, não vai para «Precisa de ti». */
+  readonly sceneOnly?: boolean;
 }
 
 export type ServerMsg =

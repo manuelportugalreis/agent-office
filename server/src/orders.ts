@@ -400,7 +400,7 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
             : /tempo/.test(why)
               ? " A cena está lenta neste computador (baixa a qualidade em ⚙ Vista); o trabalho não esperou por ela."
               : "";
-          return done(s, { state: "blocked", detail: `${why}.${hint}` });
+          return done(s, { state: "blocked", detail: `${why}.${hint}`, sceneOnly: true });
         }
         emit({ type: "log", agentId: agent, text: `Cheguei ${toPlace(where)}.` });
         return done(s, { state: "done", detail: `chegou ${toPlace(where)} (confirmado pela cena às ${clock(r.at ?? Date.now())})` });

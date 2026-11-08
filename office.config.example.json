@@ -7,5 +7,6 @@
     { "agent": "ada", "code": "CS 101", "title": "Introduction to Computer Science" },
     { "agent": "turing", "code": "CS 102", "title": "Data Structures" }
   ],
-  "extraOrigins": []
+  "extraOrigins": [],
+  "terminalModels": { "*": "sonnet" }
 }

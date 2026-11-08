@@ -122,6 +122,8 @@ export interface SavedFile {
   readonly bytes: number;
   /** Aviso para mostrar ao utilizador (por exemplo, conversão falhada). */
   readonly note?: string;
+  /** Caminho completo no PC (o terminal do agente cola-o na caixa de escrita). */
+  readonly path: string;
 }
 
 /** Guarda um ficheiro na pasta inbox do agente. `.docx` é convertido para texto (fica um `.docx.md` ao lado). */
@@ -139,21 +141,23 @@ export async function saveUpload(agentId: string, rawName: string, data: Buffer)
   const isDocx = extname(clean).toLowerCase() === ".docx";
   const name = uniqueName(dir, clean, isDocx ? ".md" : "");
   writeFileSync(join(dir, name), data, { flag: "wx" });
-  if (!isDocx) return { name, bytes: data.length };
+  const path = join(dir, name);
+  if (!isDocx) return { name, bytes: data.length, path };
   // Reserva o ficheiro de texto antes de converter (a conversão é assíncrona e outro envio podia ocupar o nome).
   writeFileSync(join(dir, `${name}.md`), "", { flag: "wx" });
   if (!zipLooksSafe(data))
     return {
       name,
       bytes: data.length,
+      path,
       note: "Não consegui converter o .docx para texto (inválido ou demasiado grande); o agente pode não o conseguir ler.",
     };
   try {
     const { value } = await mammoth.extractRawText({ buffer: data });
     writeFileSync(join(dir, `${name}.md`), value);
-    return { name, bytes: data.length };
+    return { name, bytes: data.length, path };
   } catch {
-    return { name, bytes: data.length, note: "Não consegui converter o .docx para texto; o agente pode não o conseguir ler." };
+    return { name, bytes: data.length, path, note: "Não consegui converter o .docx para texto; o agente pode não o conseguir ler." };
   }
 }
 

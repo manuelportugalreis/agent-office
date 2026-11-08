@@ -58,7 +58,7 @@ import { createApprovals } from "./ui/approvals";
 import { createPanel, type Tab } from "./ui/panel";
 import { createTeamBar, teamMembers } from "./ui/team";
 import { createLocalMode, type LocalMode } from "./ui/local-mode";
-import { createAgentTerminal } from "./ui/terminal";
+import { createAgentTerminal, MAX_CLASS as TERM_MAX } from "./ui/terminal";
 
 const SCREEN_REFRESH_S = 0.25;
 const TEAM_REFRESH_MS = 1000;
@@ -105,10 +105,18 @@ const busy = new Set<string>();
 /** Modo "Claude Code local" (criado depois da ligação ao servidor; o painel usa-o quando já existe). */
 let localMode: LocalMode | null = null;
 /** O Claude Code verdadeiro de cada agente (separador «Claude Code» do painel). */
-const agentTerminal = createAgentTerminal(byId("termHost"));
+const agentTerminal = createAgentTerminal(byId("termHost"), {
+  upload: async (agentId, file) => {
+    const saved = await uploadFile(agentId, file);
+    if (!saved.path) throw new Error("O servidor não disse onde guardou o ficheiro.");
+    return saved.path;
+  },
+  notify: toast,
+});
 /** Ao abrir um agente: o Claude Code dele quando o servidor está ligado e ele é real; senão o chat (simulado). */
 const agentTab = (a: { def: { id: string } }): Tab => (online && realAgents.has(a.def.id) ? "term" : "chat");
 byId("termRestart").onclick = () => agentTerminal.restart();
+byId("termMax").onclick = () => agentTerminal.toggleMax();
 const panel = createPanel({
   onTab: (a, t) => {
     if (t === "instr") instructionsUi.load(a.def.id, online && realAgents.has(a.def.id));
@@ -731,6 +739,11 @@ function frame(now: number): void {
   dossierProp.update(dt, t);
   reviewTray.update(t);
   stage.update(dt);
+  // Terminal em ecrã inteiro: a cena não se vê, não se desenha (poupa o computador).
+  if (document.body.classList.contains(TERM_MAX)) {
+    requestAnimationFrame(frame);
+    return;
+  }
   placeTag(walkMode.target ?? panel.selected ?? hovered);
   stage.render();
   requestAnimationFrame(frame);

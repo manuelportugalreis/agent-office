@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ServerMsg } from "../../shared/protocol.ts";
 import type { Hub, RunOptions } from "./hub.ts";
-import { createInitiative, ideaPrompt, ideasInReply, parseIdea, PROPOSERS } from "./initiative.ts";
+import { createInitiative, ideaPrompt, ideasInReply, MAX_REPLY_IDEAS_PER_DAY, parseIdea, PROPOSERS } from "./initiative.ts";
 import { createNotifications } from "./notifications.ts";
 import { parsePlan, planSteps } from "./orchestrator.ts";
 
@@ -116,6 +116,16 @@ describe("iniciativa", () => {
     const ini = createInitiative({ hub: fakeHub(""), notifications, store, log: () => undefined });
     ini.fromReply("mira", "Resumo feito.\nIdeia: acompanhar a empresa X todas as semanas, começando por uma nota.");
     expect(notifications.list()[0]).toMatchObject({ kind: "idea", agentId: "mira" });
+  });
+
+  it("das respostas, só a primeira ideia de cada uma e no máximo 3 por dia", () => {
+    const store = memoryStore();
+    const notifications = createNotifications(store, () => undefined);
+    const ini = createInitiative({ hub: fakeHub(""), notifications, store, log: () => undefined });
+    ini.fromReply("mira", "Feito.\nIdeia: primeira ideia concreta para a equipa\nIdeia: segunda ideia concreta para a equipa");
+    expect(notifications.list().filter((n) => n.kind === "idea")).toHaveLength(1);
+    for (const n of [3, 4, 5, 6]) ini.fromReply("lena", `Feito.\nIdeia: ideia número ${n} para a equipa toda`);
+    expect(notifications.list().filter((n) => n.kind === "idea")).toHaveLength(MAX_REPLY_IDEAS_PER_DAY);
   });
 
   it("definições: desligadas por defeito (a cada 60 min quando ligadas); podem mudar-se", () => {
