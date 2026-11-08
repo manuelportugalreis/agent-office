@@ -76,3 +76,51 @@ export function moveStatus(m: PendingMove): "arrived" | "diverted" | "walking" {
   if (m.agent.route.length === 0 && m.agent.loc === m.loc) return "arrived";
   return "walking";
 }
+
+/** Resposta à cena sobre uma ordem de movimento (chegou, ou porquê que não). */
+export interface Arrival {
+  readonly id: number;
+  readonly ok: boolean;
+  readonly reason?: string;
+}
+
+export interface MoveQueueDeps {
+  readonly find: (agentId: string) => Agent | undefined;
+  readonly locs: LocMap;
+  /** Responde ao servidor (chegou ou não). */
+  readonly reply: (a: Arrival) => void;
+  /** A pessoa começou a andar para `place` (para mostrar "a caminho"). */
+  readonly started: (agent: Agent, place: string) => void;
+  readonly now: () => number;
+}
+
+/**
+ * Ordens de movimento do servidor: leva a pessoa ao sítio e responde quando chega (ou se foi desviada). Uma ordem nova
+ * para a mesma pessoa substitui a anterior, que fica respondida (senão o servidor esperava por ela até desistir).
+ */
+export function createMoveQueue(d: MoveQueueDeps) {
+  let pending: PendingMove[] = [];
+  return {
+    begin(id: number, agentId: string, place: string): void {
+      const a = d.find(agentId);
+      if (!a) return d.reply({ id, ok: false, reason: "essa pessoa não existe na cena" });
+      const started = startMove(a, place, d.locs, id, d.now());
+      if ("error" in started) return d.reply({ id, ok: false, reason: started.error });
+      for (const old of pending.filter((m) => m.agent === a))
+        d.reply({ id: old.id, ok: false, reason: "substituída por outra ordem de movimento" });
+      pending = [...pending.filter((m) => m.agent !== a), started];
+      d.started(a, place);
+    },
+    /** Vê quem já chegou (ou foi desviado) e responde por cada um. */
+    check(): void {
+      const done = pending.filter((m) => moveStatus(m) !== "walking");
+      pending = pending.filter((m) => moveStatus(m) === "walking");
+      for (const m of done)
+        d.reply(
+          moveStatus(m) === "arrived"
+            ? { id: m.id, ok: true }
+            : { id: m.id, ok: false, reason: "foi desviada para outro sítio antes de chegar" },
+        );
+    },
+  };
+}

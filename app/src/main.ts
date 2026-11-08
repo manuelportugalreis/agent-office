@@ -13,10 +13,10 @@ import { buildAnnex, updateServers } from "./scene/annex";
 import { editables, loadLayout } from "./scene/editable";
 import { createEditor } from "./scene/editor";
 import { createScreen, drawScreen, type ScreenHandle } from "./scene/screens";
-import { createStage, DEFAULT_ZOOM, type TimeMode } from "./scene/stage";
+import { createStage, DEFAULT_ZOOM } from "./scene/stage";
 import { chooseFigure, pickRadius } from "./scene/pick";
 import type { ChatActions, ChatAgent } from "./chat/ChatPanel";
-import type { ChatMount } from "./chat/mount";
+import { lazyChat } from "./chat/lazy";
 import { createChatStore } from "./chat/store";
 import { activityLabel } from "./chat/activity";
 import { modelLabel, SUGGESTIONS } from "./data/prompts";
@@ -35,14 +35,17 @@ import { createGuard, GUARD_DEF } from "./sim/guard";
 import { createJanitor, JANITOR_DEF, janitorUpdate, requestCleaning } from "./sim/janitor";
 import { shortcutAllowed } from "./ui/keys";
 import { cancelAmbient, lifeTick, lifeUpdate, queueVisit } from "./sim/life";
-import { arrivedAtDesk, clickCorridor, createPlayer, goToDesk, nearestDesk, freeWalk, PLAYER_DEF } from "./sim/player";
-import { moveStatus, startMove, type PendingMove } from "./sim/orders";
+import { createPlayer, PLAYER_DEF } from "./sim/player";
+import { createMoveQueue, moveStatus, startMove } from "./sim/orders";
 import { createOrdersUi } from "./ui/orders";
 import { createTour, IS_DEMO, SETUP_URL } from "./ui/demo";
-import { createWalkStatus } from "./ui/walk-status";
+import { createWalkMode } from "./ui/walk-mode";
+import { createOrderBar } from "./ui/order-bar";
+import { createOfficePick } from "./ui/office-pick";
+import { installViewMenu } from "./ui/view-menu";
 import { createInstructionsUi } from "./ui/instructions";
 import { createNotificationsUi } from "./ui/notifications";
-import { ofPlace, placeName, ROOM_PLACES } from "../../shared/places";
+import { ofPlace, placeName } from "../../shared/places";
 
 interface LogEvent {
   readonly agent: Agent;
@@ -50,17 +53,15 @@ interface LogEvent {
 }
 import { deadlinesFor } from "./sim/canvas";
 import { buildLocations } from "./sim/locations";
-import { byId, escapeHtml, isDark, toast } from "./ui/dom";
+import { byId, toast } from "./ui/dom";
 import { createApprovals } from "./ui/approvals";
 import { createPanel, type Tab } from "./ui/panel";
-import { createTeamBar } from "./ui/team";
+import { createTeamBar, teamMembers } from "./ui/team";
 import { createLocalMode, type LocalMode } from "./ui/local-mode";
 import { createAgentTerminal } from "./ui/terminal";
 
 const SCREEN_REFRESH_S = 0.25;
 const TEAM_REFRESH_MS = 1000;
-const ARRIVAL_LOOK_MS = 6000;
-const WALK_ZOOM = 2;
 const MAX_LOG = 200;
 
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
@@ -91,8 +92,6 @@ const guard = createGuard();
 const guardView = createPerson(GUARD_DEF);
 const janitor = createJanitor();
 const janitorView = createPerson(JANITOR_DEF);
-playerView.group.visible = false;
-const walk = { on: false, follow: true, keys: new Set<string>(), arrivedFor: null as string | null };
 for (const a of agents) if (a.def.startsResting) teleport(a, locs.rest0, "rest");
 
 // ---- UI
@@ -127,8 +126,8 @@ const panel = createPanel({
     client.send({ type: "stop", agentId: a.def.id });
   },
   goTo: (a) => {
-    setWalkMode(true);
-    walkTo(a);
+    walkMode.set(true);
+    walkMode.walkTo(a);
   },
   onClose: () => {
     agentTerminal.hide();
@@ -161,7 +160,7 @@ const stage = createStage(
     if (pickId(e) === DOSSIER_ID) return dossierUi.open();
     if (editor.active()) return;
     const a = pickAt(e);
-    if (walk.on) return clickInWalkMode(e, a);
+    if (walkMode.on) return walkMode.click(e, a);
     if (a) panel.open(a, agentTab(a));
   },
   (e) => {
@@ -180,7 +179,7 @@ function refreshEditBar(): void {
   byId("editInfo").textContent = name ? `${name}: arrasta para mudar de sítio` : "Arrasta uma peça para a mudar de sítio.";
 }
 function setEditMode(on: boolean): void {
-  if (on && walk.on) setWalkMode(false);
+  if (on && walkMode.on) walkMode.set(false);
   editor.setActive(on);
   byId("hint").hidden = on;
 }
@@ -205,93 +204,26 @@ byId("editRotate").onclick = () => editor.rotate();
 byId("editReset").onclick = () => editor.reset();
 byId("editDone").onclick = () => setEditMode(false);
 
-/** Modo andar: clicar numa pessoa leva-te à secretária dela; no corredor, ao sítio clicado; numa sala, à secretária mais próxima. */
-function clickInWalkMode(e: PointerEvent, clicked: Agent | null): void {
-  if (clicked) return walkTo(clicked);
-  const ground = stage.pickGround(e);
-  if (!ground) return;
-  if (clickCorridor(player, ground)) {
-    walkTarget = null;
-    return walkStatus.heading(null);
-  }
-  const desk = nearestDesk(agents, ground);
-  if (desk) walkTo(desk);
-}
+// ---- modo Andar (o teu avatar pelo escritório): ver ui/walk-mode.ts
+const walkMode = createWalkMode({
+  stage,
+  player,
+  playerView,
+  agents,
+  locs,
+  findAgent: (id) => byAgentId.get(id),
+  defaultZoom: DEFAULT_ZOOM,
+  leaveEdit: () => {
+    if (editor.active()) setEditMode(false);
+  },
+  onArrive: (a) => panel.open(a, agentTab(a)),
+});
 
-const walkStatus = createWalkStatus(byId("walkStatus"));
-let walkTarget: Agent | null = null;
-/** Vai à secretária de alguém, a dizer para quem vais. */
-function walkTo(a: Agent): void {
-  if (!goToDesk(player, locs, a.def.id)) return toast(`Não encontro caminho até ${a.def.name}.`);
-  walk.arrivedFor = null;
-  walkTarget = a;
-  walkStatus.heading(a.def.name);
-}
-
-function setWalkMode(on: boolean): void {
-  if (on && editor.active()) setEditMode(false);
-  walk.on = on;
-  playerView.group.visible = on;
-  const btn = byId("walkBtn");
-  btn.setAttribute("aria-pressed", String(on));
-  btn.classList.toggle("on", on);
-  byId("hint").textContent = on
-    ? "Andar: WASD ou setas · Q/E rodam a câmara · clica numa pessoa para ir lá · F segue-te · G para sair"
-    : "Arrastar: mover · Roda: zoom · Botão direito ou Q/E: rodar · Clica numa pessoa";
-  stage.setZoom(on ? WALK_ZOOM : DEFAULT_ZOOM);
-  if (on) {
-    setFollow(true);
-  } else {
-    stage.setFollow(null);
-    walk.keys.clear();
-    walkTarget = null;
-    walkStatus.heading(null);
-  }
-}
-
-function setFollow(on: boolean): void {
-  walk.follow = on;
-  if (on)
-    stage.setFollow(
-      () => ({ x: player.x, z: player.z }),
-      () => (walk.follow = false),
-    );
-  else stage.setFollow(null);
-}
-
-/** Quando o avatar chega à secretária de alguém: abre a conversa e essa pessoa vira-se para ele. */
-function handleArrival(now: number): void {
-  const id = arrivedAtDesk(player);
-  if (!id) {
-    walk.arrivedFor = null;
-    return;
-  }
-  if (walk.arrivedFor === id) return;
-  walk.arrivedFor = id;
-  const worker = byAgentId.get(id);
-  if (!worker) return;
-  worker.lookAt = { x: player.x, z: player.z, until: now + ARRIVAL_LOOK_MS };
-  walkTarget = null;
-  walkStatus.arrived(worker.def.name);
-  panel.open(worker, agentTab(worker));
-}
-
-/** Teclas de andar: setas e WASD (em relação ao ecrã, não ao mundo). */
-const MOVE_KEYS: Readonly<Record<string, readonly [right: number, up: number]>> = {
-  ArrowUp: [0, 1],
-  w: [0, 1],
-  ArrowDown: [0, -1],
-  s: [0, -1],
-  ArrowLeft: [-1, 0],
-  a: [-1, 0],
-  ArrowRight: [1, 0],
-  d: [1, 0],
-};
 addEventListener("keydown", (e) => {
   if (!shortcutAllowed(e)) return;
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   // Os atalhos de ligar/desligar não repetem quando a tecla fica carregada (o autorrepeat do browser).
-  if (k === "g" && !e.repeat) return setWalkMode(!walk.on);
+  if (k === "g" && !e.repeat) return walkMode.set(!walkMode.on);
   if (k === "m" && !e.repeat) return setEditMode(!editor.active());
   if (editor.active()) {
     if (k === "r" && !e.repeat) editor.rotate();
@@ -300,18 +232,11 @@ addEventListener("keydown", (e) => {
   }
   // Esc fecha primeiro o que está por cima (menu, notificações, atividade, diálogo, dossier); só depois o painel.
   if (k === "Escape") return closeTopmost();
-  if (!walk.on) return;
-  if (k === "f" && !e.repeat) return setFollow(!walk.follow);
-  if (k in MOVE_KEYS) {
-    e.preventDefault();
-    walk.keys.add(k);
-    walk.arrivedFor = null;
-    if (walkTarget) {
-      walkTarget = null;
-      walkStatus.heading(null);
-    }
-  }
+  if (!walkMode.on) return;
+  if (k === "f" && !e.repeat) return walkMode.toggleFollow();
+  walkMode.keyDown(k, e);
 });
+addEventListener("keyup", (e) => walkMode.keyUp(e.key.length === 1 ? e.key.toLowerCase() : e.key));
 /**
  * Esc: fecha uma coisa de cada vez, a de cima primeiro. As sobreposições com Esc próprio (notificações, atividade,
  * aprovações, dossier) fecham-se sozinhas e marcam o evento, que já não chega aqui.
@@ -325,23 +250,7 @@ function closeTopmost(): void {
   const covered = document.querySelector("dialog[open]") !== null || byId("main").classList.contains("dossier-open");
   if (!covered && panel.selected) panel.close();
 }
-
-/** Perder o foco (mudar de janela ou separador) larga as setas: senão o avatar continuava a andar sozinho. */
-function releaseWalkKeys(): void {
-  if (walk.keys.size === 0) return;
-  walk.keys.clear();
-  player.route = [];
-}
-addEventListener("blur", releaseWalkKeys);
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) releaseWalkKeys();
-});
-addEventListener("keyup", (e) => {
-  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  if (!walk.keys.delete(k) || walk.keys.size > 0) return;
-  player.route = [];
-});
-byId("walkBtn").onclick = () => setWalkMode(!walk.on);
+byId("walkBtn").onclick = () => walkMode.set(!walkMode.on);
 
 const DOSSIER_ID = "dossier";
 
@@ -428,28 +337,7 @@ const chatActions: ChatActions = {
   },
   ...(IS_DEMO ? { demo: { setupUrl: SETUP_URL, tour: () => void runTour() } } : {}),
 };
-/** O chat (React + assistant-ui) só é descarregado quando é preciso: o arranque da cena 3D fica mais leve. */
-function lazyChat(): ChatMount {
-  let real: ChatMount | null = null;
-  let shown: ChatAgent | null = null;
-  let isOnline = false;
-  void import("./chat/mount").then(({ mountChat }) => {
-    real = mountChat(byId("chatRoot"), chatStore, chatActions);
-    real.setOnline(isOnline);
-    real.show(shown);
-  });
-  return {
-    show(agent) {
-      shown = agent;
-      real?.show(agent);
-    },
-    setOnline(next) {
-      isOnline = next;
-      real?.setOnline(next);
-    },
-  };
-}
-const chat = lazyChat();
+const chat = lazyChat(byId("chatRoot"), chatStore, chatActions);
 
 // ---- servidor de agentes reais
 const WORKING = new Set(["think", "work"]);
@@ -561,9 +449,9 @@ function onServerMsg(m: ServerMsg): void {
   if (m.type === "approval-resolved") return approvals.remove(m.id, m.superseded === true);
   if (m.type === "user-message") return chatStore.addUserIfNew(m.agentId, m.text, m.files);
   if (m.type === "delegate") return queueVisit(agents, locs, m.from, m.to, performance.now());
-  if (m.type === "move") return beginMove(m.id, m.agentId, m.place);
+  if (m.type === "move") return moves.begin(m.id, m.agentId, m.place);
   if (m.type === "order-steps") return ordersUi.update(m);
-  if (m.type === "office") return showOffice(m.myOffice);
+  if (m.type === "office") return officePick.show(m.myOffice);
   if (m.type === "instructions") return instructionsUi.handle(m);
   if (m.type === "notifications") return notificationsUi.set(m.items);
   if (m.type === "initiative") return notificationsUi.setInitiative(m.settings);
@@ -620,41 +508,19 @@ function onServerMsg(m: ServerMsg): void {
   }
 }
 
-// ---- ordens de movimento: o servidor pede, a cena leva a pessoa até lá e confirma a chegada
-const pendingMoves: PendingMove[] = [];
+// ---- ordens de movimento: o servidor pede, a cena leva a pessoa até lá e confirma a chegada (sim/orders.ts)
 const agentName = (id: string): string => byAgentId.get(id)?.def.name ?? id;
-
-function beginMove(id: number, agentId: string, place: string): void {
-  const a = byAgentId.get(agentId);
-  if (!a) return void client.send({ type: "arrived", id, ok: false, reason: "essa pessoa não existe na cena" });
-  const started = startMove(a, place, locs, id, performance.now());
-  if ("error" in started) return void client.send({ type: "arrived", id, ok: false, reason: started.error });
-  // Uma ordem nova para a mesma pessoa substitui a anterior.
-  for (let i = pendingMoves.length - 1; i >= 0; i--)
-    if (pendingMoves[i].agent === a) {
-      // A ordem anterior fica respondida (senão o servidor esperava por ela até desistir).
-      client.send({ type: "arrived", id: pendingMoves[i].id, ok: false, reason: "substituída por outra ordem de movimento" });
-      pendingMoves.splice(i, 1);
-    }
-  pendingMoves.push(started);
-  a.task = `A caminho ${ofPlace(placeName(place, agentName))}.`;
-  panel.refresh();
-}
-
-function checkMoves(): void {
-  for (let i = pendingMoves.length - 1; i >= 0; i--) {
-    const m = pendingMoves[i];
-    const status = moveStatus(m);
-    if (status === "walking") continue;
-    pendingMoves.splice(i, 1);
-    client.send(
-      status === "arrived"
-        ? { type: "arrived", id: m.id, ok: true }
-        : { type: "arrived", id: m.id, ok: false, reason: "foi desviada para outro sítio antes de chegar" },
-    );
-  }
-}
-setInterval(checkMoves, 250);
+const moves = createMoveQueue({
+  find: (id) => byAgentId.get(id),
+  locs,
+  reply: (r) => void client.send({ type: "arrived", ...r }),
+  started: (a, place) => {
+    a.task = `A caminho ${ofPlace(placeName(place, agentName))}.`;
+    panel.refresh();
+  },
+  now: () => performance.now(),
+});
+setInterval(() => moves.check(), 250);
 
 const ordersUi = createOrdersUi(
   byId("orders"),
@@ -705,26 +571,7 @@ const notificationsUi = createNotificationsUi({
 const instructionsUi = createInstructionsUi((m) => client.send(m), agentName);
 
 // ---- o meu gabinete: para onde vai quem mandas ao «meu gabinete»
-const officeSel = byId<HTMLSelectElement>("officeSel");
-officeSel.innerHTML =
-  `<option value="">O meu gabinete…</option>` +
-  ROOM_PLACES.filter((p) => p.id !== "tray")
-    .map((p) => `<option value="${p.id}">${p.name.replace(/^(a|o) /, "")}</option>`)
-    .join("");
-function showOffice(place: string | null): void {
-  if (place && ![...officeSel.options].some((o) => o.value === place)) {
-    const opt = document.createElement("option");
-    opt.value = place;
-    opt.textContent = placeName(place, agentName);
-    officeSel.append(opt);
-  }
-  officeSel.value = place ?? "";
-}
-officeSel.onchange = () => {
-  if (!officeSel.value) return;
-  if (client.send({ type: "set-office", place: officeSel.value })) toast(`O teu gabinete: ${placeName(officeSel.value, agentName)}`);
-  else toast("Servidor offline: não consegui guardar o gabinete.");
-};
+const officePick = createOfficePick(agentName, (place) => client.send({ type: "set-office", place }));
 
 /** O dossier mudou (ou foi restaurado ao ligar): atualiza o cartão, o rótulo e a pasta na cena. */
 function applyDossier(d: Dossier | null): void {
@@ -830,54 +677,28 @@ const dossierUi = createDossierUi(
 setInterval(() => lifeTick(agents, locs, performance.now()), 2000);
 setInterval(() => lifeUpdate(agents, locs, performance.now()), 100);
 
-// ---- comandos ao CEO
-byId<HTMLFormElement>("cmd").onsubmit = (e) => {
-  e.preventDefault();
-  const input = byId<HTMLInputElement>("cmdIn");
-  if (IS_DEMO) return void runTour();
-  const text = input.value.trim();
-  const ceo = byAgentId.get("ceo");
-  if (!text || !ceo) return;
-  const orderProfile = localMode?.profileOf("ceo");
-  if (realAgents.has("ceo") && client.send({ type: "order", text, ...(orderProfile ? { profileId: orderProfile.id } : {}) })) {
-    input.value = "";
-    chatStore.addUser("ceo", text);
-    toast("Ordem enviada");
-    showOrderTarget();
-    return;
-  }
-  toast("Servidor offline: as ordens ao CEO só funcionam com o servidor ligado.");
-};
-
-// ---- cabeçalho: tema e hora
-byId("themeBtn").onclick = () => {
-  document.documentElement.dataset.theme = isDark() ? "light" : "dark";
-  if (panel.selected) panel.open(panel.selected, panel.tab);
-};
-const TIME_CYCLE: Record<TimeMode, { label: string; next: TimeMode }> = {
-  auto: { label: "🕒 Auto", next: "day" },
-  day: { label: "☀ Dia", next: "night" },
-  night: { label: "🌙 Noite", next: "auto" },
-};
-let timeMode: TimeMode = "auto";
-const showQuality = (): void => {
-  byId("qualBtn").textContent = stage.quality() === "alta" ? "✨ Alta" : "Normal";
-};
-byId("qualBtn").onclick = () => {
-  stage.setQuality(stage.quality() === "alta" ? "normal" : "alta");
-  showQuality();
-};
-showQuality();
-// A cena estava lenta e o palco aliviou-a sozinho: diz-se o que mudou (e o botão mostra a qualidade atual).
-stage.onAutoAdjust((message) => {
-  showQuality();
-  toast(message);
+// ---- caixa de ordens ("Mira, …" vai direto; sem nome vai ao Atlas) e menu Vista
+createOrderBar({
+  agents: agents.map((a) => ({ id: a.def.id, name: a.def.name })),
+  submit: (text) => {
+    if (IS_DEMO) {
+      void runTour();
+      return false;
+    }
+    if (!text || !byAgentId.has("ceo")) return false;
+    const orderProfile = localMode?.profileOf("ceo");
+    if (realAgents.has("ceo") && client.send({ type: "order", text, ...(orderProfile ? { profileId: orderProfile.id } : {}) })) {
+      chatStore.addUser("ceo", text);
+      toast("Ordem enviada");
+      return true;
+    }
+    toast("Servidor offline: as ordens só funcionam com o servidor ligado.");
+    return false;
+  },
 });
-byId("timeBtn").onclick = () => {
-  timeMode = TIME_CYCLE[timeMode].next;
-  stage.setTimeMode(timeMode);
-  byId("timeBtn").textContent = TIME_CYCLE[timeMode].label;
-};
+installViewMenu(stage, () => {
+  if (panel.selected) panel.open(panel.selected, panel.tab);
+});
 
 // ---- loop
 let last = performance.now();
@@ -898,21 +719,7 @@ function frame(now: number): void {
   updatePerson(janitorView, janitor.agent, dt, t);
   updateLisbon(dt);
   updateServers(t);
-  if (walk.on) {
-    let right = 0;
-    let up = 0;
-    for (const k of walk.keys) {
-      right += MOVE_KEYS[k][0];
-      up += MOVE_KEYS[k][1];
-    }
-    const az = stage.azimuth();
-    // Frente no ecrã = para longe da câmara; direita no ecrã = (cos, -sin).
-    const moving = right !== 0 || up !== 0;
-    stepAgent(player, dt);
-    if (moving) freeWalk(player, -Math.sin(az) * up + Math.cos(az) * right, -Math.cos(az) * up - Math.sin(az) * right, dt);
-    updatePerson(playerView, player, dt, t);
-    handleArrival(now);
-  }
+  walkMode.step(dt, t, now);
   if (screenClock > SCREEN_REFRESH_S) {
     screenClock = 0;
     for (const a of agents) {
@@ -924,7 +731,7 @@ function frame(now: number): void {
   dossierProp.update(dt, t);
   reviewTray.update(t);
   stage.update(dt);
-  placeTag(walkTarget ?? panel.selected ?? hovered);
+  placeTag(walkMode.target ?? panel.selected ?? hovered);
   stage.render();
   requestAnimationFrame(frame);
 }
@@ -938,7 +745,7 @@ function placeTag(a: Agent | null): void {
   tag.style.display = "block";
   const selected = a === panel.selected;
   tag.classList.toggle("is-selected", selected);
-  tag.textContent = `${a === walkTarget ? "🚶 " : selected ? "● " : ""}${a.def.name} · ${a.role.split("·")[0].trim()}`;
+  tag.textContent = `${a === walkMode.target ? "🚶 " : selected ? "● " : ""}${a.def.name} · ${a.role.split("·")[0].trim()}`;
   tag.style.left = `${p.x}px`;
   tag.style.top = `${p.y - 22}px`;
 }
@@ -956,15 +763,7 @@ byId("palBtn").onclick = () => palette.open();
 // ---- equipa num relance (canto do escritório) e a caixa de ordens que ensina o atalho "Nome, …"
 const teamBar = createTeamBar(
   byId("team"),
-  () =>
-    agents.map((a) => ({
-      id: a.def.id,
-      name: a.def.name,
-      emoji: a.def.emoji,
-      role: a.role.split("·")[0]?.trim() ?? "",
-      state: stateOf(a),
-      real: online && realAgents.has(a.def.id),
-    })),
+  () => teamMembers(agents, (id) => online && realAgents.has(id)),
   (id) => {
     const a = byAgentId.get(id);
     if (a) panel.open(a, agentTab(a));
@@ -972,23 +771,7 @@ const teamBar = createTeamBar(
 );
 teamBar.refresh();
 setInterval(() => teamBar.refresh(), TEAM_REFRESH_MS);
-byId("cmdNames").innerHTML = agents.map((a) => `<option value="${escapeHtml(`${a.def.name}, `)}"></option>`).join("");
-const cmdIn = byId<HTMLInputElement>("cmdIn");
-const cmdSend = byId("cmdSend");
-/** O botão diz para onde vai a ordem: "Mira, …" vai direta para ela; sem nome vai ao Atlas. */
-const showOrderTarget = (): void => {
-  const m = /^\s*@?([\p{L}-]+)\s*[,:]/u.exec(cmdIn.value);
-  const name = m?.[1]?.toLowerCase();
-  const target = name ? agents.find((a) => a.def.name.toLowerCase() === name || a.def.id === name) : undefined;
-  cmdSend.textContent = target && target.def.id !== "ceo" ? `Enviar → ${target.def.name}` : "Enviar ao Atlas";
-};
-cmdIn.addEventListener("input", showOrderTarget);
 byId("pClose").onclick = () => panel.close();
-// O menu Vista fecha-se ao clicar fora dele.
-document.addEventListener("pointerdown", (e) => {
-  const menu = byId<HTMLDetailsElement>("viewMenu");
-  if (menu.open && !menu.contains(e.target as Node)) menu.open = false;
-});
 installResizer(byId("main"), byId("resizer"));
 
 // ---- ligação direta: #ada ou #ada/chat abre logo o painel desse agente

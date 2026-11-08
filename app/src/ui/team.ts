@@ -1,4 +1,4 @@
-import type { DisplayState } from "../sim/agent";
+import { stateOf, type Agent, type DisplayState } from "../sim/agent";
 import { escapeHtml } from "./dom";
 
 /**
@@ -72,4 +72,16 @@ export function createTeamBar(host: HTMLElement, list: () => readonly TeamMember
       host.innerHTML = html;
     },
   };
+}
+
+/** A equipa tal como a barra a mostra: nome, emoji, função curta, estado e se o terminal se pode abrir. */
+export function teamMembers(agents: readonly Agent[], isReal: (id: string) => boolean): TeamMember[] {
+  return agents.map((a) => ({
+    id: a.def.id,
+    name: a.def.name,
+    emoji: a.def.emoji,
+    role: a.role.split("·")[0]?.trim() ?? "",
+    state: stateOf(a),
+    real: isReal(a.def.id),
+  }));
 }
