@@ -21,7 +21,10 @@ function fakeClaude() {
   };
   const received: string[] = [];
   stdin.on("data", (c: Buffer) => {
-    for (const line of c.toString().split("\n").filter(Boolean)) received.push(JSON.parse(line).message.content);
+    for (const line of c.toString().split("\n").filter(Boolean)) {
+      const m = JSON.parse(line);
+      if (m.type === "user") received.push(m.message.content);
+    }
   });
   stdin.on("finish", () => {
     child.ended = true;
@@ -171,6 +174,63 @@ describe("processos do Claude Code que ficam abertos entre mensagens", () => {
     expect(pool.idleCount()).toBe(2);
     expect(made[0]?.child.killed).toBe(true);
     pool.shutdown();
+  });
+
+  it("modo local: as perguntas de permissão vão a quem pediu a mensagem atual e a resposta volta ao processo", async () => {
+    const f = fakeClaude();
+    const replies: unknown[] = [];
+    f.child.stdin.on("data", (c: Buffer) => {
+      for (const line of c.toString().split("\n").filter(Boolean)) {
+        const m = JSON.parse(line);
+        if (m.type === "control_response") replies.push(m.response);
+      }
+    });
+    let cleaned = 0;
+    const pool = createWarmPool();
+    const asked: string[] = [];
+    const run = (text: string) =>
+      pool.run(
+        {
+          key: "local",
+          text,
+          oneShot: false,
+          launch: () => ({ child: f.child as unknown as ChildProcessWithoutNullStreams, cleanup: () => cleaned++ }),
+          control: (request, h, reply) =>
+            h.onPermission?.({ tool: String(request.tool_name), input: request.input, summary: "x" }, (allow) =>
+              reply({ behavior: allow ? "allow" : "deny" }),
+            ),
+        },
+        {
+          onEvent: () => undefined,
+          onExit: () => undefined,
+          onPermission: (ask, respond) => {
+            asked.push(`${text}:${ask.tool}`);
+            respond(true);
+          },
+        },
+      );
+    run("um");
+    await tick();
+    f.child.stdout.write(
+      `${JSON.stringify({ type: "control_request", request_id: "r1", request: { subtype: "can_use_tool", tool_name: "Bash", input: {} } })}\n`,
+    );
+    await tick();
+    f.reply("ok", 0.01);
+    await tick();
+    run("dois");
+    await tick();
+    f.child.stdout.write(
+      `${JSON.stringify({ type: "control_request", request_id: "r2", request: { subtype: "can_use_tool", tool_name: "Write", input: {} } })}\n`,
+    );
+    await tick();
+    expect(asked).toEqual(["um:Bash", "dois:Write"]);
+    expect(replies).toEqual([
+      { subtype: "success", request_id: "r1", response: { behavior: "allow" } },
+      { subtype: "success", request_id: "r2", response: { behavior: "allow" } },
+    ]);
+    pool.shutdown();
+    await tick();
+    expect(cleaned).toBe(1);
   });
 
   it("args: junta a entrada stream-json; a chave ignora --session-id/--resume mas não o id", () => {

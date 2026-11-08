@@ -25,6 +25,12 @@ export interface OfficeConfig {
   readonly vaultDir: string;
   /** Pasta onde abre o Claude Code de cada agente (separador «Claude Code»). Vazio = a tua pasta pessoal. */
   readonly workDir: string;
+  /**
+   * Acesso dos agentes no trabalho do escritório (ordens do Atlas, chat, dossier): "total" = o mesmo do teu terminal
+   * (pasta de trabalho, comandos, integrações; o Agent Office fica protegido); "escritorio" = pasta própria e
+   * ferramentas limitadas (como antes).
+   */
+  readonly access: "total" | "escritorio";
   /** Origens extra aceites pelo servidor (além de 127.0.0.1 e localhost na porta do servidor e do Vite). */
   readonly extraOrigins: readonly string[];
 }
@@ -43,6 +49,7 @@ export const DEFAULTS: OfficeConfig = {
   ],
   vaultDir: "",
   workDir: "",
+  access: "total",
   extraOrigins: [],
 };
 
@@ -103,6 +110,9 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
   if (typeof workDir !== "string" || workDir.length > 500 || /[\r\n]/.test(workDir))
     throw new ConfigError("workDir tem de ser um caminho (texto numa linha)");
 
+  const access = f.access ?? DEFAULTS.access;
+  if (access !== "total" && access !== "escritorio") throw new ConfigError('access tem de ser "total" ou "escritorio"');
+
   const extraOrigins = f.extraOrigins ?? [];
   if (!Array.isArray(extraOrigins) || !extraOrigins.every((o) => typeof o === "string" && ORIGIN.test(o)))
     throw new ConfigError("extraOrigins tem de ser uma lista de origens (ex.: http://127.0.0.1:3000)");
@@ -115,6 +125,7 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
     courses,
     vaultDir: vaultDir.trim(),
     workDir: workDir.trim(),
+    access,
     extraOrigins: extraOrigins as string[],
   };
 }

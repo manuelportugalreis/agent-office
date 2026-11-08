@@ -7,7 +7,7 @@ import { CHIEF_IDS, parseGroupMove } from "./group.ts";
 import { parseOrder } from "./intent.ts";
 import { terminalOrder, type TerminalOrder } from "./direct.ts";
 import { createOrderEngine, groupSteps, sequence, summarize, type ExecStep, type OrderEngine, type StepOutcome } from "./orders.ts";
-import { describeProfile } from "./profiles.ts";
+import { DEFAULT_PROFILE_ID, describeProfile } from "./profiles.ts";
 import type { SiteId } from "./browser.ts";
 import { createHomework, isHomeworkOrder, type Homework } from "./homework.ts";
 import { createSceneBridge } from "./scene-bridge.ts";
@@ -452,7 +452,8 @@ export function createOrchestrator(
       }
       const parsed = parseOrder(text, AGENT_NAMES, "ceo");
       if (parsed) return direct(text, parsed, profile);
-      const single = toTerminal && !profile ? terminalOrder(text, AGENT_NAMES) : null;
+      // O terminal tem o acesso total: vale sem perfil ou com o perfil por omissão (o mesmo acesso).
+      const single = toTerminal && (!profile || profile.id === DEFAULT_PROFILE_ID) ? terminalOrder(text, AGENT_NAMES) : null;
       if (single && toTerminal) {
         const who = nameOf(single.agent);
         const delivered = toTerminal(single);

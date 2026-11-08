@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -9,7 +9,15 @@ import { parseClientMsg, parseProfileInput } from "../../shared/protocol.ts";
 import { createHub } from "./hub.ts";
 import { buildLocalArgs, describeAsk, lineDiff, VAULT_TOOLS } from "./local-runner.ts";
 import { changedFiles, createOrchestrator, traceText } from "./orchestrator.ts";
-import { describeProfile, ProfileError, profileRoots, validateProfile } from "./profiles.ts";
+import {
+  DEFAULT_PROFILE_ID,
+  defaultProfile,
+  describeProfile,
+  OFFICE_ROOT,
+  ProfileError,
+  profileRoots,
+  validateProfile,
+} from "./profiles.ts";
 import type { RunHandlers, RunRequest } from "./runner.ts";
 import { findAgent } from "./agents.ts";
 
@@ -103,6 +111,17 @@ describe("argumentos do Claude Code local", () => {
     const policy = JSON.parse(readFileSync(files[0], "utf8")) as { write: string[] };
     expect(policy.write).toContain(project);
     for (const f of files) rmSync(f, { force: true, recursive: true });
+  });
+  it("perfil por omissão («Acesso total»): pasta de trabalho, terminal, todas as integrações, modo auto, Agent Office protegido", () => {
+    const p = defaultProfile(project, "");
+    expect(p).toMatchObject({ id: DEFAULT_PROFILE_ID, folder: project, bash: true, mcp: ["*"], autoMode: true, vault: "none" });
+    expect(defaultProfile(join(base, "nao-existe"), "").folder).toBe(homedir());
+    expect(defaultProfile("", vault).vault).toBe("write");
+    const { args, files } = buildLocalArgs(req(p), "");
+    expect(args[args.indexOf("--permission-mode") + 1]).toBe("auto");
+    expect(args).not.toContain("--strict-mcp-config");
+    const policy = JSON.parse(readFileSync(files[0] ?? "", "utf8")) as { noWrite: string[] };
+    expect(policy.noWrite).toEqual([OFFICE_ROOT]);
   });
   it("as skills são tuas por defeito (perfis antigos incluídos); tirá-las no perfil retira a ferramenta Skill", () => {
     const withSkills = buildLocalArgs(req(profile()), vault);
@@ -277,6 +296,16 @@ describe("local-guard: pastas do perfil e notas do Obsidian", () => {
     expect(guard("Write", { file_path: join(vault, "Diario", "x.md"), content: "x" }, policy()).status).toBe(2);
     expect(guard("Write", { file_path: join(other, "x.md"), content: "x" }, policy()).status).toBe(2);
     expect(guard("Read", { file_path: join(other, "x.md") }, policy()).status).toBe(2);
+  });
+  it("noWrite: com a pasta pessoal inteira com escrita, uma pasta protegida lá dentro continua sem escrita (mas lê-se)", () => {
+    const office = join(project, "agent-office");
+    mkdirSync(office, { recursive: true });
+    const p = { cwd: project, read: [project], write: [project], noWrite: [office] };
+    expect(guard("Write", { file_path: join(project, "relatorio.md"), content: "x" }, p).status).toBe(0);
+    const blocked = guard("Write", { file_path: join(office, "server", "src", "agents.ts"), content: "x" }, p);
+    expect(blocked.status).toBe(2);
+    expect(blocked.stderr).toContain("protegida");
+    expect(guard("Read", { file_path: join(office, "README.md") }, p).status).toBe(0);
   });
   it("uma nota a pedir mais acesso não muda nada: o guard lê a política do servidor, não o texto", () => {
     writeFileSync(

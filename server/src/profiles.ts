@@ -9,7 +9,7 @@ import type { AccessProfile, ProfileInput } from "../../shared/protocol.ts";
  */
 
 /** Pasta do próprio Agent Office: um agente local não a pode escrever (seria mudar as próprias regras). */
-const OFFICE_ROOT = resolve(import.meta.dirname, "..", "..");
+export const OFFICE_ROOT = resolve(import.meta.dirname, "..", "..");
 /** Política do guard e configurações MCP das corridas: um perfil não pode ler nem escrever aqui. */
 const RUNS_DIR = join(tmpdir(), "agent-office-runs");
 /** Configuração do Claude Code do utilizador (definições, hooks, credenciais): nunca como pasta de trabalho. */
@@ -130,3 +130,30 @@ export function mcpCatalog(folder?: string): Record<string, McpConfig> {
 /** Nomes dos servidores MCP configurados (para a interface escolher). */
 export const mcpNames = (folders: readonly string[] = []): string[] =>
   [...new Set([Object.keys(mcpCatalog()), ...folders.map((f) => Object.keys(mcpCatalog(f)))].flat())].sort();
+
+/** Id do perfil por omissão (não fica na base de dados; nunca colide com os perfis criados, que começam em 1). */
+export const DEFAULT_PROFILE_ID = 0;
+
+/**
+ * "Acesso total": o que o Claude Code do teu terminal tem. Pasta de trabalho = `workDir` (ou a tua pasta pessoal),
+ * comandos de terminal, todas as tuas integrações e skills, edições sem perguntar; o vault com escrita se existir.
+ * Sem validação de pastas porque não vem do browser; o Agent Office continua protegido pelo guard (noWrite).
+ */
+export function defaultProfile(workDir: string, vaultDir: string): AccessProfile {
+  const folder = workDir && existsSync(workDir) ? workDir : homedir();
+  return Object.freeze({
+    id: DEFAULT_PROFILE_ID,
+    name: "Acesso total",
+    folder,
+    readDirs: [],
+    writeDirs: [],
+    vault: vaultDir ? "write" : "none",
+    vaultFolders: [],
+    bash: true,
+    mcp: ["*"],
+    autoEdits: true,
+    autoMode: true,
+    skills: true,
+    browser: false,
+  });
+}

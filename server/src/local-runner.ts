@@ -3,14 +3,13 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import type { AccessProfile } from "../../shared/protocol.ts";
 import { CHROME_READ_TOOLS } from "./agents.ts";
 import { canvasAllow, config } from "./config.ts";
-import { parseLine } from "./events.ts";
 import { userInstructions } from "./instructions.ts";
-import { describeProfile, mcpCatalog, profileRoots } from "./profiles.ts";
+import { describeProfile, mcpCatalog, OFFICE_ROOT, profileRoots } from "./profiles.ts";
 import type { PermissionAsk, RunHandle, RunHandlers, RunRequest } from "./runner.ts";
+import { warmPool } from "./warm-pool.ts";
 
 /**
  * Modo "Claude Code local": o `claude` instalado, com a tua autenticação, a correr na pasta do projeto com as tuas
@@ -26,7 +25,6 @@ const hookPath = (name: string): string => slash(join(import.meta.dirname, "..",
 const node = (): string => `"${slash(process.execPath)}"`;
 /** Ficheiros auxiliares das corridas (política do guard, MCP). Nenhum perfil pode incluir esta pasta. */
 export const RUN_DIR = join(tmpdir(), "agent-office-runs");
-const STDERR_LIMIT = 2000;
 const GUARD_MATCHER = "Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|PowerShell";
 
 let claudePath: string | null = null;
@@ -129,6 +127,8 @@ export function buildLocalArgs(
       write: req.readOnly ? [] : roots.write,
       vault: p.vault !== "none" ? vaultDir : null,
       officePorts: [config.port],
+      // O Agent Office (regras e memória dos agentes) nunca se escreve, mesmo com a pasta pessoal como pasta de trabalho.
+      noWrite: [OFFICE_ROOT],
     }),
     { mode: 0o600 },
   );
@@ -171,7 +171,7 @@ export function buildLocalArgs(
     JSON.stringify({ hooks }),
     ...(opts.interactive ? [] : ["--permission-prompt-tool", "stdio"]),
     "--permission-mode",
-    p.autoEdits ? "acceptEdits" : "default",
+    p.autoMode ? "auto" : p.autoEdits ? "acceptEdits" : "default",
     "--mcp-config",
     slash(files.mcp),
     ...(p.mcp.includes("*") ? [] : ["--strict-mcp-config"]),
@@ -351,75 +351,47 @@ export function childEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessE
   return env;
 }
 
-/** Lança uma sessão local. O pedido vai por stdin (mensagem stream-json), nunca como argumento. */
+/**
+ * Chave do processo local: agente, sessão, perfil e modo (só leitura). A mesma sessão com o mesmo acesso reaproveita o
+ * processo; qualquer mudança de acesso abre outro (a política do guard é do processo).
+ */
+export function localKey(req: RunRequest & { readonly profile: AccessProfile }): string {
+  return JSON.stringify(["local", req.agent.id, req.sessionId, req.profile, !!req.readOnly]);
+}
+
+/**
+ * Corre uma mensagem numa sessão local, num processo que fica aberto para a mensagem seguinte da mesma sessão. O
+ * pedido vai por stdin (mensagem stream-json), nunca como argumento; as perguntas de permissão vão à app.
+ */
 export function localRun(req: RunRequest & { readonly profile: AccessProfile }, handlers: RunHandlers): RunHandle {
-  const { args, files } = buildLocalArgs(req);
-  const cleanup = (): void => {
-    for (const f of files) rmSync(f, { force: true, recursive: true });
-  };
-  const child = spawn(claudeExecutable(), args, {
-    env: childEnv(),
-    cwd: req.profile.folder,
-    shell: false,
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  let stderr = "";
-  let ended = false;
-  const endInput = (): void => {
-    if (!ended) {
-      ended = true;
-      child.stdin.end();
-    }
-  };
-  const write = (msg: unknown): void => {
-    if (!ended && child.stdin.writable) child.stdin.write(`${JSON.stringify(msg)}\n`);
-  };
-  child.stderr.on("data", (chunk: Buffer) => {
-    if (stderr.length < STDERR_LIMIT) stderr += chunk.toString();
-  });
-  createInterface({ input: child.stdout }).on("line", (line) => {
-    let data: unknown;
-    try {
-      data = JSON.parse(line);
-    } catch {
-      return;
-    }
-    if (isRecord(data) && data.type === "control_request" && isRecord(data.request)) {
-      const requestId = str(data.request_id);
-      const reply = (response: Record<string, unknown>): void =>
-        write({ type: "control_response", response: { subtype: "success", request_id: requestId, response } });
-      if (data.request.subtype !== "can_use_tool") return reply({});
-      const input = data.request.input;
-      handlers.onPermission?.(toPermissionAsk(data.request, req.profile.folder), (allow, message) =>
-        reply(
-          allow
-            ? { behavior: "allow", updatedInput: input }
-            : { behavior: "deny", message: message ?? "Recusado pelo utilizador no Agent Office." },
-        ),
-      );
-      if (!handlers.onPermission) reply({ behavior: "deny", message: "Sem forma de pedir autorização." });
-      return;
-    }
-    for (const event of parseLine(line)) {
-      handlers.onEvent(event);
-      if (event.kind === "done") endInput();
-    }
-  });
-  child.on("error", (err) => {
-    cleanup();
-    handlers.onExit(null, `Não consegui lançar o claude: ${err.message}`);
-  });
-  child.on("close", (code) => {
-    cleanup();
-    handlers.onExit(code, stderr);
-  });
-  child.stdin.on("error", () => undefined);
-  write({ type: "user", message: { role: "user", content: req.text } });
-  return {
-    kill: () => {
-      endInput();
-      child.kill();
+  return warmPool.run(
+    {
+      key: localKey(req),
+      oneShot: !!req.oneShot,
+      text: req.text,
+      launch: () => {
+        const { args, files } = buildLocalArgs(req);
+        const child = spawn(claudeExecutable(), args, {
+          env: childEnv(),
+          cwd: req.profile.folder,
+          shell: false,
+          stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true,
+        });
+        return { child, cleanup: () => files.forEach((f) => rmSync(f, { force: true, recursive: true })) };
+      },
+      control: (request, h, reply) => {
+        const input = request.input;
+        if (!h.onPermission) return reply({ behavior: "deny", message: "Sem forma de pedir autorização." });
+        h.onPermission(toPermissionAsk(request, req.profile.folder), (allow, message) =>
+          reply(
+            allow
+              ? { behavior: "allow", updatedInput: input }
+              : { behavior: "deny", message: message ?? "Recusado pelo utilizador no Agent Office." },
+          ),
+        );
+      },
     },
-  };
+    handlers,
+  );
 }

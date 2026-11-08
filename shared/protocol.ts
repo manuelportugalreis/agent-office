@@ -162,6 +162,8 @@ export interface AccessProfile {
   readonly mcp: readonly string[];
   /** Aceitar edições de ficheiros sem perguntar (como o modo acceptEdits do terminal). */
   readonly autoEdits: boolean;
+  /** Modo auto do Claude Code (o classificador decide o que pode avançar sem perguntar), como no teu terminal. */
+  readonly autoMode?: boolean;
   /** Usar as tuas skills do Claude Code (as de ~/.claude/skills e as do projeto). Perfis antigos sem o campo: sim. */
   readonly skills?: boolean;
   /** Ler o Canvas no teu Chrome (extensão Claude in Chrome), só leitura e só o domínio do Canvas. Perfis antigos: não. */

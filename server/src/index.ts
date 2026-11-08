@@ -28,7 +28,7 @@ import { createSceneBridge } from "./scene-bridge.ts";
 import { createRateLimiter } from "./ratelimit.ts";
 import { openStore } from "./store.ts";
 import type { AccessProfile, AgentMode } from "../../shared/protocol.ts";
-import { describeProfile, mcpNames, ProfileError, validateProfile } from "./profiles.ts";
+import { defaultProfile, describeProfile, mcpNames, ProfileError, validateProfile } from "./profiles.ts";
 import { terminalScript } from "./local-runner.ts";
 import { claudeVersion, openTerminal, resumeCommand } from "./terminal.ts";
 
@@ -139,7 +139,11 @@ const approvals = createApprovals(
 /** Perfil do modo local de um agente (null = modo escritório, ou perfil que já não existe). */
 const profileOf = (agentId: string): AccessProfile | null => {
   const mode = store.modes()[agentId];
-  return mode?.kind === "local" ? (store.profiles().find((p) => p.id === mode.profileId) ?? null) : null;
+  if (mode?.kind === "local") return store.profiles().find((p) => p.id === mode.profileId) ?? null;
+  if (mode?.kind === "office") return null;
+  // Sem escolha: o mesmo acesso do terminal ("Acesso total"). Quem lê o Canvas pelo Chrome fica no escritório,
+  // onde o guarda do Chrome o limita ao Canvas.
+  return config.access === "total" && !findAgent(agentId)?.chrome ? defaultProfile(config.workDir, config.vaultDir) : null;
 };
 
 const hub = createHub({
@@ -394,7 +398,8 @@ wss.on("connection", (ws, req) => {
       case "stop":
         return hub.stop(msg.agentId);
       case "order": {
-        const profile = msg.profileId === undefined ? null : (store.profiles().find((p) => p.id === msg.profileId) ?? null);
+        // Sem perfil escolhido na app: o do Atlas (por omissão, "Acesso total", o mesmo do terminal).
+        const profile = msg.profileId === undefined ? profileOf("ceo") : (store.profiles().find((p) => p.id === msg.profileId) ?? null);
         if (msg.profileId !== undefined && !profile) return send(ws, { type: "error", agentId: "ceo", message: "Esse perfil não existe." });
         store.addChat("ceo", true, msg.text);
         broadcast({ type: "user-message", agentId: "ceo", text: msg.text, files: [] });

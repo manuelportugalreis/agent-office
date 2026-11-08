@@ -64,6 +64,8 @@ function main() {
   const policy = JSON.parse(readFileSync(policyPath, "utf8"));
   const readRoots = (policy.read ?? []).map((p) => realPath(resolve(p)));
   const writeRoots = (policy.write ?? []).map((p) => realPath(resolve(p)));
+  // Pastas onde nunca se escreve, mesmo dentro de uma pasta com escrita (ex.: o próprio Agent Office na tua pasta pessoal).
+  const noWrite = (policy.noWrite ?? []).map((p) => realPath(resolve(p)));
   const cwd = policy.cwd ? realPath(resolve(policy.cwd)) : process.cwd();
   const vault = policy.vault ? realPath(resolve(policy.vault)) : null;
   const ledgerDir = `${policyPath}.ledger`;
@@ -80,6 +82,7 @@ function main() {
   const checkWrite = (path) => {
     const root = writeRoots.find((r) => isInside(r, path));
     if (!root) block(`não tens acesso de escrita a ${path}`);
+    if (noWrite.some((r) => isInside(r, path))) block(`esta pasta é protegida (o Agent Office e as regras dos agentes): ${path}`);
     const segments = relative(root, path).split(sep).map(segName);
     if (segments.some((s) => PROTECTED_DIRS.has(s) || s.startsWith(".claude"))) block("esta pasta é protegida (.claude, .git, .obsidian)");
     if (PROTECTED_FILES.has(segments.at(-1))) block("este ficheiro configura integrações e regras do Claude Code e é protegido");

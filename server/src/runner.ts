@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { CHROME_READ_TOOLS, FILE_TOOLS, WEB_TOOLS, type RealAgent } from "./agents.ts";
 import { config } from "./config.ts";
 import type { AgentEvent } from "./events.ts";
-import { createWarmPool } from "./warm-pool.ts";
+import { warmPool } from "./warm-pool.ts";
 import type { AccessProfile } from "../../shared/protocol.ts";
 import { localRun } from "./local-runner.ts";
 import { ensureWorkspace, WORKSPACES_DIR, workspaceDir } from "./workspace.ts";
@@ -168,7 +168,7 @@ export const TOOLLESS_RULE =
   "Nesta resposta não tens ferramentas nenhumas: responde só com texto, nunca escrevas chamadas a ferramentas, não atualizes o teu CLAUDE.md nem outros ficheiros e nunca digas que gravaste ou registaste alguma coisa.";
 
 /** Processos do Claude Code que ficam abertos entre mensagens da mesma sessão (ver warm-pool.ts). */
-export const warmPool = createWarmPool();
+export { warmPool };
 
 /**
  * Chave do processo: a pasta, os argumentos (sem o par --session-id/--resume, que muda da 1.ª para a 2.ª mensagem) e o
