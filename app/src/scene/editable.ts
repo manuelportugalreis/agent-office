@@ -92,7 +92,7 @@ export function saveLayout(): void {
 }
 
 export function loadLayout(): void {
-  let raw: string | null = null;
+  let raw: string | null;
   try {
     raw = localStorage.getItem(LAYOUT_KEY);
   } catch {

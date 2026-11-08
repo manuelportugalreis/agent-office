@@ -27,7 +27,7 @@ export type NoteMatch =
 
 function walk(dir: string, out: string[]): string[] {
   if (out.length >= MAX_FILES) return out;
-  let entries: import("node:fs").Dirent[] = [];
+  let entries: import("node:fs").Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {

@@ -22,7 +22,7 @@ const rel = (p) => relative(vault, p).replaceAll("\\", "/");
 
 function walk(dir, out) {
   if (out.length >= MAX_FILES) return out;
-  let entries = [];
+  let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
