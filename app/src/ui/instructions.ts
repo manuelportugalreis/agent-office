@@ -34,6 +34,7 @@ export function createInstructionsUi(send: (m: ClientMsg) => boolean, nameOf: (i
       <div class="mode-note">Todos os agentes as recebem em cada pedido. <code>${escapeHtml(m.sharedFile)}</code></div>
       <textarea id="instrShared" class="instr-edit" rows="7" maxlength="${MAX_INSTRUCTIONS_LENGTH}">${escapeHtml(m.shared)}</textarea>
       <div class="mode-row"><button id="instrSave" class="primary" type="button">Guardar</button><span id="instrState" class="mode-note"></span></div>
+      ${m.lessons ? `<details class="instr-memory"><summary class="lbl">Lições das tuas revisões (o que corrigiste; vai em cada tarefa)</summary><div class="mode-note"><code>${escapeHtml(m.lessonsFile)}</code> (podes editar ou apagar linhas)</div><div class="instr-ro">${escapeHtml(m.lessons)}</div></details>` : ""}
       ${m.memory ? `<details class="instr-memory"><summary class="lbl">Memória de ${escapeHtml(name)} (escrita por ${escapeHtml(name)}, só para ler)</summary><div class="mode-note"><code>${escapeHtml(m.memoryFile)}</code></div><div class="instr-ro">${escapeHtml(m.memory)}</div></details>` : ""}`;
     byId("instrSave").onclick = () => {
       const notes = byId<HTMLTextAreaElement>("instrNotes").value;

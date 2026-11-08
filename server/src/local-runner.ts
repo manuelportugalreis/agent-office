@@ -182,7 +182,7 @@ export function buildLocalArgs(
       : []),
     ...(disallowed(p, req.readOnly).length ? ["--disallowedTools", disallowed(p, req.readOnly).join(",")] : []),
     "--model",
-    req.agent.model,
+    req.model ?? req.agent.model,
     "--append-system-prompt",
     // No terminal (continuar a sessão) não há o contexto do hub em cada pedido: as tuas instruções vão aqui.
     [`${req.agent.localPrompt} ${localRules(p, vaultDir)}`, opts.interactive ? userInstructions(req.agent.id) : ""]

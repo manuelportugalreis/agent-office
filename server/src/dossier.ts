@@ -22,7 +22,8 @@ import {
   todayOf,
   urlsIn,
 } from "./dossier-research.ts";
-import type { Hub, RunResult } from "./hub.ts";
+import { reviewRun } from "./config.ts";
+import type { Hub, RunOptions, RunResult } from "./hub.ts";
 import { withHandoff } from "./orchestrator.ts";
 import type { Store } from "./store.ts";
 
@@ -151,11 +152,21 @@ export interface DossierDeps {
   /** O perfil partilhado do utilizador (`_company/perfil.md`). */
   readonly readProfile?: () => string;
   readonly now?: () => number;
+  /** Devolveste o rascunho com uma nota: a nota fica como lição da Lena para os próximos rascunhos. */
+  readonly onReturned?: (note: string) => void;
 }
 
 type Step = "atlas" | "research" | "drafting" | "checking";
 
-export function createDossierService({ hub, store, approvals, emit, readProfile = () => "", now = Date.now }: DossierDeps): DossierService {
+export function createDossierService({
+  hub,
+  store,
+  approvals,
+  emit,
+  readProfile = () => "",
+  now = Date.now,
+  onReturned = () => undefined,
+}: DossierDeps): DossierService {
   let current: Dossier | null = store.loadDossier();
   /** Há um passo a correr neste servidor (impede ações em simultâneo sobre o mesmo dossier). */
   let busy = false;
@@ -209,14 +220,16 @@ export function createDossierService({ hub, store, approvals, emit, readProfile 
     d: Dossier,
     parse: (reply: string) => { ok: true; value: T } | { ok: false; reason: string },
     fixPrompt: (reason: string, previous: string) => string,
+    extra: RunOptions = {},
   ): Promise<{ ok: true; value: T } | { ok: false; reason: string; raw: string }> {
-    const first: RunResult = await hub.run(agent, prompt, { label: label(d), skipComplete: true });
+    const first: RunResult = await hub.run(agent, prompt, { label: label(d), skipComplete: true, ...extra });
     if (!first.ok) return { ok: false, reason: friendly(first.error), raw: "" };
     const parsed = parse(first.reply);
     if (parsed.ok) return parsed;
     const second: RunResult = await hub.run(agent, fixPrompt(parsed.reason, first.reply), {
       label: `${label(d)} (formato)`,
       skipComplete: true,
+      ...extra,
     });
     if (!second.ok) return { ok: false, reason: friendly(second.error), raw: first.reply };
     const again = parse(second.reply);
@@ -401,6 +414,7 @@ export function createDossierService({ hub, store, approvals, emit, readProfile 
         return r.ok ? { ok: true, value: r.check } : r;
       },
       (reason, previous) => jsonFixPrompt(reason, previous, "check"),
+      reviewRun(),
     );
     if (!result.ok) {
       block("checking", `A Nina não conseguiu verificar o rascunho: ${result.reason}`);
@@ -528,6 +542,7 @@ export function createDossierService({ hub, store, approvals, emit, readProfile 
       if (!text) return complain("Escreve uma nota para a Lena.");
       const review: DossierReview = { ts: now(), kind: "returned", note: clip(text, MAX_NOTE), version: d.draftVersion };
       approvals.supersede("lena");
+      onReturned(review.note ?? text);
       commit(
         {
           stage: "drafting",

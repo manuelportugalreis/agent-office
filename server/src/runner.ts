@@ -21,6 +21,8 @@ export interface RunRequest {
   readonly readOnly?: boolean;
   /** Sessão que nunca se retoma (corridas isoladas): o processo fecha no fim em vez de ficar à espera. */
   readonly oneShot?: boolean;
+  /** Modelo desta corrida, em vez do modelo do agente. */
+  readonly model?: string;
 }
 
 /** Uma pergunta de permissão de uma sessão local (o que no terminal te apareceria para confirmar). */
@@ -131,7 +133,7 @@ export function buildArgs(req: RunRequest): string[] {
     "--permission-mode",
     "dontAsk",
     "--model",
-    agent.model,
+    req.model ?? agent.model,
     "--append-system-prompt",
     agent.systemPrompt,
     req.resume ? "--resume" : "--session-id",
@@ -155,7 +157,7 @@ function toollessArgs(req: RunRequest): string[] {
     "--permission-mode",
     "dontAsk",
     "--model",
-    req.agent.model,
+    req.model ?? req.agent.model,
     "--append-system-prompt",
     `${req.agent.systemPrompt} ${TOOLLESS_RULE}`,
     req.resume ? "--resume" : "--session-id",

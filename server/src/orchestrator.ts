@@ -1,7 +1,7 @@
 import type { AccessProfile, ServerMsg, ToolStep } from "../../shared/protocol.ts";
 import { ROOM_PLACES } from "../../shared/places.ts";
 import { AGENT_NAMES, delegableTeam, findAgent } from "./agents.ts";
-import { config } from "./config.ts";
+import { config, reviewRun } from "./config.ts";
 import type { Hub, RunResult } from "./hub.ts";
 import { CHIEF_IDS, parseGroupMove } from "./group.ts";
 import { parseOrder } from "./intent.ts";
@@ -421,7 +421,7 @@ export function createOrchestrator(
         outcomes.map((o) => ({ agent: o.agent, reply: o.result.reply, steps: o.result.steps })),
       ),
       // Revisão independente: só leitura (a Nina aponta, não corrige o trabalho que está a rever).
-      { profile, readOnly: true },
+      { profile, readOnly: true, ...reviewRun() },
     );
     return { agent: "nina", task, result };
   }

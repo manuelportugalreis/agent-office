@@ -290,8 +290,8 @@ function pickAt(e: PointerEvent): Agent | null {
 
 const agentNamed = (name: string): Agent | undefined => agents.find((a) => a.def.name === name);
 const approvals = createApprovals([], {
-  onDecide: (id, _who, approved) => {
-    const sent = client.send({ type: "decide", id, approved });
+  onDecide: (id, _who, approved, _stillPending, reason) => {
+    const sent = client.send({ type: "decide", id, approved, ...(reason ? { reason } : {}) });
     panel.refresh();
     return sent;
   },

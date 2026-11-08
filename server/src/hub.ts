@@ -81,6 +81,8 @@ export interface RunOptions {
   toolless?: boolean;
   /** Modo local só de leitura (revisões independentes): nenhuma escrita, mesmo que o perfil a permita. */
   readOnly?: boolean;
+  /** Modelo só desta corrida (ex.: a revisão independente da Nina). Se falhar logo, repete-se com o modelo do agente. */
+  model?: string;
 }
 
 /**
@@ -95,6 +97,9 @@ export function stripFakeToolCalls(text: string): string {
     .trim();
 }
 
+const STOPPED = "Parado por ti.";
+/** Uma corrida com outro modelo que falha antes disto repete-se com o modelo do agente. */
+const MODEL_FALLBACK_MS = 60_000;
 const DEFAULT_LIMITS: HubLimits = { timeoutMs: 600_000, maxConcurrent: 3 };
 const PERMISSION_TIMEOUT_MS = 15 * 60_000;
 const WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
@@ -315,6 +320,7 @@ export function createHub({
           ...(opts.toolless && !profile ? { toolless: true } : {}),
           ...(opts.readOnly ? { readOnly: true } : {}),
           ...(isolated ? { oneShot: true } : {}),
+          ...(opts.model ? { model: opts.model } : {}),
         },
         {
           onEvent: (e) => onEvent(agentId, runId, e),
@@ -349,7 +355,16 @@ export function createHub({
   }
 
   return {
-    run: (agentId, text, opts) => start(agentId, text, opts),
+    run: async (agentId, text, opts) => {
+      const t0 = Date.now();
+      const result = await start(agentId, text, opts);
+      // Um modelo pedido só para esta corrida (ex.: Opus na revisão da Nina) que falha logo, por exemplo por não estar
+      // no teu plano: repete-se com o modelo do agente em vez de deixar o trabalho por fazer.
+      const quickFail = !result.ok && Date.now() - t0 < MODEL_FALLBACK_MS && result.error !== STOPPED;
+      if (!opts?.model || !quickFail || running.has(agentId)) return result;
+      emit({ type: "log", agentId, text: `O modelo ${opts.model} falhou (${result.error ?? "erro"}); repito com o modelo habitual.` });
+      return start(agentId, text, { ...opts, model: undefined });
+    },
     decidePermission: (id, allow) => resolvePermission(id, allow, "user"),
     pendingPermissions: () => [...permissions.values()].map((p) => p.request),
     localSession: (agentId, profile) => sessions.getSession(sessionKey(agentId, profile)),
@@ -361,7 +376,7 @@ export function createHub({
       const r = running.get(agentId);
       if (!r) return;
       r.handle.kill();
-      finish(agentId, r.runId, false, undefined, "Parado por ti.");
+      finish(agentId, r.runId, false, undefined, STOPPED);
     },
     shutdown() {
       for (const id of [...permissions.keys()]) resolvePermission(id, false, "stopped");

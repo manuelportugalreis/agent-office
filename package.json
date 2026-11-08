@@ -19,6 +19,7 @@
     "app": "node scripts/app.mjs",
     "app:install": "node scripts/install-app.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "eval": "node server/src/evals-run.ts",
     "typecheck": "npm run typecheck --workspaces",
     "test": "npm test --workspaces",
     "lint": "eslint .",

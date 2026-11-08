@@ -10,7 +10,7 @@ export interface Approval {
 
 export interface ApprovalCallbacks {
   /** O utilizador decidiu. `who` é o nome do agente. */
-  onDecide(id: number, who: string, approved: boolean, stillPending: boolean): boolean;
+  onDecide(id: number, who: string, approved: boolean, stillPending: boolean, reason?: string): boolean;
   /** O utilizador quer ver o rascunho do agente. */
   onView(who: string): void;
   /** O utilizador quer copiar o rascunho do agente. */
@@ -29,9 +29,11 @@ export interface ApprovalQueue {
 /** Fila de aprovações de ações sensíveis. Nada é enviado sem passar por aqui. */
 export function createApprovals(initial: readonly Approval[], cb: ApprovalCallbacks): ApprovalQueue {
   let items = [...initial];
+  /** A aprovação a ser rejeitada (mostra a caixa do motivo). */
+  let rejecting: number | null = null;
   const box = byId("appr");
 
-  const resolve = (id: number, approved: boolean): void => {
+  const resolve = (id: number, approved: boolean, reason?: string): void => {
     const done = items.find((i) => i.id === id);
     if (!done) return;
     const remaining = items.filter((i) => i.id !== id);
@@ -42,11 +44,13 @@ export function createApprovals(initial: readonly Approval[], cb: ApprovalCallba
         done.who,
         approved,
         remaining.some((i) => i.who === done.who),
+        reason,
       )
     ) {
       toast("Sem ligação ao servidor: a decisão não foi enviada.");
       return;
     }
+    rejecting = null;
     toast("Decisão enviada, a aguardar confirmação…");
   };
 
@@ -59,7 +63,8 @@ export function createApprovals(initial: readonly Approval[], cb: ApprovalCallba
           .map(
             (i) => `<div class="it"><b>${escapeHtml(i.who)}</b> · ${escapeHtml(i.text)}
           ${i.draft ? `<details><summary>Ver o texto a aprovar</summary><pre class="draft">${escapeHtml(i.draft)}</pre></details>` : ""}
-          <div class="bt"><button class="primary" data-a="${i.id}">Aprovar</button><button data-r="${i.id}">Rejeitar</button><button data-v="${i.id}">Ver rascunho</button><button data-c="${i.id}">Copiar</button></div></div>`,
+          <div class="bt"><button class="primary" data-a="${i.id}">Aprovar</button><button data-r="${i.id}">Rejeitar</button><button data-v="${i.id}">Ver rascunho</button><button data-c="${i.id}">Copiar</button></div>
+          ${rejecting === i.id ? `<div class="bt"><input data-why="${i.id}" maxlength="500" placeholder="Porquê? (opcional: fica como lição para ${escapeHtml(i.who)})" style="flex:1"><button class="primary" data-rr="${i.id}">Rejeitar</button></div>` : ""}</div>`,
           )
           .join("")
       : `<div class="it" style="color:var(--muted)">Sem aprovações pendentes.</div>`;
@@ -67,7 +72,23 @@ export function createApprovals(initial: readonly Approval[], cb: ApprovalCallba
       b.onclick = () => resolve(Number(b.dataset.a), true);
     });
     box.querySelectorAll<HTMLButtonElement>("[data-r]").forEach((b) => {
-      b.onclick = () => resolve(Number(b.dataset.r), false);
+      // Primeiro pede o motivo (opcional); a rejeição só segue no segundo botão ou com Enter.
+      b.onclick = (e) => {
+        e.stopPropagation();
+        rejecting = Number(b.dataset.r);
+        render();
+        box.querySelector<HTMLInputElement>(`[data-why="${rejecting}"]`)?.focus();
+      };
+    });
+    const reject = (id: number): void =>
+      resolve(id, false, box.querySelector<HTMLInputElement>(`[data-why="${id}"]`)?.value.trim() || undefined);
+    box.querySelectorAll<HTMLButtonElement>("[data-rr]").forEach((b) => {
+      b.onclick = () => reject(Number(b.dataset.rr));
+    });
+    box.querySelectorAll<HTMLInputElement>("[data-why]").forEach((input) => {
+      input.onkeydown = (e) => {
+        if (e.key === "Enter") reject(Number(input.dataset.why));
+      };
     });
     const wire = (attr: "v" | "c", fn: (who: string, draft?: string) => void): void => {
       box.querySelectorAll<HTMLButtonElement>(`[data-${attr}]`).forEach((b) => {

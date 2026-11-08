@@ -4,9 +4,24 @@
   "canvasHost": "canvas.instructure.com",
   "vaultDir": "",
   "courses": [
-    { "agent": "ada", "code": "CS 101", "title": "Introduction to Computer Science" },
-    { "agent": "turing", "code": "CS 102", "title": "Data Structures" }
+    {
+      "agent": "ada",
+      "code": "CS 101",
+      "title": "Introduction to Computer Science"
+    },
+    {
+      "agent": "turing",
+      "code": "CS 102",
+      "title": "Data Structures"
+    }
   ],
   "extraOrigins": [],
-  "terminalModels": { "*": "sonnet" }
+  "terminalModels": {
+    "*": "sonnet"
+  },
+  "jobSearch": {
+    "roles": ["AI", "Business Analyst", "Data"],
+    "locations": []
+  },
+  "reviewModel": "opus"
 }

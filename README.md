@@ -113,17 +113,22 @@ Copy the example and edit it. The real file is git-ignored, so your name and cou
 cp office.config.example.json office.config.json
 ```
 
-| Key            | What it does                                                                                                      |
-| -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `userName`     | How agents address you and the chat greeting. Empty means "the user".                                             |
-| `port`         | Server port (default `8787`). Also `AGENT_OFFICE_PORT`.                                                           |
-| `canvasHost`   | The **only** domain the Canvas readers (Dean, Ada, Turing) may open in your browser.                              |
-| `canvasOrigin` | Tests only: a local test Canvas (`http://127.0.0.1:<port>`, see `scripts/canvas-fixture.mjs`). Leave it out.      |
-| `courses`      | Which agent handles which course (`agent`, `code`, `title`). The code must match what Canvas shows.               |
-| `vaultDir`     | Optional folder (for example an Obsidian vault) where file agents may also read and write. Empty means no access. |
-| `extraOrigins` | Extra origins allowed to talk to the server (for example a reverse proxy). Leave empty normally.                  |
+| Key              | What it does                                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `userName`       | How agents address you and the chat greeting. Empty means "the user".                                             |
+| `port`           | Server port (default `8787`). Also `AGENT_OFFICE_PORT`.                                                           |
+| `canvasHost`     | The **only** domain the Canvas readers (Dean, Ada, Turing) may open in your browser.                              |
+| `canvasOrigin`   | Tests only: a local test Canvas (`http://127.0.0.1:<port>`, see `scripts/canvas-fixture.mjs`). Leave it out.      |
+| `courses`        | Which agent handles which course (`agent`, `code`, `title`). The code must match what Canvas shows.               |
+| `vaultDir`       | Optional folder (for example an Obsidian vault) where file agents may also read and write. Empty means no access. |
+| `extraOrigins`   | Extra origins allowed to talk to the server (for example a reverse proxy). Leave empty normally.                  |
+| `terminalModels` | Model of each agent's Claude Code tab, for example `{ "mira": "opus", "*": "sonnet" }`. Default: Sonnet.          |
+| `jobSearch`      | What Scout looks for and Vera prioritises: `{ "roles": [...], "locations": [...] }`.                              |
+| `reviewModel`    | Model for Nina's independent reviews (default `opus`; falls back to her own model if it fails). Empty = Sonnet.   |
 
 Edit `server/workspaces/_company/perfil.md` (created on first run) to tell every agent about you. Agents can only read it.
+
+When you reject a draft (or return a dossier draft) with a reason, the reason is saved in `_company/licoes/<agent>.md` and sent with that agent's next tasks. You can edit or delete those lines; agents cannot.
 
 ### Canvas without the Chrome extension (calendar feed)
 
@@ -183,6 +188,8 @@ Open http://127.0.0.1:8787. The port is published on this machine only, because 
 ```bash
 npm run check        # typecheck + lint + format check + tests + build
 npm run e2e          # browser tests (first: npx playwright install chromium); no agents, no quota
+npm run eval         # agent quality: fixed tasks run by the real agents and graded automatically (uses quota)
+npm run eval -- lena,atlas-plano   # only some cases (by id or agent)
 npm test             # app and server tests
 npm run typecheck
 npm run lint

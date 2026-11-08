@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { AccessProfile, ServerMsg, StepView, ToolStep } from "../../shared/protocol.ts";
 import { fold, ofPlace, placeName, ROOM_PLACES, toPlace } from "../../shared/places.ts";
-import { AGENT_NAMES, findAgent } from "./agents.ts";
+import { AGENT_NAMES, findAgent, handoffFixPrompt, missingHandoffSections } from "./agents.ts";
+import { reviewRun } from "./config.ts";
 import type { Hub, RunResult } from "./hub.ts";
 import { withHistory } from "./chat-context.ts";
 import { groupDestination, type GroupMove } from "./group.ts";
@@ -516,13 +517,23 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
           ...(fresh ? { fresh: true } : {}),
           ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
           // Quando o Atlas lhe passa uma revisão, a Nina aponta e não corrige (só leitura em qualquer modo).
-          ...(agent === "nina" && opts.delegator ? { readOnly: true } : {}),
+          ...(agent === "nina" && opts.delegator ? { readOnly: true, ...reviewRun() } : {}),
           ...(s.silent ? { silent: true } : {}),
         });
         if (!result.ok) return done(s, { state: "blocked", detail: `falhou: ${result.error ?? "erro desconhecido"}` }, result);
-        const v = taskEvidence(s.task ?? "", result, note, prior, agent === "nina" && !!opts.delegator);
+        const handed = await ensureHandoff(
+          hub,
+          agent,
+          result,
+          steps.some((x) => x.after.includes(s.id)),
+          s.task ?? text,
+          {
+            ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
+          },
+        );
+        const v = taskEvidence(s.task ?? "", handed, note, prior, agent === "nina" && !!opts.delegator);
         const evidence = missing ? [missing, ...v.evidence] : v.evidence;
-        return done(s, { state: missing ? "partial" : v.state, detail: evidence.join("; ") || "terminou" }, result);
+        return done(s, { state: missing ? "partial" : v.state, detail: evidence.join("; ") || "terminou" }, handed);
       }
 
       publish();
@@ -597,6 +608,32 @@ function labelOf(s: ExecStep): string {
   if (s.kind === "open_site") return `Abrir ${s.site ? SITE_NAMES[s.site] : "o sítio"} numa janela do browser`;
   const task = (s.task ?? "").replace(/\s+/g, " ");
   return `${nameOf(s.agent ?? "")}: ${task.length > 90 ? `${task.slice(0, 90)}…` : task}`;
+}
+
+/**
+ * Um resultado que vai para um colega (há passos que dependem dele) tem de ter as secções do formato do agente
+ * (ex.: Por confirmar e Fontes da Mira). Se faltarem, pede-se uma vez ao agente que o reformate, na mesma conversa.
+ * O rasto da primeira corrida (ficheiros, ferramentas) fica com o resultado.
+ */
+export async function ensureHandoff(
+  hub: Hub,
+  agent: string,
+  result: RunResult,
+  feedsOthers: boolean,
+  label: string,
+  runOpts: Parameters<Hub["run"]>[2] = {},
+): Promise<RunResult> {
+  if (!feedsOthers || !result.ok) return result;
+  const missing = missingHandoffSections(agent, result.reply);
+  if (!missing.length) return result;
+  const fixed = await hub.run(agent, handoffFixPrompt(missing), {
+    ...runOpts,
+    label: `${label} (formato)`,
+    skipComplete: true,
+    silent: true,
+  });
+  if (!fixed.ok || !fixed.reply.trim()) return result;
+  return { ...result, reply: fixed.reply, steps: [...(result.steps ?? []), ...(fixed.steps ?? [])] };
 }
 
 /** Corre a tarefa quando o agente estiver livre (ex.: acabou de responder no chat) e houver vaga. */

@@ -350,12 +350,18 @@ describe("orchestrator", () => {
     f.h("ceo").onEvent({ kind: "done", ok: true });
     await new Promise((r) => setImmediate(r));
     expect(f.requests.map((r) => r.agent.id)).toEqual(["ceo", "mira"]);
+    // Sem as secções do formato da Mira (Por confirmar, Fontes), o servidor pede-lhe uma vez que o reformate.
     f.h("mira").onEvent({ kind: "text", text: "A empresa X valoriza dados." });
     f.h("mira").onEvent({ kind: "done", ok: true });
     await new Promise((r) => setImmediate(r));
-    expect(f.requests.map((r) => r.agent.id)).toEqual(["ceo", "mira", "lena"]);
-    expect(f.requests[2].text).toContain("escreve o email");
-    expect(f.requests[2].text).toContain("[mira]\nA empresa X valoriza dados.");
+    expect(f.requests.map((r) => r.agent.id)).toEqual(["ceo", "mira", "mira"]);
+    expect(f.requests[2].text).toContain("faltam-lhe as secções «Por confirmar:» e «Fontes:»");
+    f.h("mira").onEvent({ kind: "text", text: "A empresa X valoriza dados.\nPor confirmar: nada\nFontes: https://x.pt" });
+    f.h("mira").onEvent({ kind: "done", ok: true });
+    await new Promise((r) => setImmediate(r));
+    expect(f.requests.map((r) => r.agent.id)).toEqual(["ceo", "mira", "mira", "lena"]);
+    expect(f.requests[3].text).toContain("escreve o email");
+    expect(f.requests[3].text).toContain("[mira]\nA empresa X valoriza dados.\nPor confirmar: nada");
     f.h("lena").onEvent({ kind: "done", ok: true });
     await new Promise((r) => setImmediate(r));
     f.h("ceo").onEvent({ kind: "done", ok: true });

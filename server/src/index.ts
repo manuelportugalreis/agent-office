@@ -22,6 +22,7 @@ import { warmPool } from "./runner.ts";
 import { parsePlaceText } from "./intent.ts";
 import { createOrderEngine } from "./orders.ts";
 import { InstructionsError, readInstructions, saveInstructions, userInstructions } from "./instructions.ts";
+import { addLesson } from "./lessons.ts";
 import { createNotifications } from "./notifications.ts";
 import { createInitiative } from "./initiative.ts";
 import { createSceneBridge } from "./scene-bridge.ts";
@@ -136,6 +137,7 @@ const approvals = createApprovals(
   store,
   (agentId) => hub.isRunning(agentId),
   (agentId, draft) => saveApprovedDraft(config.vaultDir, findAgent(agentId)?.name ?? agentId, draft),
+  (agentId, reason) => addLesson(agentId, findAgent(agentId)?.name ?? agentId, reason),
 );
 /** Perfil do modo local de um agente (null = modo escritório, ou perfil que já não existe). */
 const profileOf = (agentId: string): AccessProfile | null => {
@@ -277,6 +279,7 @@ const dossier = createDossierService({
   store,
   approvals,
   emit: broadcast,
+  onReturned: (note) => addLesson("lena", "Lena", note),
   // O perfil partilhado: o mesmo texto vai à Lena e à Nina (só leitura; quem o edita és tu).
   readProfile: () => {
     try {
@@ -494,7 +497,7 @@ wss.on("connection", (ws, req) => {
       case "dossier-archive":
         return dossier.archive(msg.id);
       case "decide":
-        return approvals.decide(msg.id, msg.approved);
+        return approvals.decide(msg.id, msg.approved, msg.reason);
       case "sync":
         return background(canvas.sync(), "sincronização do Canvas");
     }

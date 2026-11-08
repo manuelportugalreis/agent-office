@@ -38,6 +38,18 @@ export interface OfficeConfig {
    * para todos os que não estão na lista. Sem nada, cada agente usa o modelo dele (Sonnet): poupa a quota do teu plano.
    */
   readonly terminalModels: Readonly<Record<string, string>>;
+  /** O que o Scout procura e a Vera prioriza: funções e locais (vazio = qualquer local). */
+  readonly jobSearch: JobSearch;
+  /**
+   * Modelo das revisões independentes da Nina (dossier e revisão do que a equipa alterou). Um modelo diferente de quem
+   * escreveu apanha erros que esse não vê. Vazio = o modelo dela (Sonnet). Se o modelo falhar, a revisão corre com o dela.
+   */
+  readonly reviewModel: string;
+}
+
+export interface JobSearch {
+  readonly roles: readonly string[];
+  readonly locations: readonly string[];
 }
 
 export const DEFAULT_PORT = 8787;
@@ -57,7 +69,22 @@ export const DEFAULTS: OfficeConfig = {
   access: "total",
   extraOrigins: [],
   terminalModels: {},
+  jobSearch: { roles: ["AI", "Business Analyst", "Data"], locations: [] },
+  reviewModel: "opus",
 };
+
+const SHORT_TEXTS = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.length <= 10 && v.every((x) => typeof x === "string" && x.trim().length > 0 && x.length <= 60 && !/[\r\n]/.test(x));
+
+function parseJobSearch(v: unknown): JobSearch {
+  if (v === undefined) return DEFAULTS.jobSearch;
+  if (!isRecord(v)) throw new ConfigError('jobSearch tem de ser { "roles": [...], "locations": [...] }');
+  const roles = v.roles ?? DEFAULTS.jobSearch.roles;
+  const locations = v.locations ?? [];
+  if (!SHORT_TEXTS(roles) || roles.length === 0) throw new ConfigError("jobSearch.roles tem de ser uma lista de 1 a 10 funções");
+  if (!SHORT_TEXTS(locations)) throw new ConfigError("jobSearch.locations tem de ser uma lista de até 10 locais");
+  return { roles: roles.map((r) => r.trim()), locations: locations.map((l) => l.trim()) };
+}
 
 const HOSTNAME = /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/i;
 /** Canvas de ensaio: só nesta máquina, com porta explícita. */
@@ -134,6 +161,11 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
   )
     throw new ConfigError('terminalModels tem de ser { "agente": "modelo" } (ex.: { "mira": "opus", "*": "sonnet" })');
 
+  const jobSearch = parseJobSearch(f.jobSearch);
+  const reviewModel = f.reviewModel ?? DEFAULTS.reviewModel;
+  if (typeof reviewModel !== "string" || (reviewModel !== "" && !MODEL.test(reviewModel)))
+    throw new ConfigError('reviewModel tem de ser um modelo (ex.: "opus", "sonnet") ou vazio');
+
   return {
     userName: userName.trim(),
     port,
@@ -145,6 +177,8 @@ export function parseConfig(file: unknown, env: Readonly<Record<string, string |
     access,
     extraOrigins: extraOrigins as string[],
     terminalModels: terminalModels as Record<string, string>,
+    jobSearch,
+    reviewModel,
   };
 }
 
@@ -188,3 +222,6 @@ export const canvasUrl = (c: OfficeConfig): string => (c.canvasOrigin ? `${c.can
 export const canvasAllow = (c: OfficeConfig): string => c.canvasOrigin || c.canvasHost;
 
 export const config: OfficeConfig = loadConfig();
+
+/** Opções de uma revisão independente da Nina: o modelo de revisão, se estiver definido. */
+export const reviewRun = (c: OfficeConfig = config): { model?: string } => (c.reviewModel ? { model: c.reviewModel } : {});

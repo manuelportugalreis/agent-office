@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { findAgent, officeMap, type RealAgent } from "./agents.ts";
+import { lessonsContext, lessonsFile, readLessons } from "./lessons.ts";
 import { COMPANY_DIR, ensureWorkspace, workspaceDir } from "./workspace.ts";
 
 /**
@@ -32,6 +33,8 @@ export interface Instructions {
   readonly file: string;
   readonly sharedFile: string;
   readonly memoryFile: string;
+  readonly lessons: string;
+  readonly lessonsFile: string;
 }
 
 const read = (file: string): string => {
@@ -70,6 +73,8 @@ export function readInstructions(agent: RealAgent): Instructions {
     file: notesFile(agent.id),
     sharedFile: sharedFile(),
     memoryFile: memoryFile(agent.id),
+    lessons: readLessons(agent.id),
+    lessonsFile: lessonsFile(agent.id),
   };
 }
 
@@ -90,13 +95,14 @@ export function saveInstructions(agentId: string, notes: string, shared?: string
 const clip = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max)}\n[… cortado: o ficheiro tem ${text.length} caracteres]` : text;
 
-/** As tuas instruções e as regras da equipa, para o pedido de cada tarefa (escritório e local). */
+/** As tuas instruções, as regras da equipa e as lições das tuas revisões, para o pedido de cada tarefa (escritório e local). */
 export function userInstructions(agentId: string): string {
   const shared = read(sharedFile()).trim();
   const notes = read(notesFile(agentId)).trim();
   return [
     shared ? `Regras do utilizador para toda a equipa (ficheiro que só ele edita):\n${clip(shared, SHARED_MAX)}` : "",
     notes ? `Instruções do utilizador para ti (ficheiro que só ele edita):\n${clip(notes, NOTES_MAX)}` : "",
+    lessonsContext(agentId),
   ]
     .filter(Boolean)
     .join("\n\n");

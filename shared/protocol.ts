@@ -342,6 +342,9 @@ export type ServerMsg =
       readonly file: string;
       readonly sharedFile: string;
       readonly memoryFile: string;
+      /** Lições das tuas rejeições (o servidor escreve-as; podes editar o ficheiro). */
+      readonly lessons: string;
+      readonly lessonsFile: string;
       readonly saved?: boolean;
     }
   /** Todas as notificações (abertas e as fechadas recentes) e as definições das ideias por iniciativa. */
@@ -368,7 +371,7 @@ export type ClientMsg =
   | { readonly type: "set-mode"; readonly agentId: string; readonly mode: AgentMode }
   | { readonly type: "permission-decide"; readonly id: number; readonly allow: boolean }
   | { readonly type: "open-terminal"; readonly agentId: string }
-  | { readonly type: "decide"; readonly id: number; readonly approved: boolean }
+  | { readonly type: "decide"; readonly id: number; readonly approved: boolean; readonly reason?: string }
   /** A personagem chegou (ok) ou não conseguiu ir (ok=false) ao sítio pedido num `move`. */
   | { readonly type: "arrived"; readonly id: number; readonly ok: boolean; readonly reason?: string }
   /** Marcar uma notificação como vista. */
@@ -518,9 +521,14 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case "dossier-archive":
       return Number.isInteger(m.id) ? { type: "dossier-archive", id: m.id as number } : null;
     case "decide":
-      return Number.isInteger(m.id) && typeof m.approved === "boolean"
-        ? { type: "decide", id: m.id as number, approved: m.approved }
-        : null;
+      if (!Number.isInteger(m.id) || typeof m.approved !== "boolean") return null;
+      if (m.reason !== undefined && (typeof m.reason !== "string" || m.reason.length > 500)) return null;
+      return {
+        type: "decide",
+        id: m.id as number,
+        approved: m.approved,
+        ...(typeof m.reason === "string" && m.reason.trim() ? { reason: m.reason.trim() } : {}),
+      };
     default:
       return null;
   }
