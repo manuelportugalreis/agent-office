@@ -174,6 +174,26 @@ describe("hub", () => {
     expect(out.at(-1)).toMatchObject({ status: "err" });
   });
 
+  it("liberta o agente e permite nova tentativa se o runner lançar ao arrancar", async () => {
+    const out: ServerMsg[] = [];
+    const f = fakeRunner();
+    const run = vi.fn<Runner>(f.runner).mockImplementationOnce(() => {
+      throw new Error("workspace indisponível");
+    });
+    const hub = createHub({ emit: (m) => out.push(m), run, limits: { timeoutMs: 1000, maxConcurrent: 1 } });
+
+    await expect(hub.run("mira", "primeira tentativa")).resolves.toMatchObject({ ok: false, error: "workspace indisponível" });
+    expect(hub.active()).toEqual([]);
+    expect(hub.hasCapacity()).toBe(true);
+    expect(out.at(-1)).toMatchObject({ type: "status", status: "err" });
+
+    const retry = hub.run("mira", "nova tentativa");
+    expect(f.requests[0]).toMatchObject({ resume: false });
+    expect(f.requests[0].sessionId).not.toBe(run.mock.calls[0][0].sessionId);
+    f.h("mira").onEvent({ kind: "done", ok: true });
+    await expect(retry).resolves.toMatchObject({ ok: true });
+  });
+
   it("mata a tarefa ao fim do tempo máximo e quando se pede stop", async () => {
     vi.useFakeTimers();
     const a = setup({ timeoutMs: 50, maxConcurrent: 1 });
@@ -362,6 +382,48 @@ describe("orchestrator", () => {
     await p;
     expect(out.some((m) => m.type === "log" && m.text === "A equipa terminou: 2/2 tarefas com sucesso.")).toBe(true);
     expect(out.filter((m) => m.type === "delegate").map((m) => (m as { to: string }).to)).toEqual(["mira", "lena"]);
+  });
+
+  it("entrega a evidência se o resumo falhar e recupera a memória na ordem seguinte", async () => {
+    const { out, f, hub } = setup();
+    const store = openStore(":memory:");
+    try {
+      const memory = {
+        get: () => store.getSetting("lastOrderResults") ?? "",
+        set: (text: string) => store.setSetting("lastOrderResults", text),
+      };
+      const orch = createOrchestrator(hub, (m) => out.push(m), undefined, memory);
+      const order = orch.order("prepara uma análise e uma revisão");
+      f.h("ceo").onEvent({
+        kind: "text",
+        text: '{"summary":"Plano","tasks":[{"agent":"mira","task":"analisa os dados"},{"agent":"nina","task":"revê a análise","after":["mira"]}]}',
+      });
+      f.h("ceo").onEvent({ kind: "done", ok: true });
+      await vi.waitFor(() => expect(hub.isRunning("mira")).toBe(true));
+      f.h("mira").onEvent({ kind: "text", text: "Marcador AZUL-4719." });
+      f.h("mira").onEvent({ kind: "done", ok: true });
+      await vi.waitFor(() => expect(hub.isRunning("nina")).toBe(true));
+      expect(f.requests[2]).toMatchObject({ readOnly: true, oneShot: true, resume: false });
+      expect(f.requests[2].text).toContain("Marcador AZUL-4719.");
+      f.h("nina").onEvent({ kind: "text", text: "Marcador confirmado." });
+      f.h("nina").onEvent({ kind: "done", ok: true });
+      await vi.waitFor(() => expect(hub.isRunning("ceo")).toBe(true));
+      f.h("ceo").onExit(1, "resumo indisponível");
+      await order;
+
+      const replies = out.filter((m) => m.type === "reply" && m.agentId === "ceo");
+      expect(replies.at(-1)).toMatchObject({ text: expect.stringContaining("resumo indisponível") });
+      expect(replies.at(-1)).toMatchObject({ text: expect.stringContaining("Marcador confirmado.") });
+
+      const next = createOrchestrator(hub, (m) => out.push(m), undefined, memory).order("usa o resultado anterior");
+      expect(f.requests.at(-1)).toMatchObject({ resume: false, text: expect.stringContaining("Marcador AZUL-4719.") });
+      f.h("ceo").onEvent({ kind: "text", text: "Memória recuperada." });
+      f.h("ceo").onEvent({ kind: "done", ok: true });
+      await next;
+    } finally {
+      hub.shutdown();
+      store.close();
+    }
   });
 
   it("se o colega falha, a tarefa seguinte não corre", async () => {

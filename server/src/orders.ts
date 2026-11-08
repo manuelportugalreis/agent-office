@@ -516,7 +516,7 @@ export function createOrderEngine(deps: EngineDeps): OrderEngine {
           ...(fresh ? { fresh: true } : {}),
           ...(opts.profile !== undefined ? { profile: opts.profile } : {}),
           // Quando o Atlas lhe passa uma revisão, a Nina aponta e não corrige (só leitura em qualquer modo).
-          ...(agent === "nina" && opts.delegator ? { readOnly: true } : {}),
+          ...(agent === "nina" && opts.delegator ? { readOnly: true, isolated: true } : {}),
           ...(s.silent ? { silent: true } : {}),
         });
         if (!result.ok) return done(s, { state: "blocked", detail: `falhou: ${result.error ?? "erro desconhecido"}` }, result);

@@ -305,41 +305,46 @@ export function createHub({
         finished: false,
       };
       running.set(agentId, entry);
-      entry.handle = run(
-        {
-          agent,
-          text: prompt,
-          sessionId: session.id,
-          resume: session.started,
-          ...(profile ? { profile } : {}),
-          ...(opts.toolless && !profile ? { toolless: true } : {}),
-          ...(opts.readOnly ? { readOnly: true } : {}),
-          ...(isolated ? { oneShot: true } : {}),
-        },
-        {
-          onEvent: (e) => onEvent(agentId, runId, e),
-          onExit: (code, stderr) =>
-            finish(agentId, runId, false, undefined, (stderr.trim() || `terminou com código ${code}`).slice(0, ERROR_LIMIT)),
-          onPermission: (ask, respond) => {
-            const current = running.get(agentId);
-            if (!current || current.runId !== runId) return respond(false, "A tarefa já terminou.");
-            const id = ++permissionCounter;
-            const request: PermissionRequest = {
-              id,
-              agentId,
-              tool: ask.tool,
-              summary: ask.summary,
-              ...(ask.detail ? { detail: ask.detail } : {}),
-              ...(ask.reason ? { reason: ask.reason } : {}),
-              ts: Date.now(),
-            };
-            const timer = setTimeout(() => resolvePermission(id, false, "timeout"), permissionTimeoutMs);
-            permissions.set(id, { request, runId, timer, respond });
-            emit({ type: "permission", request });
-            emit({ type: "log", agentId, text: `Pede autorização: ${ask.summary}` });
+      try {
+        entry.handle = run(
+          {
+            agent,
+            text: prompt,
+            sessionId: session.id,
+            resume: session.started,
+            ...(profile ? { profile } : {}),
+            ...(opts.toolless && !profile ? { toolless: true } : {}),
+            ...(opts.readOnly ? { readOnly: true } : {}),
+            ...(isolated ? { oneShot: true } : {}),
           },
-        },
-      );
+          {
+            onEvent: (e) => onEvent(agentId, runId, e),
+            onExit: (code, stderr) =>
+              finish(agentId, runId, false, undefined, (stderr.trim() || `terminou com código ${code}`).slice(0, ERROR_LIMIT)),
+            onPermission: (ask, respond) => {
+              const current = running.get(agentId);
+              if (!current || current.runId !== runId) return respond(false, "A tarefa já terminou.");
+              const id = ++permissionCounter;
+              const request: PermissionRequest = {
+                id,
+                agentId,
+                tool: ask.tool,
+                summary: ask.summary,
+                ...(ask.detail ? { detail: ask.detail } : {}),
+                ...(ask.reason ? { reason: ask.reason } : {}),
+                ts: Date.now(),
+              };
+              const timer = setTimeout(() => resolvePermission(id, false, "timeout"), permissionTimeoutMs);
+              permissions.set(id, { request, runId, timer, respond });
+              emit({ type: "permission", request });
+              emit({ type: "log", agentId, text: `Pede autorização: ${ask.summary}` });
+            },
+          },
+        );
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        finish(agentId, runId, false, undefined, error.slice(0, ERROR_LIMIT) || "Não consegui iniciar o agente.");
+      }
       if (!entry.finished)
         entry.timer = setTimeout(() => {
           entry.handle.kill();
