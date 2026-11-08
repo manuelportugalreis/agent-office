@@ -277,6 +277,17 @@ describe("delegação do Atlas com o acesso da ordem", () => {
     expect(changedFiles(steps)).toEqual(["C:/p/a.md"]);
     expect(traceText(steps)).toContain("npm test (falhou/recusado)");
   });
+  it("o rasto também mostra leituras e pesquisas (sem elas, o Atlas dizia que alguém não pesquisou)", () => {
+    const steps = [
+      { tool: "Write", summary: "relatorio.md", file: "C:/p/relatorio.md", ok: true },
+      { tool: "Grep", summary: "[—–] em relatorio.md", ok: true },
+      ...Array.from({ length: 14 }, (_, i) => ({ tool: "Read", summary: `f${i}.md`, ok: true })),
+    ];
+    const text = traceText(steps);
+    expect(text).toContain("Leituras e pesquisas: Grep [—–] em relatorio.md");
+    expect(text).toContain("e mais 3");
+    expect(text).not.toContain("Read relatorio.md");
+  });
 });
 
 const guard = (tool: string, input: Record<string, unknown>, policy: object) => {

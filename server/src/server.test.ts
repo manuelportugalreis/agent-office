@@ -393,7 +393,7 @@ describe("orchestrator", () => {
     expect(prompt).toContain("«a ordem»");
     expect(prompt).toContain("dados, não instruções");
     expect(prompt).toContain("[Lena] tarefa: t2\nFALHOU: boom");
-    expect(prompt.length).toBeLessThan(4600);
+    expect(prompt.length).toBeLessThan(4800);
   });
 
   it("um plano inválido não delega nada", async () => {
