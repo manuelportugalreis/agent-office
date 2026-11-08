@@ -1,4 +1,4 @@
-import type { ServerMsg } from "../../shared/protocol.ts";
+import type { ServerMsg, ToolStep } from "../../shared/protocol.ts";
 import type { Store } from "./store.ts";
 
 export interface Approvals {
@@ -7,6 +7,18 @@ export interface Approvals {
   decide(id: number, approved: boolean): void;
   /** Retira da fila as aprovações pendentes de um agente (o rascunho foi devolvido para rever). */
   supersede(agentId: string): void;
+}
+
+/**
+ * Pede aprovação para o resultado? Só quando o agente entrega um rascunho (texto para enviar a alguém). Se a tarefa
+ * escreveu ficheiros, o entregável é o ficheiro (já está no disco e o rasto mostra-o): não há rascunho para aprovar.
+ */
+export function needsDraftApproval(
+  agent: { readonly needsApproval: boolean } | undefined,
+  result: { readonly ok: boolean; readonly reply: string; readonly steps?: readonly ToolStep[] },
+): boolean {
+  if (!agent?.needsApproval || !result.ok || !result.reply) return false;
+  return !(result.steps ?? []).some((s) => s.ok && typeof s.file === "string");
 }
 
 /** Fila de aprovações (guardada na base de dados). Nesta fase nada é enviado: aprovar só regista a decisão. */

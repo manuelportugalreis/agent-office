@@ -40,7 +40,7 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
   const count = byId("notifCount");
   const panel = byId("notifPanel");
   let items: readonly AppNotification[] = [];
-  let initiative: InitiativeSettings = { enabled: true, everyMin: 30 };
+  let initiative: InitiativeSettings = { enabled: false, everyMin: 60 };
   let loaded = false;
   let showClosed = false;
 
@@ -66,9 +66,12 @@ export function createNotificationsUi(deps: NotificationsDeps): NotificationsUi 
 
   function render(): void {
     const open = items.filter((n) => n.open);
-    count.textContent = String(open.length);
-    count.style.display = open.length ? "" : "none";
-    btn.classList.toggle("attn", open.length > 0);
+    // O número conta só o que espera mesmo por ti (perguntas, autorizações, aprovações, bloqueios, dossier); as ideias
+    // aparecem na lista mas não acendem o botão.
+    const urgent = open.filter((n) => n.kind !== "idea").length;
+    count.textContent = String(urgent);
+    count.style.display = urgent ? "" : "none";
+    btn.classList.toggle("attn", urgent > 0);
     const shown = showClosed ? [...items].reverse() : [...open].reverse();
     const rows = shown
       .map((n) => {

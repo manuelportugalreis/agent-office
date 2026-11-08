@@ -10,10 +10,11 @@ import type { Notifications } from "./notifications.ts";
  * avançar com uma põe o Atlas a organizar a equipa. Nada é feito sem o teu "avançar".
  */
 
-export const DEFAULT_INITIATIVE: InitiativeSettings = { enabled: true, everyMin: 30 };
+/** Desligada por omissão: ideias sem ninguém pedir enchiam o "Precisa de ti". Liga-se no menu das notificações. */
+export const DEFAULT_INITIATIVE: InitiativeSettings = { enabled: false, everyMin: 60 };
 /** Quem propõe, à vez (o Atlas coordena; o Dean só lê o Canvas). */
 export const PROPOSERS = ["rhea", "vera", "nina", "mira", "lena", "scout", "theo", "ada", "turing"];
-const MAX_PER_DAY = 16;
+const MAX_PER_DAY = 3;
 const SETTINGS_KEY = "initiative";
 const TURN_KEY = "initiativeTurn";
 const IDEA_MAX = 500;

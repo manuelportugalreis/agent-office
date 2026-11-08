@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { MAX_TEXT_LENGTH, parseClientMsg, type ServerMsg } from "../../shared/protocol.ts";
 import { REAL_AGENTS } from "./agents.ts";
-import { createApprovals } from "./approvals.ts";
+import { createApprovals, needsDraftApproval } from "./approvals.ts";
 import { parseLine } from "./events.ts";
 import { createHub, type HubLimits } from "./hub.ts";
 import { createOrchestrator, noPlanReply, parsePlan, planSteps, reportPrompt } from "./orchestrator.ts";
@@ -409,6 +409,16 @@ describe("orchestrator", () => {
 });
 
 describe("approvals", () => {
+  it("só se pede aprovação para rascunhos: uma tarefa que escreveu ficheiros entregou o ficheiro", () => {
+    const lena = { needsApproval: true };
+    expect(needsDraftApproval(lena, { ok: true, reply: "Caro recrutador..." })).toBe(true);
+    const wrote = [{ tool: "Write", summary: "relatorio.md", file: "C:/x/relatorio.md", ok: true }];
+    expect(needsDraftApproval(lena, { ok: true, reply: "Feito: relatorio.md", steps: wrote })).toBe(false);
+    // Uma escrita recusada não conta como entrega: o texto continua a ser o rascunho.
+    expect(needsDraftApproval(lena, { ok: true, reply: "x", steps: [{ ...wrote[0]!, ok: false }] })).toBe(true);
+    expect(needsDraftApproval({ needsApproval: false }, { ok: true, reply: "x" })).toBe(false);
+    expect(needsDraftApproval(lena, { ok: false, reply: "x" })).toBe(false);
+  });
   it("pede, decide e volta a idle quando não há mais pendentes", () => {
     const out: ServerMsg[] = [];
     const ap = createApprovals((m) => out.push(m), openStore(":memory:"));

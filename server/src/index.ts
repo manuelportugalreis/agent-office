@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { WebSocket, WebSocketServer } from "ws";
 import { parseClientMsg, type ServerMsg } from "../../shared/protocol.ts";
 import { courseFor, findAgent, REAL_AGENTS } from "./agents.ts";
-import { createApprovals } from "./approvals.ts";
+import { createApprovals, needsDraftApproval } from "./approvals.ts";
 import { readFileSync } from "node:fs";
 import { createDossierService } from "./dossier.ts";
 import { COMPANY_DIR } from "./workspace.ts";
@@ -160,8 +160,7 @@ const hub = createHub({
       .join("\n\n");
   },
   onComplete: (agentId, result) => {
-    if (result.ok && result.reply && findAgent(agentId)?.needsApproval)
-      approvals.request(agentId, "Rascunho pronto para rever", result.reply);
+    if (needsDraftApproval(findAgent(agentId), result)) approvals.request(agentId, "Rascunho pronto para rever", result.reply);
     // "Ideia: …" no fim de uma resposta: vai para as notificações.
     if (result.ok && result.reply) initiative.fromReply(agentId, result.reply);
   },

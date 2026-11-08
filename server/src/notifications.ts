@@ -29,8 +29,11 @@ const DISMISSABLE: ReadonlySet<NotificationKind> = new Set(["blocked", "dossier"
 /** Fechadas que ainda se mostram (o histórico recente). */
 const KEEP_CLOSED = 30;
 const TEXT_MAX = 600;
+/** Ideias e bloqueios antigos deixam de ser "precisa de ti": fecham sozinhos ao fim de um dia. */
+const EXPIRE_MS = 24 * 60 * 60_000;
+const EXPIRES: ReadonlySet<NotificationKind> = new Set(["idea", "blocked"]);
 
-export function createNotifications(store: NotificationStore, emit: (m: ServerMsg) => void): Notifications {
+export function createNotifications(store: NotificationStore, emit: (m: ServerMsg) => void, now: () => number = Date.now): Notifications {
   let items: AppNotification[] = [];
   try {
     items = JSON.parse(store.getSetting(SETTING) ?? "[]") as AppNotification[];
@@ -38,8 +41,11 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
     items = [];
   }
   let counter = items.reduce((max, n) => Math.max(max, n.id), 0);
+  // Ideias e bloqueios com mais de um dia fecham ao arrancar e sempre que algo muda (não se acumulam às dezenas).
+  const stale = (n: AppNotification): boolean => n.open && EXPIRES.has(n.kind) && now() - n.ts > EXPIRE_MS;
 
   const publish = (): void => {
+    items = items.map((n) => (stale(n) ? { ...n, open: false, closedAt: now() } : n));
     // As abertas ficam todas; das fechadas, só as mais recentes.
     const open = items.filter((n) => n.open);
     const closed = items.filter((n) => !n.open).slice(-KEEP_CLOSED);
@@ -50,10 +56,12 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
   const close = (match: (n: AppNotification) => boolean, dismissed = false): void => {
     let changed = false;
     items = items.map((n) =>
-      n.open && match(n) ? ((changed = true), { ...n, open: false, closedAt: Date.now(), ...(dismissed ? { dismissed } : {}) }) : n,
+      n.open && match(n) ? ((changed = true), { ...n, open: false, closedAt: now(), ...(dismissed ? { dismissed } : {}) }) : n,
     );
     if (changed) publish();
   };
+
+  if (items.some(stale)) publish();
 
   return {
     open(key, agentId, kind, text, data) {
@@ -63,7 +71,7 @@ export function createNotifications(store: NotificationStore, emit: (m: ServerMs
       if (items.some((n) => n.key === key && n.dismissed)) return;
       const existing = items.find((n) => n.key === key && n.open);
       if (existing) items = items.map((n) => (n === existing ? { ...n, text: clipped, ...(data ? { data } : {}) } : n));
-      else items = [...items, { id: ++counter, key, agentId, kind, text: clipped, ts: Date.now(), open: true, ...(data ? { data } : {}) }];
+      else items = [...items, { id: ++counter, key, agentId, kind, text: clipped, ts: now(), open: true, ...(data ? { data } : {}) }];
       publish();
     },
     resolve: (key) => close((n) => n.key === key),

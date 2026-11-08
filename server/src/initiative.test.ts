@@ -118,7 +118,7 @@ describe("iniciativa", () => {
     expect(notifications.list()[0]).toMatchObject({ kind: "idea", agentId: "mira" });
   });
 
-  it("definições: ligadas por defeito a cada 30 min; podem mudar-se", () => {
+  it("definições: desligadas por defeito (a cada 60 min quando ligadas); podem mudar-se", () => {
     const store = memoryStore();
     const ini = createInitiative({
       hub: fakeHub(""),
@@ -126,7 +126,7 @@ describe("iniciativa", () => {
       store,
       log: () => undefined,
     });
-    expect(ini.settings()).toEqual({ enabled: true, everyMin: 30 });
+    expect(ini.settings()).toEqual({ enabled: false, everyMin: 60 });
     ini.set({ enabled: false, everyMin: 60 });
     expect(ini.settings()).toEqual({ enabled: false, everyMin: 60 });
   });
@@ -153,7 +153,7 @@ describe("plano com deslocações de grupo", () => {
 
   it("a ideia aprovada não pede o limite do dia: 'agora' também respeita o máximo diário", async () => {
     const store = memoryStore();
-    store.setSetting("initiativeCount", JSON.stringify({ day: new Date().toISOString().slice(0, 10), n: 16 }));
+    store.setSetting("initiativeCount", JSON.stringify({ day: new Date().toISOString().slice(0, 10), n: 3 }));
     const hub = fakeHub('{"idea":"x"}');
     const ini = createInitiative({ hub, notifications: createNotifications(store, () => undefined), store, log: () => undefined });
     expect(await ini.now()).toBe(false);
