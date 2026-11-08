@@ -151,13 +151,19 @@
           <div class="tabs">
             <button data-t="term" title="O Claude Code verdadeiro deste agente, como no teu terminal">Claude Code</button
             ><button data-t="sum" class="on">Resumo</button><button data-t="log">Log</button
-            ><button data-t="chat" title="O chat antigo do escritório (ordens e rascunhos)">Chat</button
+            ><button data-t="chat" title="O trabalho que o Atlas dá a este agente e as respostas">Tarefas</button
             ><button data-t="instr">Instruções</button>
           </div>
           <div class="tc" id="tSum"></div>
           <div class="tc" id="tLog" style="display: none"></div>
           <div class="tc" id="tInstr" style="display: none"></div>
-          <div id="chatbox"><div id="chatRoot"></div></div>
+          <div id="chatbox">
+            <p class="chat-note">
+              Aqui fica o trabalho que o Atlas dá a este agente e as respostas. Para falar com ele diretamente, usa o separador
+              <b>Claude Code</b>.
+            </p>
+            <div id="chatRoot"></div>
+          </div>
           <div id="termbox" style="display: none">
             <div class="term-bar">
               <span>Claude Code deste agente: o mesmo do teu terminal, com acesso a tudo o que tu tens. Pergunta antes de agir.</span>

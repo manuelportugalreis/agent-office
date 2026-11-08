@@ -429,6 +429,13 @@ body.resizing {
   flex: 1;
   min-height: 0;
 }
+.chat-note {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
 #termbox {
   flex-direction: column;
   flex: 1;

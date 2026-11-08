@@ -12,7 +12,10 @@ const scratch = join(tmpdir(), `agent-office-e2e-${process.pid}`);
 
 export default defineConfig({
   testDir: "e2e",
-  timeout: 60_000,
+  // Com WebGL por software (SwiftShader) cada imagem da cena demora 5-6 s nesta máquina (medido; não é a resolução
+  // nem o bairro: é desenhar o escritório no processador). Os cliques e as verificações têm de esperar por isso.
+  timeout: 180_000,
+  expect: { timeout: 30_000 },
   fullyParallel: false,
   workers: 1,
   reporter: "list",

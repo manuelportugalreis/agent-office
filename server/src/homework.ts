@@ -686,7 +686,7 @@ export function createHomework(deps: HomeworkDeps): Homework {
         `- ${name}: ${lines.help === "entregável" ? "fez o entregável (as regras da entrega permitem)" : lines.help === "ajuda permitida" ? "deu só a ajuda permitida (as regras da entrega não permitem fazer o trabalho)" : `ajuda: ${lines.help}`}.`,
         check
           ? `- Ficheiro: ${check.path ?? lines.file} (${check.ok ? "verificado pelo servidor" : "atenção"}: ${check.detail})`
-          : "- Ficheiro: nenhum (a resposta está no chat dele)",
+          : "- Ficheiro: nenhum (a resposta está no separador Tarefas dele)",
         `- Em falta: ${lines.missing}`,
       ].join("\n");
     });

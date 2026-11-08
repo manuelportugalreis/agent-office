@@ -34,6 +34,12 @@ interface OfficeDebug {
   stage: { dom: HTMLCanvasElement; project(x: number, y: number, z: number): { x: number; y: number } };
 }
 
+/** O botão da mobília vive no menu ⚙ Vista: abre-se o menu primeiro, como faz quem usa a app. */
+async function toggleEdit(page: Page): Promise<void> {
+  await page.locator("#viewMenu summary").click();
+  await page.locator("#editBtn").click();
+}
+
 const placementOf = (page: Page, id: string): Promise<Placement | undefined> =>
   page.evaluate((id) => (window as unknown as { __office: OfficeDebug }).__office.editables().find((e) => e.id === id)?.placement, id);
 
@@ -63,7 +69,7 @@ test.describe("modo mobília", () => {
   const FREE = { x: 14.1, z: 3.8 };
 
   test("a barra abre e fecha, e sair pelo botão Concluir volta ao normal", async ({ page }) => {
-    await page.locator("#editBtn").click({ force: true });
+    await toggleEdit(page);
     await expect(page.locator("#editBar")).toBeVisible();
     await page.locator("#editDone").click({ force: true });
     await expect(page.locator("#editBar")).toBeHidden();
@@ -74,7 +80,7 @@ test.describe("modo mobília", () => {
     // Sem GPU (SwiftShader) cada imagem da cena demora vários segundos e este teste arrasta e recarrega a página:
     // já andava nos 52-59 s com o limite de 60 s, e o bairro de Lisboa tornou-o ~15% mais pesado.
     test.slow();
-    await page.locator("#editBtn").click({ force: true });
+    await toggleEdit(page);
     await dragPiece(page, PIECE, FREE);
     await expect(page.locator("#editInfo")).toContainText("Impressora");
     const moved = await placementOf(page, PIECE);
@@ -86,7 +92,7 @@ test.describe("modo mobília", () => {
     const after = await placementOf(page, PIECE);
     expect(after?.x).toBeCloseTo(moved?.x ?? NaN);
 
-    await page.locator("#editBtn").click({ force: true });
+    await toggleEdit(page);
     await page.locator("#editReset").click({ force: true });
     expect((await placementOf(page, PIECE))?.x).toBeCloseTo(12.8);
   });
@@ -99,7 +105,7 @@ test.describe("modo mobília", () => {
   });
 
   test("sair do modo a meio de um arrasto devolve a peça ao sítio", async ({ page }) => {
-    await page.locator("#editBtn").click({ force: true });
+    await toggleEdit(page);
     const before = await placementOf(page, PIECE);
     await dragPiece(page, PIECE, FREE, false);
     await page.keyboard.press("Escape");
@@ -114,7 +120,7 @@ test.describe("modo mobília", () => {
   });
 
   test("não deixa pousar uma peça no corredor: volta para onde estava", async ({ page }) => {
-    await page.locator("#editBtn").click({ force: true });
+    await toggleEdit(page);
     const before = await placementOf(page, PIECE);
     await dragPiece(page, PIECE, { x: 12, z: 6 });
     await expect(page.locator("#editInfo")).toContainText("Impressora");

@@ -73,7 +73,7 @@ export function createOrdersUi(
               : "";
         return `<article class="order-card${o.finished ? " done" : ""}${blocked ? " attn" : ""}" data-id="${o.id}">
           <header><span class="oc-who">${esc(nameOf(o.owner))}</span><span class="oc-title" title="${esc(o.title)}">${esc(o.title)}</span>
-          <button type="button" class="oc-chat" data-owner="${esc(o.owner)}" title="Abrir a conversa">Chat</button>
+          <button type="button" class="oc-chat" data-owner="${esc(o.owner)}" title="Ver o resultado no separador Tarefas">Tarefas</button>
           ${o.finished ? `<button type="button" class="oc-x" data-close="${o.id}" aria-label="Fechar">×</button>` : ""}</header>
           <ol>${steps}</ol>${recover}</article>`;
       })
