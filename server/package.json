@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
-    "@xterm/headless": "^5.5.0",
+    "@xterm/headless": "^6.0.0",
     "mammoth": "^1.13.0",
     "ws": "^8.18.0"
   },
